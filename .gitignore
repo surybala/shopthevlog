@@ -1,18 +1,22 @@
+# Environment files — NEVER commit
+.env
+.env.local
+.env.*.local
+
 # Dependencies
 node_modules/
 .venv/
 __pycache__/
 *.pyc
-
-# Environment
-.env
-.env.local
-.env.*.local
+*.pyo
+*.pyd
+.Python
 
 # Build output
 dist/
 build/
 *.egg-info/
+.eggs/
 
 # IDE
 .idea/
@@ -22,6 +26,20 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Vite
+frontend/.vite/
+
+# Supabase local dev
+supabase/.branches/
+supabase/.temp/
 
 # Logs
 *.log

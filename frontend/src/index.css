@@ -1,0 +1,113 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-gradient-hero text-white antialiased min-h-screen;
+    background-attachment: fixed;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.35);
+  }
+}
+
+@layer components {
+  /* Glass card base */
+  .glass {
+    @apply backdrop-blur-glass bg-white/10 border border-white/[0.18] rounded-2xl shadow-glass;
+  }
+
+  .glass-sm {
+    @apply backdrop-blur-glass bg-white/10 border border-white/[0.18] rounded-xl shadow-glass-sm;
+  }
+
+  .glass-hover {
+    @apply glass transition-all duration-200 hover:bg-white/[0.16] hover:shadow-glass-lg hover:-translate-y-0.5 cursor-pointer;
+  }
+
+  /* Glass input */
+  .glass-input {
+    @apply bg-white/[0.08] border border-white/20 rounded-xl text-white placeholder:text-white/40
+           focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/30
+           backdrop-blur-xs transition-all duration-200 px-4 py-3 w-full;
+  }
+
+  /* Glass button variants */
+  .btn-primary {
+    @apply bg-brand-500 hover:bg-brand-600 text-white font-semibold px-6 py-3 rounded-xl
+           transition-all duration-200 hover:shadow-glow-indigo hover:-translate-y-0.5
+           focus:outline-none focus:ring-2 focus:ring-brand-400/50 active:translate-y-0;
+  }
+
+  .btn-glass {
+    @apply glass text-white font-semibold px-6 py-3 rounded-xl
+           transition-all duration-200 hover:bg-white/[0.16] hover:shadow-glass-lg hover:-translate-y-0.5
+           focus:outline-none focus:ring-2 focus:ring-white/20 active:translate-y-0;
+  }
+
+  .btn-ghost {
+    @apply text-white/70 hover:text-white font-medium px-4 py-2 rounded-lg
+           transition-all duration-200 hover:bg-white/10
+           focus:outline-none focus:ring-2 focus:ring-white/20;
+  }
+
+  /* Glass badge */
+  .badge {
+    @apply bg-brand-500/20 border border-brand-400/30 text-brand-200 rounded-full text-xs px-2.5 py-1 font-medium;
+  }
+
+  .badge-green {
+    @apply bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 rounded-full text-xs px-2.5 py-1 font-medium;
+  }
+
+  .badge-amber {
+    @apply bg-amber-500/20 border border-amber-400/30 text-amber-200 rounded-full text-xs px-2.5 py-1 font-medium;
+  }
+
+  /* Skeleton shimmer */
+  .skeleton {
+    @apply bg-white/[0.08] rounded-xl animate-pulse;
+  }
+
+  /* Page section */
+  .section {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Gradient text */
+  .text-gradient {
+    @apply bg-gradient-aurora bg-clip-text text-transparent;
+  }
+
+  .text-gradient-sunset {
+    @apply bg-gradient-sunset bg-clip-text text-transparent;
+  }
+}
+
+@layer utilities {
+  .bg-size-200 {
+    background-size: 200% 100%;
+  }
+}
