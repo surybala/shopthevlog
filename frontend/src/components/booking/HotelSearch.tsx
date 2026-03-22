@@ -7,14 +7,33 @@ import type { HotelOffer } from '../../types/booking'
 
 export default function HotelSearch() {
   const search = useHotelSearch()
-  const selectHotel = useBookingStore((s) => s.selectHotel)
+  const { selectHotel, setHotelParams } = useBookingStore((s) => ({
+    selectHotel: s.selectHotel,
+    setHotelParams: s.setHotelParams,
+  }))
+
+  // Read pre-populated params set by ItineraryPanel when the drawer opened.
+  // useState reads store once at mount — fine because HotelSearch unmounts when
+  // the drawer closes and remounts fresh each time it opens.
+  const storedParams = useBookingStore((s) => s.hotelParams)
+  const destinationLabel = useBookingStore((s) => s.destinationLabel)
+
   const [form, setForm] = useState({
-    location: '',
-    check_in: '',
-    check_out: '',
-    guests: 1,
-    rooms: 1,
+    location: storedParams?.location ?? '',
+    check_in: storedParams?.check_in ?? '',
+    check_out: storedParams?.check_out ?? '',
+    guests: storedParams?.guests ?? 1,
+    rooms: storedParams?.rooms ?? 1,
   })
+
+  /** Update local form state AND sync back to the store so "Save & Close" captures the latest values. */
+  function updateForm(updates: Partial<typeof form>) {
+    setForm((f) => {
+      const next = { ...f, ...updates }
+      setHotelParams(next)
+      return next
+    })
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -23,30 +42,43 @@ export default function HotelSearch() {
 
   return (
     <div className="space-y-5">
+      {/* Auto-populated hint */}
+      {destinationLabel && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-500/10 border border-brand-500/20">
+          <span className="text-brand-400 text-sm">✨</span>
+          <p className="text-white/70 text-xs">
+            Pre-filled for <span className="text-white font-medium">{destinationLabel}</span> based on your itinerary.
+            Adjust any field below.
+          </p>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <GlassInput
           label="Destination"
           placeholder="Tokyo, Japan"
           value={form.location}
-          onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+          onChange={(e) => updateForm({ location: e.target.value })}
           required
         />
+
         <div className="grid grid-cols-2 gap-3">
           <GlassInput
             label="Check-in"
             type="date"
             value={form.check_in}
-            onChange={(e) => setForm((f) => ({ ...f, check_in: e.target.value }))}
+            onChange={(e) => updateForm({ check_in: e.target.value })}
             required
           />
           <GlassInput
             label="Check-out"
             type="date"
             value={form.check_out}
-            onChange={(e) => setForm((f) => ({ ...f, check_out: e.target.value }))}
+            onChange={(e) => updateForm({ check_out: e.target.value })}
             required
           />
         </div>
+
         <div className="grid grid-cols-2 gap-3">
           <GlassInput
             label="Guests"
@@ -54,7 +86,7 @@ export default function HotelSearch() {
             min={1}
             max={20}
             value={form.guests}
-            onChange={(e) => setForm((f) => ({ ...f, guests: Number(e.target.value) }))}
+            onChange={(e) => updateForm({ guests: Number(e.target.value) })}
           />
           <GlassInput
             label="Rooms"
@@ -62,9 +94,10 @@ export default function HotelSearch() {
             min={1}
             max={10}
             value={form.rooms}
-            onChange={(e) => setForm((f) => ({ ...f, rooms: Number(e.target.value) }))}
+            onChange={(e) => updateForm({ rooms: Number(e.target.value) })}
           />
         </div>
+
         <GlassButton type="submit" loading={search.isPending} fullWidth>
           Search Hotels
         </GlassButton>

@@ -98,15 +98,20 @@ def create_flight_order(offer_id: str, passengers: list[dict], trip_id: str) -> 
     for i, p in enumerate(passengers):
         if i >= len(offer_passengers):
             break
+        # Duffel requires "m"/"f", not "male"/"female"
+        gender_raw = p.get("gender", "male")
+        duffel_gender = "m" if gender_raw in ("male", "m") else "f"
+        # Duffel requires E.164 phone — strip spaces and dashes
+        phone = p["phone_number"].replace(" ", "").replace("-", "")
         duffel_passengers.append({
             "id": offer_passengers[i]["id"],
             "title": p.get("title", "mr"),
             "given_name": p["given_name"],
             "family_name": p["family_name"],
-            "gender": p.get("gender", "male"),
+            "gender": duffel_gender,
             "born_on": str(p["born_on"]),
             "email": p["email"],
-            "phone_number": p["phone_number"],
+            "phone_number": phone,
         })
 
     payload = {
@@ -120,8 +125,23 @@ def create_flight_order(offer_id: str, passengers: list[dict], trip_id: str) -> 
 
     with _client() as client:
         resp = client.post("/air/orders", json=payload)
-        resp.raise_for_status()
+        if not resp.is_success:
+            try:
+                detail = resp.json()
+            except Exception:
+                detail = resp.text
+            logger.error(f"Duffel /air/orders {resp.status_code}: {detail}")
+            # Detect stale offer — offer request was already used in a prior attempt
+            errors = detail.get("errors", []) if isinstance(detail, dict) else []
+            if any(e.get("code") == "offer_request_already_booked" for e in errors):
+                raise StaleOfferError("This flight offer has expired. Please search again for fresh results.")
+            raise ValueError(f"Duffel {resp.status_code}: {detail}")
         return resp.json()["data"]
+
+
+class StaleOfferError(Exception):
+    """Raised when the Duffel offer request has already been used and can't be rebooked."""
+    pass
 
 
 def cancel_flight_order(duffel_order_id: str) -> bool:

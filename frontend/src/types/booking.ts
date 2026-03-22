@@ -51,8 +51,9 @@ export interface FlightOffer {
     origin: { iata_code: string; name: string }
     destination: { iata_code: string; name: string }
     duration: string
-    departing_at: string
-    arriving_at: string
+    // Duffel v2: these may be absent at the slice level — prefer segments[0]
+    departing_at?: string
+    arriving_at?: string
     segments: Array<{
       operating_carrier: { name: string; logo_symbol_url: string }
       aircraft: { name: string } | null

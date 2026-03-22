@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from google_auth_oauthlib.flow import Flow
@@ -5,6 +7,85 @@ from google_auth_oauthlib.flow import Flow
 from app.core.security import get_current_user, UserClaims
 from app.core.config import settings
 from app.db.client import get_supabase
+
+logger = logging.getLogger(__name__)
+
+SEED_QUERIES = [
+    "Japan travel vlog 2024",
+    "Bali Indonesia travel vlog",
+    "Europe backpacking trip",
+    "New York City travel guide",
+    "Southeast Asia travel vlog",
+    "Thailand travel 2024",
+    "Italy travel vlog",
+    "Morocco travel vlog",
+]
+
+
+async def _seed_public_travel_vlogs(db) -> int:
+    """
+    Search public YouTube for popular travel vlogs and insert them as ready
+    so the discovery feed has content immediately after a user connects.
+    Returns the number of newly inserted vlogs.
+    """
+    from app.services.youtube_service import search_travel_vlogs
+
+    inserted = 0
+    for query in SEED_QUERIES:
+        try:
+            public_vlogs = search_travel_vlogs(query, max_results=10)
+            for v in public_vlogs:
+                exists = (
+                    db.table("vlogs")
+                    .select("id")
+                    .eq("platform_video_id", v.platform_video_id)
+                    .eq("platform", "youtube")
+                    .execute()
+                )
+                if exists.data:
+                    continue
+
+                db.table("vlogs").insert({
+                    "platform": "youtube",
+                    "platform_video_id": v.platform_video_id,
+                    "title": v.title,
+                    "description": v.description,
+                    "thumbnail_url": v.thumbnail_url,
+                    "video_url": v.video_url,
+                    "channel_name": v.channel_name,
+                    "channel_id": v.channel_id,
+                    "duration_seconds": v.duration_seconds,
+                    "published_at": v.published_at.isoformat() if v.published_at else None,
+                    "view_count": v.view_count,
+                    "like_count": v.like_count,
+                    # Mark as ready so the feed ranking picks them up immediately.
+                    # Description serves as a lightweight transcript for now; the
+                    # full AI pipeline can re-process them in the background later.
+                    "processing_status": "ready",
+                    "raw_transcript": v.description or v.title,
+                    "destinations": [],
+                    "travel_styles": [],
+                }).execute()
+                inserted += 1
+        except Exception as e:
+            logger.warning(f"Seed query '{query}' failed: {e}")
+
+    logger.info(f"Seeded {inserted} public travel vlogs")
+    return inserted
+
+
+async def _seed_and_build_feed(db, user_id: str) -> None:
+    """Background helper: seed public vlogs then build the user's feed."""
+    from app.services.feed_ranking_service import build_feed_for_user
+    try:
+        if settings.YOUTUBE_API_KEY:
+            await _seed_public_travel_vlogs(db)
+        else:
+            logger.warning("YOUTUBE_API_KEY not set — skipping public vlog seeding")
+        build_feed_for_user(user_id)
+        logger.info(f"Feed seeded and built for user {user_id}")
+    except Exception as e:
+        logger.exception(f"_seed_and_build_feed failed for user {user_id}: {e}")
 
 router = APIRouter(prefix="/social", tags=["social"])
 
@@ -16,7 +97,7 @@ YOUTUBE_SCOPES = [
 ]
 
 
-def _make_youtube_flow(state: str | None = None) -> Flow:
+def _make_youtube_flow() -> Flow:
     client_config = {
         "web": {
             "client_id": settings.YOUTUBE_CLIENT_ID,
@@ -26,24 +107,24 @@ def _make_youtube_flow(state: str | None = None) -> Flow:
             "token_uri": "https://oauth2.googleapis.com/token",
         }
     }
-    flow = Flow.from_client_config(
+    return Flow.from_client_config(
         client_config,
         scopes=YOUTUBE_SCOPES,
         redirect_uri=settings.YOUTUBE_REDIRECT_URI,
     )
-    if state:
-        flow.state = state
-    return flow
 
 
 @router.get("/connect/youtube")
 async def connect_youtube(user: UserClaims = Depends(get_current_user)):
     """Returns the Google OAuth URL for YouTube scope."""
-    flow = _make_youtube_flow(state=user.user_id)
+    flow = _make_youtube_flow()
+    # Pass user_id as `state` directly to authorization_url — setting flow.state
+    # after construction does NOT propagate into the generated URL.
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",
+        state=user.user_id,
     )
     return {"url": auth_url}
 
@@ -89,13 +170,27 @@ async def youtube_callback(request: Request):
             "scopes": list(credentials.scopes) if credentials.scopes else YOUTUBE_SCOPES,
         }, on_conflict="user_id,platform").execute()
 
-        # Kick off vlog ingest asynchronously
+        # Kick off vlog ingest from the user's own channel asynchronously
         new_ids = await ingest_new_vlogs_for_user(state)
         for vlog_id in new_ids:
             asyncio.create_task(process_vlog_task(vlog_id))
 
-    except Exception:
-        pass  # Don't expose errors to the popup
+        # Seed discovery feed + build feed in the background (don't block the popup)
+        asyncio.create_task(_seed_and_build_feed(db, state))
+
+    except Exception as e:
+        import traceback
+        err_detail = traceback.format_exc()
+        logger.exception(f"YouTube callback error: {e}")
+        # Show the error in the popup so we can diagnose it
+        safe_err = str(e).replace("`", "'").replace('"', "'")
+        return HTMLResponse(f"""
+            <html><body style="font-family:monospace;background:#1a1a2e;color:#e94560;padding:20px">
+            <h3>YouTube OAuth Error (dev only)</h3>
+            <pre style="white-space:pre-wrap;font-size:12px;color:#fff">{err_detail[:3000]}</pre>
+            <button onclick="window.close()" style="margin-top:16px;padding:8px 16px">Close</button>
+            </body></html>
+        """)
 
     return HTMLResponse(
         "<script>window.opener?.postMessage({type:'yt_connect',success:true},'*');window.close();</script>"

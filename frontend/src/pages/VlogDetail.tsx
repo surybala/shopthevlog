@@ -63,8 +63,8 @@ export default function VlogDetail() {
         </div>
       </div>
 
-      {/* Right: Itinerary panel */}
-      <div className="w-full lg:w-96 border-t lg:border-t-0 lg:border-l border-white/10 flex flex-col bg-white/5 backdrop-blur-heavy overflow-hidden">
+      {/* Right: compact itinerary preview — full itinerary opens in slide-out sheet */}
+      <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-white/10 flex flex-col bg-white/5 backdrop-blur-heavy overflow-visible">
         <ItineraryPanel
           vlogId={vlog.id}
           initialStatus={vlog.processing_status}

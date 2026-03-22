@@ -8,18 +8,19 @@ export function useAuth() {
   const { session, profile, loading, setSession, setProfile, setLoading, clear } = useAuthStore()
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // onAuthStateChange fires immediately with the current session
+    // (including INITIAL_SESSION event) — this is the reliable way to
+    // get the session because getSession() can race with storage restore.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
-      if (session) fetchProfile()
-      else setLoading(false)
-    })
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      if (session) fetchProfile()
-      else clear()
+      if (session) {
+        fetchProfile()
+      } else {
+        // No session — stop loading so AuthGuard can redirect to /login
+        if (event === 'INITIAL_SESSION' || event === 'SIGNED_OUT') {
+          clear()
+        }
+      }
     })
 
     return () => subscription.unsubscribe()
@@ -30,7 +31,8 @@ export function useAuth() {
       const { data } = await api.get<Profile>('/auth/me')
       setProfile(data)
     } catch {
-      // profile may not exist yet for brand-new users
+      // Profile row may not exist yet for brand-new OAuth users —
+      // the Supabase webhook creates it asynchronously
     } finally {
       setLoading(false)
     }

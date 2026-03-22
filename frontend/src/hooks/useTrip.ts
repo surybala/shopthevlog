@@ -42,3 +42,11 @@ export function useUpdateTrip() {
     },
   })
 }
+
+export function useDeleteTrip() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/trips/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['trips'] }),
+  })
+}

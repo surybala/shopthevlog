@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.encoders import jsonable_encoder
+from datetime import datetime, timezone
 
 from app.core.security import get_current_user, UserClaims
 from app.db.client import get_supabase
@@ -43,18 +45,28 @@ async def book_hotel(body: HotelBookRequest, user: UserClaims = Depends(get_curr
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Booking failed: {str(e)}")
 
-    booking_resp = db.table("bookings").insert({
-        "trip_id": body.trip_id,
-        "user_id": user.user_id,
-        "booking_type": "hotel",
-        "duffel_order_id": order.get("id"),
-        "duffel_booking_reference": order.get("reference"),
-        "status": "confirmed",
-        "total_amount": float(order.get("total_amount", 0)),
-        "currency": order.get("currency", "USD"),
-        "duffel_response": order,
-        "booked_at": "now()",
-    }).execute()
+    try:
+        booking_payload = jsonable_encoder({
+            "trip_id": body.trip_id,
+            "user_id": user.user_id,
+            "booking_type": "hotel",
+            "duffel_order_id": order.get("id"),
+            "duffel_booking_reference": order.get("reference"),
+            "status": "confirmed",
+            "total_amount": float(order.get("total_amount", 0)),
+            "currency": order.get("currency", "USD"),
+            "duffel_response": order,
+            "booked_at": datetime.now(timezone.utc).isoformat(),
+        })
+        booking_resp = db.table("bookings").insert(booking_payload).execute()
 
-    db.table("trips").update({"status": "booked"}).eq("id", body.trip_id).execute()
-    return booking_resp.data[0]
+        if not booking_resp.data:
+            raise HTTPException(status_code=500, detail="Booking was placed but failed to save. Check Duffel dashboard.")
+
+        db.table("trips").update({"status": "booked"}).eq("id", body.trip_id).execute()
+
+        return booking_resp.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save booking record: {str(e)}")

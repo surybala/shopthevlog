@@ -10,6 +10,10 @@ export function useItinerary(id: string | null) {
       return data
     },
     enabled: !!id,
+    // Itineraries are immutable once generated — cache for 30 min so revisiting
+    // a vlog shows the itinerary instantly without any network round-trip.
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   })
 }
 

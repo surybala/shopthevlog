@@ -39,6 +39,10 @@ const config: Config = {
         'glow-blue':    '0 0 24px rgba(59, 130, 246, 0.5)',
         'glow-pink':    '0 0 24px rgba(236, 72, 153, 0.5)',
       },
+      zIndex: {
+        '60': '60',
+        '70': '70',
+      },
       fontFamily: {
         sans:    ['Inter', 'system-ui', 'sans-serif'],
         display: ['Inter', 'system-ui', 'sans-serif'],

@@ -48,11 +48,20 @@ async def auth_webhook(payload: WebhookPayload):
 
 @router.get("/me")
 async def get_me(user: UserClaims = Depends(get_current_user)):
-    db = get_supabase()
-    profile_resp = db.table("profiles").select("*").eq("id", user.user_id).single().execute()
-    if not profile_resp.data:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    return profile_resp.data
+    import traceback
+    try:
+        db = get_supabase()
+        profile_resp = db.table("profiles").select("*").eq("id", user.user_id).execute()
+        rows = profile_resp.data or []
+        if not rows:
+            # Profile not created yet — auto-create it
+            display_name = user.email.split("@")[0] if user.email else "traveller"
+            new_profile = {"id": user.user_id, "display_name": display_name, "onboarded": False}
+            db.table("profiles").upsert(new_profile, on_conflict="id").execute()
+            return {**new_profile, "avatar_url": None, "bio": None}
+        return rows[0]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
 
 @router.patch("/profile")

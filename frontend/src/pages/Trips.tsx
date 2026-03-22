@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useTrips } from '../hooks/useTrip'
+import { useTrips, useDeleteTrip } from '../hooks/useTrip'
 import GlassCard from '../components/ui/GlassCard'
 import Spinner from '../components/ui/Spinner'
 import BookingDrawer from '../components/booking/BookingDrawer'
 import { useBookingStore } from '../stores/bookingStore'
+import toast from 'react-hot-toast'
 import type { Trip } from '../types/booking'
 
 const statusColors: Record<string, string> = {
@@ -16,12 +18,52 @@ const statusColors: Record<string, string> = {
 function TripCard({ trip }: { trip: Trip }) {
   const navigate = useNavigate()
   const openBooking = useBookingStore((s) => s.open)
+  const deleteTrip = useDeleteTrip()
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  async function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!confirmDelete) {
+      setConfirmDelete(true)
+      // Auto-cancel after 3 s if user doesn't confirm
+      setTimeout(() => setConfirmDelete(false), 3000)
+      return
+    }
+    try {
+      await deleteTrip.mutateAsync(trip.id)
+      toast.success('Trip deleted')
+    } catch {
+      toast.error('Failed to delete trip')
+      setConfirmDelete(false)
+    }
+  }
 
   return (
     <GlassCard hoverable padding="md" onClick={() => navigate(`/trips/${trip.id}`)}>
       <div className="flex items-start justify-between gap-3 mb-3">
         <h3 className="font-semibold text-white">{trip.name}</h3>
-        <span className={statusColors[trip.status] ?? 'badge'}>{trip.status}</span>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className={statusColors[trip.status] ?? 'badge'}>{trip.status}</span>
+          {trip.status === 'planning' && (
+            <button
+              onClick={handleDelete}
+              disabled={deleteTrip.isPending}
+              title={confirmDelete ? 'Click again to confirm' : 'Delete trip'}
+              className={`p-1 rounded-lg transition-all text-xs ${
+                confirmDelete
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/40 px-2'
+                  : 'text-white/30 hover:text-red-400 hover:bg-red-500/10'
+              }`}
+            >
+              {confirmDelete ? '⚠️ Confirm?' : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              )}
+            </button>
+          )}
+        </div>
       </div>
       {(trip.start_date || trip.end_date) && (
         <p className="text-white/60 text-sm mb-3">

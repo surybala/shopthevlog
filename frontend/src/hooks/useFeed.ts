@@ -22,6 +22,12 @@ export function useFeed(filters: FeedFilters = {}) {
     },
     initialPageParam: undefined,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    // Keep feed data fresh for 5 minutes — navigating away and back is instant
+    staleTime: 5 * 60 * 1000,
+    // Hold pages in memory for 10 minutes after the component unmounts
+    gcTime: 10 * 60 * 1000,
+    // Don't trigger a background refetch every time the user alt-tabs back
+    refetchOnWindowFocus: false,
   })
 }
 
