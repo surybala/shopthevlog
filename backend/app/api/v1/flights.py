@@ -9,7 +9,6 @@ from app.db.client import get_supabase
 from app.schemas.booking import FlightSearchRequest, FlightBookRequest, BookingResponse
 from app.services import duffel_service
 from app.services.duffel_service import StaleOfferError
-from app.core.config import settings
 
 router = APIRouter(prefix="/flights", tags=["flights"])
 logger = logging.getLogger(__name__)
@@ -30,36 +29,7 @@ async def search_flights(body: FlightSearchRequest, user: UserClaims = Depends(g
     except HTTPException:
         raise
     except Exception as e:
-        if settings.APP_ENV == "development":
-            logger.warning(f"Duffel flight search failed, returning mock data: {e}")
-            return _mock_flights(body.origin, body.destination, str(body.departure_date))
         raise HTTPException(status_code=502, detail=f"Flight search error: {str(e)}")
-
-
-def _mock_flights(origin: str, destination: str, departure_date: str) -> list:
-    carriers = [
-        ("mock_001", "Delta Air Lines", "https://assets.duffel.com/img/airlines/for-light-background/full-color-logo/DL.svg", "320.00", "USD"),
-        ("mock_002", "United Airlines", "https://assets.duffel.com/img/airlines/for-light-background/full-color-logo/UA.svg", "285.00", "USD"),
-        ("mock_003", "American Airlines", "https://assets.duffel.com/img/airlines/for-light-background/full-color-logo/AA.svg", "410.00", "USD"),
-    ]
-    return [
-        {
-            "id": f"off_{carrier_id}",
-            "total_amount": price,
-            "total_currency": currency,
-            "owner": {"name": name, "logo_symbol_url": logo},
-            "slices": [
-                {
-                    "origin": {"iata_code": origin},
-                    "destination": {"iata_code": destination},
-                    "duration": "PT8H30M",
-                    "departing_at": f"{departure_date}T09:00:00",
-                    "segments": [{"departing_at": f"{departure_date}T09:00:00"}],
-                }
-            ],
-        }
-        for carrier_id, name, logo, price, currency in carriers
-    ]
 
 
 @router.get("/offers/{offer_id}")
