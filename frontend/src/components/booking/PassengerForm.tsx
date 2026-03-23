@@ -58,6 +58,8 @@ export default function PassengerForm() {
 
   const passengerCount = flightParams?.passengers ?? 1
 
+  const needsPassport = tab === 'flights' && selectedFlightOffer?.provider === 'amadeus'
+
   const emptyPassenger = () => ({
     title: 'mr' as const,
     given_name: '',
@@ -66,6 +68,7 @@ export default function PassengerForm() {
     born_on: '',
     email: '',
     phone_number: '',
+    passport: needsPassport ? { number: '', expiry_date: '', country: '', nationality: '' } : undefined,
   })
 
   // Restore previously saved passengers (from draft), or start fresh
@@ -82,6 +85,14 @@ export default function PassengerForm() {
   function updatePassenger(index: number, field: string, value: string) {
     setPassengers(
       passengers.map((p, i) => (i === index ? { ...p, [field]: value } : p))
+    )
+  }
+
+  function updatePassport(index: number, field: string, value: string) {
+    setPassengers(
+      passengers.map((p, i) =>
+        i === index ? { ...p, passport: { ...(p.passport ?? { number: '', expiry_date: '', country: '', nationality: '' }), [field]: value } } : p
+      )
     )
   }
 
@@ -261,6 +272,52 @@ export default function PassengerForm() {
               />
               <p className="text-white/30 text-xs mt-1 pl-1">Include country code, e.g. +44 7700 900000</p>
             </div>
+
+            {needsPassport && (
+              <div className="space-y-3 pt-2 border-t border-white/10">
+                <p className="text-white/50 text-xs font-medium uppercase tracking-wide">Passport</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <GlassInput
+                    label="Passport number"
+                    placeholder="P1234567"
+                    value={passenger.passport?.number ?? ''}
+                    onChange={(e) => updatePassport(idx, 'number', e.target.value.toUpperCase())}
+                    required
+                  />
+                  <GlassInput
+                    label="Expiry date"
+                    type="date"
+                    value={passenger.passport?.expiry_date ?? ''}
+                    onChange={(e) => updatePassport(idx, 'expiry_date', e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <GlassInput
+                      label="Issuing country"
+                      placeholder="US"
+                      maxLength={2}
+                      value={passenger.passport?.country ?? ''}
+                      onChange={(e) => updatePassport(idx, 'country', e.target.value.toUpperCase())}
+                      required
+                    />
+                    <p className="text-white/30 text-xs mt-1 pl-1">2-letter ISO code</p>
+                  </div>
+                  <div>
+                    <GlassInput
+                      label="Nationality"
+                      placeholder="US"
+                      maxLength={2}
+                      value={passenger.passport?.nationality ?? ''}
+                      onChange={(e) => updatePassport(idx, 'nationality', e.target.value.toUpperCase())}
+                      required
+                    />
+                    <p className="text-white/30 text-xs mt-1 pl-1">2-letter ISO code</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         ))}
 

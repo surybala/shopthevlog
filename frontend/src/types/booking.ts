@@ -43,6 +43,8 @@ export interface HotelSearchParams {
 
 export interface FlightOffer {
   id: string
+  /** Which provider this offer came from — used to route booking and show passport fields. */
+  provider?: 'duffel' | 'amadeus'
   total_amount: string
   total_currency: string
   expires_at: string
@@ -67,14 +69,24 @@ export interface FlightOffer {
 
 export interface HotelOffer {
   id: string
+  /** Which provider this offer came from — used to route the booking correctly. */
+  provider: 'liteapi' | 'amadeus' | 'duffel'
   accommodation: {
     name: string
     rating: number | null
     photos: Array<{ url: string }>
     location: { geographic_coordinates: { latitude: number; longitude: number } | null }
+    address?: string
   }
   cheapest_rate_total_amount: string
   cheapest_rate_currency: string
+}
+
+export interface PassportInfo {
+  number: string
+  expiry_date: string  // ISO date YYYY-MM-DD
+  country: string      // ISO 3166-1 alpha-2, e.g. "US"
+  nationality: string  // ISO 3166-1 alpha-2
 }
 
 export interface Passenger {
@@ -85,4 +97,5 @@ export interface Passenger {
   born_on: string  // ISO date
   email: string
   phone_number: string
+  passport?: PassportInfo
 }

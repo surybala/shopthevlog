@@ -30,9 +30,20 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
 
-    # Duffel
+    # Duffel (flights)
     DUFFEL_ACCESS_TOKEN: str = ""
     DUFFEL_WEBHOOK_SECRET: str = ""
+
+    # LiteAPI (hotels — primary)
+    LITEAPI_API_KEY: str = ""
+
+    # Amadeus (hotels — fallback; also available for flights)
+    AMADEUS_CLIENT_ID: str = ""
+    AMADEUS_CLIENT_SECRET: str = ""
+    # Production payment card for Amadeus hotel orders (leave blank → sandbox test card used)
+    AMADEUS_PAYMENT_VENDOR_CODE: str = ""
+    AMADEUS_PAYMENT_CARD_NUMBER: str = ""
+    AMADEUS_PAYMENT_EXPIRY: str = ""
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379"

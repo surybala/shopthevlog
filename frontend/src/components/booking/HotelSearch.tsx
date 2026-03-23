@@ -114,7 +114,7 @@ export default function HotelSearch() {
               className="w-full glass-hover p-4 text-left"
             >
               <div className="flex gap-3">
-                {offer.accommodation.photos[0] && (
+                {offer.accommodation.photos[0]?.url && (
                   <img
                     src={offer.accommodation.photos[0].url}
                     className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
@@ -130,11 +130,24 @@ export default function HotelSearch() {
                       {offer.cheapest_rate_currency} {parseFloat(offer.cheapest_rate_total_amount).toLocaleString()}
                     </span>
                   </div>
-                  {offer.accommodation.rating && (
-                    <div className="flex items-center gap-1 mt-1">
-                      {'★'.repeat(Math.round(offer.accommodation.rating))}
-                      <span className="text-white/40 text-xs">{'☆'.repeat(5 - Math.round(offer.accommodation.rating))}</span>
-                    </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    {offer.accommodation.rating && (
+                      <span className="text-yellow-400 text-xs">
+                        {'★'.repeat(Math.min(Math.round(Number(offer.accommodation.rating)), 5))}
+                      </span>
+                    )}
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                      offer.provider === 'liteapi'
+                        ? 'bg-emerald-500/15 text-emerald-400'
+                        : offer.provider === 'amadeus'
+                          ? 'bg-blue-500/15 text-blue-400'
+                          : 'bg-white/10 text-white/40'
+                    }`}>
+                      {offer.provider === 'liteapi' ? 'LiteAPI' : offer.provider === 'amadeus' ? 'Amadeus' : 'Duffel'}
+                    </span>
+                  </div>
+                  {offer.accommodation.address && (
+                    <p className="text-white/40 text-xs mt-0.5 truncate">{offer.accommodation.address}</p>
                   )}
                 </div>
               </div>

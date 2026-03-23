@@ -13,20 +13,68 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 DUFFEL_BASE = "https://api.duffel.com"
-DUFFEL_VERSION = "v2"
 
-
-def _headers() -> dict:
+def _headers(version: str = "v2") -> dict:
     return {
         "Authorization": f"Bearer {settings.DUFFEL_ACCESS_TOKEN}",
-        "Duffel-Version": DUFFEL_VERSION,
+        "Duffel-Version": version,
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
 
-
 def _client() -> httpx.Client:
-    return httpx.Client(base_url=DUFFEL_BASE, headers=_headers(), timeout=30.0)
+    """Air (flights) client — Duffel-Version v2."""
+    return httpx.Client(base_url=DUFFEL_BASE, headers=_headers("v2"), timeout=30.0)
+
+def _stays_client() -> httpx.Client:
+    """Stays (hotels) client — Duffel-Version v1."""
+    return httpx.Client(base_url=DUFFEL_BASE, headers=_headers("v1"), timeout=60.0)
+
+
+# IATA city codes for destinations where city ≠ primary airport code
+_CITY_CODES: dict[str, str] = {
+    "new york": "NYC", "new york city": "NYC", "nyc": "NYC",
+    "london": "LON",
+    "paris": "PAR",
+    "tokyo": "TYO",
+    "osaka": "OSA",
+    "seoul": "SEL",
+    "beijing": "BJS",
+    "shanghai": "SHA",
+    "rome": "ROM",
+    "milan": "MIL",
+    "chicago": "CHI",
+    "toronto": "YTO",
+    "montreal": "YMQ",
+    "los angeles": "LAX",
+    "san francisco": "SFO",
+    "miami": "MIA",
+    # Most other cities share airport/city code
+    "dubai": "DXB", "singapore": "SIN", "sydney": "SYD",
+    "bangkok": "BKK", "amsterdam": "AMS", "barcelona": "BCN",
+    "hong kong": "HKG", "bali": "DPS", "istanbul": "IST",
+    "lisbon": "LIS", "madrid": "MAD", "berlin": "BER",
+    "vienna": "VIE", "prague": "PRG", "budapest": "BUD",
+    "athens": "ATH", "cairo": "CAI", "nairobi": "NBO",
+    "cape town": "CPT", "johannesburg": "JNB",
+    "mumbai": "BOM", "delhi": "DEL", "kolkata": "CCU",
+    "kuala lumpur": "KUL", "jakarta": "CGK", "taipei": "TPE",
+    "ho chi minh": "SGN", "hanoi": "HAN", "manila": "MNL",
+    "mexico city": "MEX", "buenos aires": "BUE", "sao paulo": "SAO",
+    "rio de janeiro": "RIO", "lima": "LIM", "bogota": "BOG",
+}
+
+def _to_iata_city_code(location: str) -> str:
+    """Convert a city name or IATA code to a Duffel IATA city code."""
+    # Strip country part if "City, Country" format
+    city = location.strip().split(",")[0].strip().lower()
+    if city in _CITY_CODES:
+        return _CITY_CODES[city]
+    # Already looks like an IATA code
+    if len(location.strip()) == 3:
+        return location.strip().upper()
+    # Fallback: first 3 chars uppercase
+    return city[:3].upper()
 
 
 # ─── FLIGHTS ───────────────────────────────────────────────────────────────────
@@ -168,31 +216,53 @@ def search_hotels(
     guests: int = 1,
     rooms: int = 1,
 ) -> list[dict]:
-    """Search Duffel Stays for accommodation."""
+    """Search Duffel Stays for accommodation. Handles async polling."""
+    import time
+
+    iata_city_code = _to_iata_city_code(location)
     payload = {
         "data": {
-            "location": {"name": location},
             "check_in_date": str(check_in),
             "check_out_date": str(check_out),
-            "guests": guests,
             "rooms": rooms,
+            "guests": [{"type": "adult"} for _ in range(guests)],
+            "location": {"iata_city_code": iata_city_code},
         }
     }
 
-    with _client() as client:
+    with _stays_client() as client:
         resp = client.post("/stays/searches", json=payload)
-        resp.raise_for_status()
-        data = resp.json()["data"]
+        if not resp.is_success:
+            try:
+                detail = resp.json()
+            except Exception:
+                detail = resp.text
+            logger.error(f"Duffel /stays/searches {resp.status_code}: {detail}")
+            resp.raise_for_status()
 
-    results = data.get("results", [])
-    # Sort by cheapest rate
+        data = resp.json()["data"]
+        results = data.get("results", [])
+
+        # Duffel Stays search is async — poll until complete
+        if not results and data.get("status") != "completed":
+            search_id = data["id"]
+            for _ in range(15):
+                time.sleep(2)
+                poll = client.get(f"/stays/searches/{search_id}")
+                if not poll.is_success:
+                    break
+                poll_data = poll.json()["data"]
+                results = poll_data.get("results", [])
+                if results or poll_data.get("status") == "completed":
+                    break
+
     results.sort(key=lambda r: float(r.get("cheapest_rate_total_amount", "999999")))
     return results[:20]
 
 
 def get_hotel_rate(rate_id: str) -> dict:
     """Get a confirmed hotel rate (quote) before booking."""
-    with _client() as client:
+    with _stays_client() as client:
         resp = client.get(f"/stays/quotes/{rate_id}")
         resp.raise_for_status()
         return resp.json()["data"]
@@ -214,7 +284,13 @@ def create_hotel_order(rate_id: str, guests: list[dict], trip_id: str) -> dict:
         }
     }
 
-    with _client() as client:
+    with _stays_client() as client:
         resp = client.post("/stays/bookings", json=payload)
-        resp.raise_for_status()
+        if not resp.is_success:
+            try:
+                detail = resp.json()
+            except Exception:
+                detail = resp.text
+            logger.error(f"Duffel /stays/bookings {resp.status_code}: {detail}")
+            resp.raise_for_status()
         return resp.json()["data"]

@@ -156,6 +156,11 @@ export default function FlightSearch() {
                     <img src={offer.owner.logo_symbol_url} className="w-5 h-5 object-contain" alt="" />
                   )}
                   <span className="text-white font-medium text-sm">{offer.owner.name}</span>
+                  {offer.provider === 'amadeus' ? (
+                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300">Amadeus</span>
+                  ) : (
+                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 border border-white/20 text-white/50">Duffel</span>
+                  )}
                 </div>
                 <span className="text-brand-300 font-bold">
                   {offer.total_currency} {parseFloat(offer.total_amount).toLocaleString()}
