@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
-import type { Trip } from '../types/booking'
+import type { Trip, Booking } from '../types/booking'
 
 export function useTrips() {
   return useQuery({
@@ -48,5 +48,27 @@ export function useDeleteTrip() {
   return useMutation({
     mutationFn: (id: string) => api.delete(`/trips/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['trips'] }),
+  })
+}
+
+export function useTripBookings(tripId: string) {
+  return useQuery({
+    queryKey: ['bookings', tripId],
+    queryFn: async () => {
+      const { data } = await api.get<Booking[]>(`/bookings?trip_id=${tripId}`)
+      return data
+    },
+    enabled: !!tripId,
+  })
+}
+
+export function useCancelBooking() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (bookingId: string) => api.delete(`/bookings/${bookingId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bookings'] })
+      qc.invalidateQueries({ queryKey: ['trips'] })
+    },
   })
 }
