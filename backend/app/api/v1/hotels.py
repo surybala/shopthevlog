@@ -1,68 +1,43 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from datetime import datetime, timezone
-import asyncio
-import concurrent.futures
 import logging
 
 from app.core.security import get_current_user, UserClaims
 from app.db.client import get_supabase
 from app.schemas.booking import HotelSearchRequest, HotelBookRequest, BookingResponse
-from app.services import liteapi_service, amadeus_service, duffel_service
+from app.services import liteapi_service, duffel_service
 from app.core.config import settings
 
 router = APIRouter(prefix="/hotels", tags=["hotels"])
 logger = logging.getLogger(__name__)
 
 
-def _search_all_providers(body: HotelSearchRequest) -> list[dict]:
-    """Run LiteAPI + Amadeus in parallel, merge sorted by price."""
+@router.post("/search")
+async def search_hotels(body: HotelSearchRequest, user: UserClaims = Depends(get_current_user)):
+    results = []
 
-    def run_liteapi():
-        if not settings.LITEAPI_API_KEY:
-            return []
+    if settings.LITEAPI_API_KEY:
         try:
-            return liteapi_service.search_hotels(
+            results = liteapi_service.search_hotels(
                 location=body.location, check_in=body.check_in,
                 check_out=body.check_out, guests=body.guests, rooms=body.rooms,
             )
         except Exception as e:
             logger.warning(f"LiteAPI search failed: {e}")
-            return []
 
-    def run_amadeus():
-        if not settings.AMADEUS_CLIENT_ID or not settings.AMADEUS_CLIENT_SECRET:
-            return []
+    if not results:
+        # Fallback to Duffel Stays
         try:
-            return amadeus_service.search_hotels(
+            results = duffel_service.search_hotels(
                 location=body.location, check_in=body.check_in,
-                check_out=body.check_out, guests=body.guests, rooms=body.rooms,
+                check_out=body.check_out, guests=body.guests,
             )
         except Exception as e:
-            logger.warning(f"Amadeus search failed: {e}")
-            return []
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-        f1 = pool.submit(run_liteapi)
-        f2 = pool.submit(run_amadeus)
-        results = f1.result() + f2.result()
+            logger.warning(f"Duffel hotel search failed: {e}")
 
     results.sort(key=lambda r: float(r.get("cheapest_rate_total_amount") or "999999"))
     return results[:20]
-
-
-@router.post("/search")
-async def search_hotels(body: HotelSearchRequest, user: UserClaims = Depends(get_current_user)):
-    loop = asyncio.get_event_loop()
-    try:
-        results = await loop.run_in_executor(None, lambda: _search_all_providers(body))
-        if not results:
-            raise HTTPException(status_code=404, detail="No hotels found for this destination and dates.")
-        return results
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Hotel search error: {str(e)}")
 
 
 @router.post("/book", response_model=BookingResponse)
@@ -73,14 +48,11 @@ async def book_hotel(body: HotelBookRequest, user: UserClaims = Depends(get_curr
     if not trip_resp.data:
         raise HTTPException(status_code=404, detail="Trip not found")
 
-    # Route booking to the correct provider based on offer ID prefix
     try:
         if body.rate_id.startswith("liteapi_hotel_"):
             order = liteapi_service.create_hotel_order(body.rate_id, body.guests)
-        elif body.rate_id.startswith("amadeus_hotel_"):
-            order = amadeus_service.create_hotel_order(body.rate_id, body.guests)
         else:
-            # Legacy Duffel Stays
+            # Duffel Stays
             raw = duffel_service.create_hotel_order(body.rate_id, body.guests, body.trip_id)
             order = {
                 "id": raw.get("id"),
