@@ -3,6 +3,7 @@ import { useHotelSearch } from '../../hooks/useHotelSearch'
 import { useBookingStore } from '../../stores/bookingStore'
 import GlassInput from '../ui/GlassInput'
 import GlassButton from '../ui/GlassButton'
+import HotelDetailSheet from './HotelDetailSheet'
 import type { HotelOffer } from '../../types/booking'
 
 export default function HotelSearch() {
@@ -25,6 +26,9 @@ export default function HotelSearch() {
     guests: storedParams?.guests ?? 1,
     rooms: storedParams?.rooms ?? 1,
   })
+
+  /** Offer currently shown in the detail sheet; null = sheet closed. */
+  const [detailOffer, setDetailOffer] = useState<HotelOffer | null>(null)
 
   /** Update local form state AND sync back to the store so "Save & Close" captures the latest values. */
   function updateForm(updates: Partial<typeof form>) {
@@ -103,14 +107,14 @@ export default function HotelSearch() {
         </GlassButton>
       </form>
 
-      {/* Results */}
+      {/* Results — clicking a card opens the detail sheet */}
       {search.data && (
         <div className="space-y-3">
           <p className="text-white/50 text-sm">{search.data.length} properties found</p>
           {(search.data as HotelOffer[]).map((offer) => (
             <button
               key={offer.id}
-              onClick={() => selectHotel(offer)}
+              onClick={() => setDetailOffer(offer)}
               className="w-full glass-hover p-4 text-left"
             >
               <div className="flex gap-3">
@@ -147,6 +151,7 @@ export default function HotelSearch() {
                   {offer.accommodation.address && (
                     <p className="text-white/40 text-xs mt-0.5 truncate">{offer.accommodation.address}</p>
                   )}
+                  <p className="text-white/30 text-xs mt-1">Tap to view details →</p>
                 </div>
               </div>
             </button>
@@ -157,6 +162,18 @@ export default function HotelSearch() {
       {search.isError && (
         <p className="text-red-400 text-sm">{(search.error as Error).message}</p>
       )}
+
+      {/* Hotel detail sheet */}
+      <HotelDetailSheet
+        offer={detailOffer}
+        checkIn={form.check_in}
+        checkOut={form.check_out}
+        onClose={() => setDetailOffer(null)}
+        onSelect={(offer) => {
+          selectHotel(offer)
+          setDetailOffer(null)
+        }}
+      />
     </div>
   )
 }
