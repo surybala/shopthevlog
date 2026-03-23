@@ -136,27 +136,30 @@ def search_hotels(
         rates_data = rates_raw.get("data", [])
         logger.info(f"LiteAPI /hotels/rates: {len(rates_data)} hotels with rates")
 
+    def _rate_total(room_type: dict) -> dict:
+        """Extract the cheapest rate total, handling both dict and list shapes for 'rates'."""
+        rates = room_type.get("rates", {})
+        if isinstance(rates, list):
+            rates = rates[0] if rates else {}
+        retail = rates.get("retailRate", {})
+        if isinstance(retail, list):
+            retail = retail[0] if retail else {}
+        total = retail.get("total", [{"amount": "999999", "currency": "USD"}])
+        if isinstance(total, list):
+            return total[0] if total else {"amount": "999999", "currency": "USD"}
+        return total if isinstance(total, dict) else {"amount": str(total), "currency": "USD"}
+
     results = []
     for hotel_rates in rates_data:
         hid = hotel_rates.get("hotelId")
         room_types = hotel_rates.get("roomTypes", [])
         if not room_types:
             continue
+        if logger.isEnabledFor(logging.DEBUG) and hotel_rates == rates_data[0]:
+            logger.debug(f"LiteAPI room_type[0] sample: {str(room_types[0])[:400]}")
         # Pick the cheapest room type
-        cheapest = min(
-            room_types,
-            key=lambda r: float(
-                r.get("rates", {})
-                 .get("retailRate", {})
-                 .get("total", [{"amount": "999999"}])[0]
-                 .get("amount", "999999")
-            ),
-        )
-        rate_total = (
-            cheapest.get("rates", {})
-            .get("retailRate", {})
-            .get("total", [{"amount": "0", "currency": "USD"}])[0]
-        )
+        cheapest = min(room_types, key=lambda r: float(_rate_total(r).get("amount", "999999")))
+        rate_total = _rate_total(cheapest)
         meta = hotel_meta.get(hid, {})
         thumbnail = meta.get("thumbnail", "") or meta.get("main_photo", "")
         results.append({
