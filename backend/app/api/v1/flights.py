@@ -56,6 +56,30 @@ async def book_flight(body: FlightBookRequest, user: UserClaims = Depends(get_cu
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Booking failed: {str(e)}")
 
+    # Extract structured metadata from the Duffel order so the UI can display
+    # route / schedule info without parsing the full raw response.
+    def _extract_flight_metadata(order_data: dict) -> dict:
+        slices = order_data.get("slices") or []
+        slice_summaries = []
+        for sl in slices:
+            segments = sl.get("segments") or []
+            first_seg = segments[0] if segments else {}
+            last_seg = segments[-1] if segments else {}
+            slice_summaries.append({
+                "origin": sl.get("origin", {}).get("iata_code") or first_seg.get("origin", {}).get("iata_code"),
+                "destination": sl.get("destination", {}).get("iata_code") or last_seg.get("destination", {}).get("iata_code"),
+                "departing_at": first_seg.get("departing_at") or sl.get("departing_at"),
+                "arriving_at": last_seg.get("arriving_at") or sl.get("arriving_at"),
+                "airline": (first_seg.get("operating_carrier") or first_seg.get("marketing_carrier") or {}).get("name"),
+            })
+        return {
+            "slices": slice_summaries,
+            "origin": slice_summaries[0]["origin"] if slice_summaries else None,
+            "destination": slice_summaries[0]["destination"] if slice_summaries else None,
+        }
+
+    search_params = _extract_flight_metadata(order)
+
     try:
         booking_payload = jsonable_encoder({
             "trip_id": body.trip_id,
@@ -69,6 +93,7 @@ async def book_flight(body: FlightBookRequest, user: UserClaims = Depends(get_cu
             "currency": order.get("total_currency", "USD"),
             "passenger_details": passengers,
             "duffel_response": order.get("raw") or order,
+            "search_params": search_params,
             "booked_at": datetime.now(timezone.utc).isoformat(),
         })
         booking_resp = db.table("bookings").insert(booking_payload).execute()

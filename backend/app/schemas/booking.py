@@ -50,6 +50,13 @@ class HotelBookRequest(BaseModel):
     guests: List[dict]
     trip_id: str
     prebook_id: Optional[str] = None
+    # Structured metadata stored alongside the booking so the UI can display
+    # hotel name / dates without parsing raw provider responses.
+    hotel_name: Optional[str] = None
+    check_in: Optional[str] = None
+    check_out: Optional[str] = None
+    hotel_address: Optional[str] = None
+    hotel_rating: Optional[float] = None
 
 
 class BookingResponse(BaseModel):
@@ -62,3 +69,7 @@ class BookingResponse(BaseModel):
     currency: str = "USD"
     booked_at: Optional[datetime] = None
     created_at: datetime
+    # Additional fields persisted to the database and returned to the client
+    provider: Optional[str] = None
+    passenger_details: Optional[List[Any]] = None
+    search_params: Optional[Any] = None

@@ -88,6 +88,16 @@ async def book_hotel(body: HotelBookRequest, user: UserClaims = Depends(get_curr
         logger.error(f"Hotel booking failed: {type(e).__name__}: {e}", exc_info=True)
         raise HTTPException(status_code=502, detail=f"Booking failed: {str(e)}")
 
+    # Build structured metadata so the UI can show hotel details without
+    # parsing the raw provider response.
+    search_params = {
+        "hotel_name": body.hotel_name,
+        "check_in": body.check_in,
+        "check_out": body.check_out,
+        "hotel_address": body.hotel_address,
+        "hotel_rating": body.hotel_rating,
+    }
+
     try:
         booking_payload = jsonable_encoder({
             "trip_id": body.trip_id,
@@ -100,6 +110,7 @@ async def book_hotel(body: HotelBookRequest, user: UserClaims = Depends(get_curr
             "total_amount": float(order.get("total_amount") or 0),
             "currency": order.get("currency", "USD"),
             "duffel_response": order.get("raw") or order,
+            "search_params": search_params,
             "booked_at": datetime.now(timezone.utc).isoformat(),
         })
         booking_resp = db.table("bookings").insert(booking_payload).execute()

@@ -5,6 +5,7 @@ import { useBookFlight } from '../../hooks/useFlightSearch'
 import { useBookHotel } from '../../hooks/useHotelSearch'
 import GlassInput from '../ui/GlassInput'
 import GlassButton from '../ui/GlassButton'
+import BookingSuccessModal, { type BookingSuccessInfo } from './BookingSuccessModal'
 import toast from 'react-hot-toast'
 import { ApiError } from '../../lib/api'
 
@@ -48,7 +49,7 @@ function formatPhoneInput(raw: string): string {
 export default function PassengerForm() {
   const navigate = useNavigate()
   const {
-    tab, tripId, selectedFlightOffer, selectedHotelOffer, flightParams,
+    tab, tripId, selectedFlightOffer, selectedHotelOffer, flightParams, hotelParams,
     hotelPrebookId,
     reset, close,
     passengers: storedPassengers, setPassengers: setStorePassengers,
@@ -56,6 +57,8 @@ export default function PassengerForm() {
 
   const bookFlight = useBookFlight()
   const bookHotel = useBookHotel()
+
+  const [successInfo, setSuccessInfo] = useState<BookingSuccessInfo | null>(null)
 
   const passengerCount = flightParams?.passengers ?? 1
 
@@ -103,9 +106,17 @@ export default function PassengerForm() {
           passengers,
           trip_id: tripId,
         })
-        // Don't reset — keep hotel params alive so confirmation page can offer hotel booking
-        close()
-        navigate(`/booking/confirmation?ref=${data.duffel_booking_reference}&type=flight&trip_id=${tripId}`)
+        const route = selectedFlightOffer.slices
+          .map((s) => `${s.origin.iata_code} → ${s.destination.iata_code}`)
+          .join(' · ')
+        setSuccessInfo({
+          type: 'flight',
+          reference: data.duffel_booking_reference ?? data.booking_reference ?? undefined,
+          bookingId: data.id ?? undefined,
+          summary: route,
+          totalAmount: selectedFlightOffer.total_amount,
+          currency: selectedFlightOffer.total_currency,
+        })
 
       } else if (tab === 'hotels' && selectedHotelOffer) {
         const { data } = await bookHotel.mutateAsync({
@@ -118,10 +129,21 @@ export default function PassengerForm() {
             phone_number: p.phone_number,
           })),
           trip_id: tripId,
+          // Send structured metadata so TripDetail can display hotel info
+          hotel_name: selectedHotelOffer.accommodation.name,
+          check_in: hotelParams?.check_in ?? null,
+          check_out: hotelParams?.check_out ?? null,
+          hotel_address: selectedHotelOffer.accommodation.address ?? null,
+          hotel_rating: selectedHotelOffer.accommodation.rating ?? null,
         })
-        reset()
-        close()
-        navigate('/trips')
+        setSuccessInfo({
+          type: 'hotel',
+          reference: data.reference ?? data.bookingReference ?? undefined,
+          bookingId: data.id ?? data.bookingId ?? undefined,
+          summary: selectedHotelOffer.accommodation.name,
+          totalAmount: data.total_amount ?? selectedHotelOffer.cheapest_rate_total_amount,
+          currency: data.currency ?? selectedHotelOffer.cheapest_rate_currency,
+        })
       }
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 409) {
@@ -136,7 +158,22 @@ export default function PassengerForm() {
 
   const isPending = bookFlight.isPending || bookHotel.isPending
 
+  function handleSuccessClose() {
+    const wasHotel = successInfo?.type === 'hotel'
+    setSuccessInfo(null)
+    reset()
+    close()
+    if (!wasHotel) {
+      // For flights, navigate to trips (confirmation already shown in modal)
+      navigate('/trips')
+    } else {
+      navigate('/trips')
+    }
+  }
+
   return (
+    <>
+    <BookingSuccessModal info={successInfo} onClose={handleSuccessClose} />
     <div className="space-y-5">
       {/* Selected offer summary */}
       {tab === 'flights' && selectedFlightOffer && (
@@ -281,5 +318,6 @@ export default function PassengerForm() {
         </div>
       </form>
     </div>
+    </>
   )
 }

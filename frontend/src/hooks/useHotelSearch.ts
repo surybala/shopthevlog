@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import api from '../lib/api'
-import type { HotelSearchParams, HotelOffer } from '../types/booking'
+import type { HotelOffer, HotelSearchParams } from '../types/booking'
 
 export function useHotelSearch() {
   return useMutation({
@@ -28,6 +28,12 @@ export function useBookHotel() {
       guests: unknown[]
       trip_id: string
       prebook_id?: string | null
+      // Structured metadata stored so TripDetail can show hotel details
+      hotel_name?: string | null
+      check_in?: string | null
+      check_out?: string | null
+      hotel_address?: string | null
+      hotel_rating?: number | null
     }) => api.post('/hotels/book', payload),
   })
 }
