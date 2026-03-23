@@ -2,19 +2,20 @@
  * Tests for HotelDetailSheet component.
  *
  * Verifies:
- *   - Sheet renders when an offer is provided
- *   - Sheet renders nothing when offer is null
- *   - Hotel name, rating, address and price are displayed
- *   - Photos are rendered up to the capped limit
- *   - Provider badge shows correct label
- *   - Check-in/out dates are displayed when provided
- *   - onClose is called by close button and backdrop click
- *   - onSelect is called with the offer when "Select" CTA is clicked
+ *   — Basic rendering (name, rating, address, price, photos, badges, dates)
+ *   — onClose fired by close button and backdrop click
+ *   — Duffel offers: onSelect called immediately without prebook
+ *   — LiteAPI offers: prebook called first, prebookId stored, then onSelect
+ *   — LiteAPI offers: 409 prebook error → toast + onClose, no onSelect
+ *   — LiteAPI offers: other prebook error → toast, no onSelect
+ *   — Loading state while prebook is in flight
  */
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import HotelDetailSheet from '../HotelDetailSheet'
 import type { HotelOffer } from '../../../types/booking'
+import { useBookingStore } from '../../../stores/bookingStore'
+import { ApiError } from '../../../lib/api'
 
 // ─── Mock framer-motion so animations don't interfere with jsdom ──────────────
 vi.mock('framer-motion', () => ({
@@ -26,11 +27,23 @@ vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
+// ─── Mock react-hot-toast ─────────────────────────────────────────────────────
+vi.mock('react-hot-toast', () => ({
+  default: { error: vi.fn(), success: vi.fn() },
+}))
+
+// ─── Mock usePrebookHotel — prevents React Query context requirement ──────────
+const mockMutateAsync = vi.fn()
+vi.mock('../../../hooks/useHotelSearch', () => ({
+  usePrebookHotel: vi.fn(),
+}))
+
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-const liteapiOffer: HotelOffer = {
-  id: 'hotel-1',
-  provider: 'liteapi',
+/** ID does NOT start with "liteapi_hotel_" → prebook is skipped for this offer. */
+const duffelOffer: HotelOffer = {
+  id: 'duffel-hotel-1',
+  provider: 'duffel',
   accommodation: {
     name: 'Grand Hotel Tokyo',
     rating: 5,
@@ -47,153 +60,234 @@ const liteapiOffer: HotelOffer = {
   cheapest_rate_currency: 'USD',
 }
 
-const duffelOffer: HotelOffer = {
-  ...liteapiOffer,
-  id: 'hotel-2',
-  provider: 'duffel',
+/** ID starts with "liteapi_hotel_" → triggers the prebook step. */
+const liteapiOffer: HotelOffer = {
+  ...duffelOffer,
+  id: 'liteapi_hotel_RATE_XYZ',
+  provider: 'liteapi',
 }
 
 const noAddressOffer: HotelOffer = {
-  ...liteapiOffer,
-  id: 'hotel-3',
-  accommodation: {
-    ...liteapiOffer.accommodation,
-    address: undefined,
-    photos: [],
-  },
+  ...duffelOffer,
+  accommodation: { ...duffelOffer.accommodation, address: undefined, photos: [] },
 }
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
+// ─── Setup ────────────────────────────────────────────────────────────────────
+
+// Import the mocked module so we can configure it per-test
+import * as HotelSearchHooks from '../../../hooks/useHotelSearch'
+import toast from 'react-hot-toast'
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  // Default: prebook succeeds immediately
+  vi.mocked(HotelSearchHooks.usePrebookHotel).mockReturnValue({
+    mutateAsync: mockMutateAsync.mockResolvedValue('PB-DEFAULT'),
+    isPending: false,
+  } as any)
+  // Reset the Zustand store
+  useBookingStore.setState({ hotelPrebookId: null })
+})
+
+// ─── Rendering ────────────────────────────────────────────────────────────────
 
 describe('HotelDetailSheet', () => {
-  it('renders nothing when offer is null', () => {
-    const { container } = render(
-      <HotelDetailSheet offer={null} onClose={vi.fn()} onSelect={vi.fn()} />
-    )
-    expect(container).toBeEmptyDOMElement()
+  describe('rendering', () => {
+    it('renders nothing when offer is null', () => {
+      const { container } = render(
+        <HotelDetailSheet offer={null} onClose={vi.fn()} onSelect={vi.fn()} />
+      )
+      expect(container).toBeEmptyDOMElement()
+    })
+
+    it('renders the sheet when an offer is provided', () => {
+      render(<HotelDetailSheet offer={duffelOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+      expect(screen.getByTestId('hotel-detail-sheet')).toBeInTheDocument()
+    })
+
+    it('displays the hotel name', () => {
+      render(<HotelDetailSheet offer={duffelOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+      expect(screen.getByText('Grand Hotel Tokyo')).toBeInTheDocument()
+    })
+
+    it('displays the total price and currency', () => {
+      render(<HotelDetailSheet offer={duffelOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+      expect(screen.getByText(/USD/)).toBeInTheDocument()
+      expect(screen.getByText(/320/)).toBeInTheDocument()
+    })
+
+    it('displays the hotel address', () => {
+      render(<HotelDetailSheet offer={duffelOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+      expect(screen.getByText('1-2-3 Shinjuku, Tokyo 160-0022')).toBeInTheDocument()
+    })
+
+    it('does not render address section when address is absent', () => {
+      render(<HotelDetailSheet offer={noAddressOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+      expect(screen.queryByText(/Location/)).not.toBeInTheDocument()
+    })
+
+    it('renders hotel photos', () => {
+      render(<HotelDetailSheet offer={duffelOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+      const images = screen.getAllByRole('img').filter((img) =>
+        (img as HTMLImageElement).src.includes('example.com/photo')
+      )
+      expect(images.length).toBe(2)
+    })
+
+    it('shows LiteAPI provider badge for liteapi offers', () => {
+      render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+      expect(screen.getByText('LiteAPI')).toBeInTheDocument()
+    })
+
+    it('shows Duffel provider badge for duffel offers', () => {
+      render(<HotelDetailSheet offer={duffelOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+      expect(screen.getByText('Duffel')).toBeInTheDocument()
+    })
+
+    it('shows star rating', () => {
+      render(<HotelDetailSheet offer={duffelOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+      expect(screen.getByLabelText('5 stars')).toBeInTheDocument()
+    })
+
+    it('displays check-in and check-out dates when provided', () => {
+      render(
+        <HotelDetailSheet
+          offer={duffelOffer}
+          checkIn="2025-06-10"
+          checkOut="2025-06-15"
+          onClose={vi.fn()}
+          onSelect={vi.fn()}
+        />
+      )
+      expect(screen.getByText(/Check-in/)).toBeInTheDocument()
+      expect(screen.getByText(/Check-out/)).toBeInTheDocument()
+    })
+
+    it('does not render stay section when check-in/out are not provided', () => {
+      render(<HotelDetailSheet offer={duffelOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+      expect(screen.queryByText(/Check-in/)).not.toBeInTheDocument()
+    })
+
+    it('shows Best Available Rate label', () => {
+      render(<HotelDetailSheet offer={duffelOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+      expect(screen.getByText('Best Available Rate')).toBeInTheDocument()
+    })
+
+    it('shows "Confirming offer…" and disables button when prebook is pending', () => {
+      vi.mocked(HotelSearchHooks.usePrebookHotel).mockReturnValue({
+        mutateAsync: vi.fn(),
+        isPending: true,
+      } as any)
+      render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+      expect(screen.getByText('Confirming offer…')).toBeInTheDocument()
+      expect(screen.getByTestId('hotel-select-btn')).toBeDisabled()
+    })
   })
 
-  it('renders the sheet when an offer is provided', () => {
-    render(
-      <HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />
-    )
-    expect(screen.getByTestId('hotel-detail-sheet')).toBeInTheDocument()
+  // ── Close behaviour ──────────────────────────────────────────────────────────
+
+  describe('close behaviour', () => {
+    it('calls onClose when the close button is clicked', () => {
+      const onClose = vi.fn()
+      render(<HotelDetailSheet offer={duffelOffer} onClose={onClose} onSelect={vi.fn()} />)
+      fireEvent.click(screen.getByTestId('hotel-detail-close'))
+      expect(onClose).toHaveBeenCalledOnce()
+    })
+
+    it('calls onClose when the backdrop is clicked', () => {
+      const onClose = vi.fn()
+      render(<HotelDetailSheet offer={duffelOffer} onClose={onClose} onSelect={vi.fn()} />)
+      fireEvent.click(screen.getByTestId('hotel-detail-backdrop'))
+      expect(onClose).toHaveBeenCalledOnce()
+    })
   })
 
-  it('displays the hotel name', () => {
-    render(
-      <HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />
-    )
-    expect(screen.getByText('Grand Hotel Tokyo')).toBeInTheDocument()
+  // ── Duffel offers — no prebook ────────────────────────────────────────────────
+
+  describe('Duffel offer selection (no prebook)', () => {
+    it('calls onSelect immediately without calling prebook', () => {
+      const onSelect = vi.fn()
+      render(<HotelDetailSheet offer={duffelOffer} onClose={vi.fn()} onSelect={onSelect} />)
+      fireEvent.click(screen.getByTestId('hotel-select-btn'))
+      expect(mockMutateAsync).not.toHaveBeenCalled()
+      expect(onSelect).toHaveBeenCalledOnce()
+      expect(onSelect).toHaveBeenCalledWith(duffelOffer)
+    })
+
+    it('does not write hotelPrebookId to the store', () => {
+      render(<HotelDetailSheet offer={duffelOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+      fireEvent.click(screen.getByTestId('hotel-select-btn'))
+      expect(useBookingStore.getState().hotelPrebookId).toBeNull()
+    })
   })
 
-  it('displays the total price and currency', () => {
-    render(
-      <HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />
-    )
-    expect(screen.getByText(/USD/)).toBeInTheDocument()
-    expect(screen.getByText(/320/)).toBeInTheDocument()
-  })
+  // ── LiteAPI offers — prebook required ────────────────────────────────────────
 
-  it('displays the hotel address', () => {
-    render(
-      <HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />
-    )
-    expect(screen.getByText('1-2-3 Shinjuku, Tokyo 160-0022')).toBeInTheDocument()
-  })
+  describe('LiteAPI offer selection (prebook required)', () => {
+    it('calls usePrebookHotel.mutateAsync with the offer id', async () => {
+      const onSelect = vi.fn()
+      render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={onSelect} />)
+      fireEvent.click(screen.getByTestId('hotel-select-btn'))
+      await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledWith('liteapi_hotel_RATE_XYZ'))
+    })
 
-  it('does not render address section when address is absent', () => {
-    render(
-      <HotelDetailSheet offer={noAddressOffer} onClose={vi.fn()} onSelect={vi.fn()} />
-    )
-    expect(screen.queryByText(/Location/)).not.toBeInTheDocument()
-  })
+    it('stores the returned prebookId in the booking store before calling onSelect', async () => {
+      mockMutateAsync.mockResolvedValue('PB-RETURNED')
+      const onSelect = vi.fn()
+      render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={onSelect} />)
+      fireEvent.click(screen.getByTestId('hotel-select-btn'))
+      await waitFor(() => {
+        expect(useBookingStore.getState().hotelPrebookId).toBe('PB-RETURNED')
+        expect(onSelect).toHaveBeenCalledWith(liteapiOffer)
+      })
+    })
 
-  it('renders hotel photos', () => {
-    render(
-      <HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />
-    )
-    const images = screen.getAllByRole('img').filter((img) =>
-      (img as HTMLImageElement).src.includes('example.com/photo')
-    )
-    expect(images.length).toBe(2)
-  })
+    it('calls onSelect after prebook succeeds', async () => {
+      const onSelect = vi.fn()
+      render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={onSelect} />)
+      fireEvent.click(screen.getByTestId('hotel-select-btn'))
+      await waitFor(() => expect(onSelect).toHaveBeenCalledOnce())
+    })
 
-  it('shows LiteAPI provider badge for liteapi offers', () => {
-    render(
-      <HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />
-    )
-    expect(screen.getByText('LiteAPI')).toBeInTheDocument()
-  })
+    it('shows a stale-offer toast and calls onClose when prebook returns 409', async () => {
+      mockMutateAsync.mockRejectedValue(new ApiError('Offer expired', 409))
+      const onClose = vi.fn()
+      const onSelect = vi.fn()
+      render(<HotelDetailSheet offer={liteapiOffer} onClose={onClose} onSelect={onSelect} />)
+      fireEvent.click(screen.getByTestId('hotel-select-btn'))
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith(
+          expect.stringContaining('expired'),
+          expect.any(Object)
+        )
+        expect(onClose).toHaveBeenCalledOnce()
+        expect(onSelect).not.toHaveBeenCalled()
+      })
+    })
 
-  it('shows Duffel provider badge for duffel offers', () => {
-    render(
-      <HotelDetailSheet offer={duffelOffer} onClose={vi.fn()} onSelect={vi.fn()} />
-    )
-    expect(screen.getByText('Duffel')).toBeInTheDocument()
-  })
+    it('shows a generic toast (no close) when prebook fails with a non-409 error', async () => {
+      mockMutateAsync.mockRejectedValue(new ApiError('Network error', 502))
+      const onClose = vi.fn()
+      const onSelect = vi.fn()
+      render(<HotelDetailSheet offer={liteapiOffer} onClose={onClose} onSelect={onSelect} />)
+      fireEvent.click(screen.getByTestId('hotel-select-btn'))
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith(
+          expect.stringContaining('try again'),
+          // no duration option for generic error
+        )
+        expect(onClose).not.toHaveBeenCalled()
+        expect(onSelect).not.toHaveBeenCalled()
+      })
+    })
 
-  it('shows star rating', () => {
-    render(
-      <HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />
-    )
-    // 5-star offer → aria-label "5 stars"
-    expect(screen.getByLabelText('5 stars')).toBeInTheDocument()
-  })
-
-  it('displays check-in and check-out dates when provided', () => {
-    render(
-      <HotelDetailSheet
-        offer={liteapiOffer}
-        checkIn="2025-06-10"
-        checkOut="2025-06-15"
-        onClose={vi.fn()}
-        onSelect={vi.fn()}
-      />
-    )
-    expect(screen.getByText(/Check-in/)).toBeInTheDocument()
-    expect(screen.getByText(/Check-out/)).toBeInTheDocument()
-  })
-
-  it('does not render stay section when check-in/out are not provided', () => {
-    render(
-      <HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />
-    )
-    expect(screen.queryByText(/Check-in/)).not.toBeInTheDocument()
-  })
-
-  it('calls onClose when the close button is clicked', () => {
-    const onClose = vi.fn()
-    render(
-      <HotelDetailSheet offer={liteapiOffer} onClose={onClose} onSelect={vi.fn()} />
-    )
-    fireEvent.click(screen.getByTestId('hotel-detail-close'))
-    expect(onClose).toHaveBeenCalledOnce()
-  })
-
-  it('calls onClose when the backdrop is clicked', () => {
-    const onClose = vi.fn()
-    render(
-      <HotelDetailSheet offer={liteapiOffer} onClose={onClose} onSelect={vi.fn()} />
-    )
-    fireEvent.click(screen.getByTestId('hotel-detail-backdrop'))
-    expect(onClose).toHaveBeenCalledOnce()
-  })
-
-  it('calls onSelect with the offer when the select button is clicked', () => {
-    const onSelect = vi.fn()
-    render(
-      <HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={onSelect} />
-    )
-    fireEvent.click(screen.getByText(/Select this hotel/))
-    expect(onSelect).toHaveBeenCalledOnce()
-    expect(onSelect).toHaveBeenCalledWith(liteapiOffer)
-  })
-
-  it('shows Best Available Rate label', () => {
-    render(
-      <HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />
-    )
-    expect(screen.getByText('Best Available Rate')).toBeInTheDocument()
+    it('does not call onSelect when prebook fails', async () => {
+      mockMutateAsync.mockRejectedValue(new ApiError('Fail', 500))
+      const onSelect = vi.fn()
+      render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={onSelect} />)
+      fireEvent.click(screen.getByTestId('hotel-select-btn'))
+      await waitFor(() => expect(toast.error).toHaveBeenCalled())
+      expect(onSelect).not.toHaveBeenCalled()
+    })
   })
 })

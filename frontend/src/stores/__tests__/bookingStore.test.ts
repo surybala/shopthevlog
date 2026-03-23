@@ -82,6 +82,7 @@ describe('bookingStore', () => {
       hotelParams: null,
       selectedFlightOffer: null,
       selectedHotelOffer: null,
+      hotelPrebookId: null,
       passengers: [],
     })
   })
@@ -130,6 +131,12 @@ describe('bookingStore', () => {
       useBookingStore.getState().open('trip-1')
       expect(useBookingStore.getState().selectedFlightOffer).toBeNull()
       expect(useBookingStore.getState().selectedHotelOffer).toBeNull()
+    })
+
+    it('clears hotelPrebookId on open so stale ids are never reused', () => {
+      useBookingStore.setState({ hotelPrebookId: 'PB-STALE' })
+      useBookingStore.getState().open('trip-1')
+      expect(useBookingStore.getState().hotelPrebookId).toBeNull()
     })
   })
 
@@ -251,6 +258,34 @@ describe('bookingStore', () => {
       useBookingStore.getState().selectHotel(MOCK_HOTEL_OFFER)
       expect(useBookingStore.getState().step).toBe('passengers')
     })
+
+    it('clears any stale hotelPrebookId when a new offer is selected', () => {
+      useBookingStore.setState({ hotelPrebookId: 'PB-OLD' })
+      useBookingStore.getState().selectHotel(MOCK_HOTEL_OFFER)
+      expect(useBookingStore.getState().hotelPrebookId).toBeNull()
+    })
+  })
+
+  // ── setHotelPrebookId() ───────────────────────────────────────────────────────
+
+  describe('setHotelPrebookId()', () => {
+    it('stores the prebookId', () => {
+      useBookingStore.getState().setHotelPrebookId('PB-123')
+      expect(useBookingStore.getState().hotelPrebookId).toBe('PB-123')
+    })
+
+    it('can be cleared back to null', () => {
+      useBookingStore.getState().setHotelPrebookId('PB-123')
+      useBookingStore.getState().setHotelPrebookId(null)
+      expect(useBookingStore.getState().hotelPrebookId).toBeNull()
+    })
+
+    it('does not affect other store state', () => {
+      useBookingStore.getState().open('trip-1', 'hotels')
+      useBookingStore.getState().setHotelPrebookId('PB-999')
+      expect(useBookingStore.getState().tab).toBe('hotels')
+      expect(useBookingStore.getState().step).toBe('search')
+    })
   })
 
   // ── setPassengers() ──────────────────────────────────────────────────────────
@@ -294,6 +329,7 @@ describe('bookingStore', () => {
       expect(state.hotelParams).toBeNull()
       expect(state.selectedFlightOffer).toBeNull()
       expect(state.selectedHotelOffer).toBeNull()
+      expect(state.hotelPrebookId).toBeNull()
       expect(state.passengers).toEqual([])
       expect(state.step).toBe('search')
     })
