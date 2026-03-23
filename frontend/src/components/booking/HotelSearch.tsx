@@ -44,8 +44,8 @@ export default function HotelSearch() {
     <div className="space-y-5">
       {/* Auto-populated hint */}
       {destinationLabel && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-500/10 border border-brand-500/20">
-          <span className="text-brand-400 text-sm">✨</span>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.06] border border-white/15">
+          <span className="text-white/60 text-sm">✨</span>
           <p className="text-white/70 text-xs">
             Pre-filled for <span className="text-white font-medium">{destinationLabel}</span> based on your itinerary.
             Adjust any field below.
@@ -126,7 +126,7 @@ export default function HotelSearch() {
                     <span className="font-medium text-white text-sm leading-snug">
                       {offer.accommodation.name}
                     </span>
-                    <span className="text-brand-300 font-bold text-sm flex-shrink-0">
+                    <span className="text-white font-bold text-sm flex-shrink-0">
                       {offer.cheapest_rate_currency} {parseFloat(offer.cheapest_rate_total_amount).toLocaleString()}
                     </span>
                   </div>
@@ -139,11 +139,9 @@ export default function HotelSearch() {
                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                       offer.provider === 'liteapi'
                         ? 'bg-emerald-500/15 text-emerald-400'
-                        : offer.provider === 'amadeus'
-                          ? 'bg-blue-500/15 text-blue-400'
-                          : 'bg-white/10 text-white/40'
+                        : 'bg-white/10 text-white/40'
                     }`}>
-                      {offer.provider === 'liteapi' ? 'LiteAPI' : offer.provider === 'amadeus' ? 'Amadeus' : 'Duffel'}
+                      {offer.provider === 'liteapi' ? 'LiteAPI' : 'Duffel'}
                     </span>
                   </div>
                   {offer.accommodation.address && (

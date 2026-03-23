@@ -27,7 +27,7 @@ export default function ActivityCard({ activity }: ActivityCardProps) {
           <p className="text-white/60 text-xs mt-1 leading-relaxed">{activity.description}</p>
         )}
         {activity.location_name && (
-          <p className="text-brand-300 text-xs mt-1">📍 {activity.location_name}</p>
+          <p className="text-white/50 text-xs mt-1">📍 {activity.location_name}</p>
         )}
         {activity.duration_minutes && (
           <p className="text-white/40 text-xs mt-1">⏱ {activity.duration_minutes} min</p>
@@ -37,7 +37,7 @@ export default function ActivityCard({ activity }: ActivityCardProps) {
             href={activity.booking_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block mt-2 text-xs text-brand-400 hover:text-brand-200 transition-colors"
+            className="inline-block mt-2 text-xs text-white/60 hover:text-white transition-colors"
           >
             Book →
           </a>

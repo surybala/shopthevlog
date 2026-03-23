@@ -45,7 +45,7 @@ export default function BookingConfirmation() {
         {ref && (
           <div className="glass rounded-xl p-3 mb-6">
             <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Booking reference</p>
-            <p className="font-mono font-bold text-brand-300 text-lg">{ref}</p>
+            <p className="font-mono font-bold text-white text-lg tracking-widest">{ref}</p>
           </div>
         )}
 

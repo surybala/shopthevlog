@@ -15,14 +15,14 @@ const BUDGETS = [
   { value: 'luxury', label: 'Luxury', desc: 'Premium experiences, 5-star stays' },
 ]
 
-type Step = 'styles' | 'destinations' | 'budget' | 'connect' | 'building'
+type Step = 'styles' | 'destinations' | 'budget' | 'location' | 'connect' | 'building'
 
 function ToggleChip({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
       className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-        selected ? 'bg-brand-500 text-white shadow-glow-indigo' : 'glass text-white/60 hover:text-white'
+        selected ? 'bg-white text-black shadow-glow-white' : 'glass text-white/60 hover:text-white'
       }`}
     >
       {label}
@@ -37,6 +37,7 @@ export default function Onboarding() {
   const [destinations, setDestinations] = useState<string[]>([])
   const [durations, setDurations] = useState<string[]>([])
   const [budget, setBudget] = useState('')
+  const [homeLocation, setHomeLocation] = useState('')
   const [saving, setSaving] = useState(false)
 
   function toggle<T>(arr: T[], val: T): T[] {
@@ -52,6 +53,7 @@ export default function Onboarding() {
         destinations,
         trip_durations: durations,
         budget_range: budget || null,
+        home_location: homeLocation.trim() || null,
       })
       await api.post('/feed/refresh')
       setTimeout(() => navigate('/feed'), 1500)
@@ -70,22 +72,22 @@ export default function Onboarding() {
     } catch { toast.error('Failed to initiate YouTube connect') }
   }
 
-  const steps: Step[] = ['styles', 'destinations', 'budget', 'connect', 'building']
-  const stepIndex = steps.indexOf(step)
+  const progressSteps: Step[] = ['styles', 'destinations', 'budget', 'location', 'connect']
+  const stepIndex = progressSteps.indexOf(step)
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
       {/* Ambient */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 w-96 h-96 -translate-x-1/2 rounded-full bg-brand-500/15 blur-[120px]" />
+        <div className="absolute top-0 left-1/2 w-96 h-96 -translate-x-1/2 rounded-full bg-white/[0.04] blur-[120px]" />
       </div>
 
       <div className="relative w-full max-w-lg">
         {/* Progress */}
         {step !== 'building' && (
           <div className="flex gap-1.5 mb-8 justify-center">
-            {['styles', 'destinations', 'budget', 'connect'].map((s, i) => (
-              <div key={s} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= stepIndex ? 'bg-brand-500' : 'bg-white/20'}`} />
+            {progressSteps.map((s, i) => (
+              <div key={s} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= stepIndex ? 'bg-white' : 'bg-white/20'}`} />
             ))}
           </div>
         )}
@@ -142,7 +144,7 @@ export default function Onboarding() {
                       key={b.value}
                       onClick={() => setBudget(b.value)}
                       className={`w-full p-4 rounded-xl text-left transition-all duration-200 ${
-                        budget === b.value ? 'bg-brand-500/30 border border-brand-400/50' : 'glass hover:bg-white/15'
+                        budget === b.value ? 'bg-white/15 border border-white/40' : 'glass hover:bg-white/[0.10]'
                       }`}
                     >
                       <div className="font-medium text-white">{b.label}</div>
@@ -150,7 +152,36 @@ export default function Onboarding() {
                     </button>
                   ))}
                 </div>
-                <GlassButton onClick={() => setStep('connect')} fullWidth>Next →</GlassButton>
+                <GlassButton onClick={() => setStep('location')} fullWidth>Next →</GlassButton>
+              </GlassCard>
+            </motion.div>
+          )}
+
+          {step === 'location' && (
+            <motion.div key="location" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+              <GlassCard>
+                <h2 className="text-2xl font-bold text-white mb-1">Where are you based?</h2>
+                <p className="text-white/60 text-sm mb-6">
+                  We use this to personalise your feed — content about your home city or country is deprioritised so you see places you actually want to travel to.
+                </p>
+                <div className="mb-6">
+                  <input
+                    type="text"
+                    value={homeLocation}
+                    onChange={(e) => setHomeLocation(e.target.value)}
+                    placeholder="e.g. London, UK"
+                    className="w-full px-4 py-3 rounded-xl glass text-white placeholder-white/30 bg-transparent border border-white/10 focus:border-white/40 focus:outline-none transition-colors"
+                  />
+                </div>
+                <GlassButton onClick={() => setStep('connect')} fullWidth>
+                  Next →
+                </GlassButton>
+                <button
+                  onClick={() => setStep('connect')}
+                  className="w-full text-center text-white/40 text-sm mt-3 hover:text-white/60 transition-colors"
+                >
+                  Skip
+                </button>
               </GlassCard>
             </motion.div>
           )}
@@ -159,7 +190,7 @@ export default function Onboarding() {
             <motion.div key="connect" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
               <GlassCard>
                 <h2 className="text-2xl font-bold text-white mb-1">Connect your accounts</h2>
-                <p className="text-white/60 text-sm mb-6">We pull vlogs from creators you already follow</p>
+                <p className="text-white/60 text-sm mb-6">We surface vlogs from creators you already subscribe to</p>
                 <div className="space-y-3 mb-6">
                   <button onClick={connectYouTube} className="w-full glass-hover p-4 flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
@@ -169,7 +200,7 @@ export default function Onboarding() {
                     </div>
                     <div className="text-left">
                       <div className="font-medium text-white">Connect YouTube</div>
-                      <div className="text-white/50 text-sm">Import vlogs from channels you subscribe to</div>
+                      <div className="text-white/50 text-sm">Boost vlogs from channels you subscribe to</div>
                     </div>
                     <svg className="w-5 h-5 text-white/30 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -206,7 +237,7 @@ export default function Onboarding() {
                 <h2 className="text-2xl font-bold text-white mb-2">Building your feed…</h2>
                 <p className="text-white/60">Finding travel vlogs that match your vibe</p>
                 <div className="flex justify-center mt-6">
-                  <div className="w-8 h-8 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-8 h-8 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
                 </div>
               </GlassCard>
             </motion.div>

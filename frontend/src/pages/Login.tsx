@@ -37,8 +37,8 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center px-4">
       {/* Ambient */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full bg-brand-500/20 blur-[100px]" />
-        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 rounded-full bg-violet-500/15 blur-[100px]" />
+        <div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full bg-white/[0.04] blur-[100px]" />
+        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 rounded-full bg-white/[0.03] blur-[100px]" />
       </div>
 
       <div className="relative w-full max-w-md">
@@ -92,7 +92,7 @@ export default function Login() {
 
           <p className="text-center text-sm text-white/50 mt-5">
             Don't have an account?{' '}
-            <Link to="/signup" className="text-brand-400 hover:text-brand-300 transition-colors">
+            <Link to="/signup" className="text-white/70 hover:text-white transition-colors">
               Sign up
             </Link>
           </p>

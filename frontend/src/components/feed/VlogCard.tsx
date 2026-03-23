@@ -55,7 +55,7 @@ export default function VlogCard({ vlog, index = 0 }: VlogCardProps) {
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
-          <div className="w-full h-full bg-brand-900/50 flex items-center justify-center">
+          <div className="w-full h-full bg-white/[0.04] flex items-center justify-center">
             <svg className="w-12 h-12 text-white/20" fill="currentColor" viewBox="0 0 24 24">
               <path d="M8 5v14l11-7z" />
             </svg>
@@ -89,7 +89,7 @@ export default function VlogCard({ vlog, index = 0 }: VlogCardProps) {
 
       {/* Content */}
       <div className="p-4">
-        <h3 className="font-semibold text-white text-sm leading-snug line-clamp-2 mb-2 group-hover:text-brand-200 transition-colors">
+        <h3 className="font-semibold text-white text-sm leading-snug line-clamp-2 mb-2 group-hover:text-white/80 transition-colors">
           {vlog.title}
         </h3>
 

@@ -26,7 +26,7 @@ export default function FeedFilters({
         <button
           onClick={() => onStyleChange('')}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
-            !style ? 'bg-brand-500 text-white' : 'glass text-white/60 hover:text-white'
+            !style ? 'bg-white text-black' : 'glass text-white/60 hover:text-white'
           }`}
         >
           All
@@ -36,7 +36,7 @@ export default function FeedFilters({
             key={s}
             onClick={() => onStyleChange(style === s ? '' : s)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
-              style === s ? 'bg-brand-500 text-white' : 'glass text-white/60 hover:text-white'
+              style === s ? 'bg-white text-black' : 'glass text-white/60 hover:text-white'
             }`}
           >
             {s}

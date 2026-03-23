@@ -49,10 +49,10 @@ export default function Navbar() {
                 <img
                   src={profile.avatar_url}
                   alt={profile.display_name ?? 'Profile'}
-                  className="w-8 h-8 rounded-full border-2 border-white/20 group-hover:border-brand-400 transition-colors"
+                  className="w-8 h-8 rounded-full border-2 border-white/20 group-hover:border-white/60 transition-colors"
                 />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-brand-500/40 border-2 border-white/20 flex items-center justify-center text-xs font-bold text-white/80 group-hover:border-brand-400 transition-colors">
+                <div className="w-8 h-8 rounded-full bg-white/10 border-2 border-white/20 flex items-center justify-center text-xs font-bold text-white/80 group-hover:border-white/60 transition-colors">
                   {profile?.display_name?.[0]?.toUpperCase() ?? '?'}
                 </div>
               )}
