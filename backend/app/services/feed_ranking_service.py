@@ -196,8 +196,14 @@ def get_paginated_feed(
         if not v:
             continue
         # Flatten nested itineraries join → itinerary_id scalar
-        itineraries = v.pop("itineraries", None) or []
-        v["itinerary_id"] = itineraries[0]["id"] if itineraries else None
+        # PostgREST may return a dict (unique FK) or list depending on constraint
+        itineraries = v.pop("itineraries", None)
+        if isinstance(itineraries, dict):
+            v["itinerary_id"] = itineraries.get("id")
+        elif isinstance(itineraries, list) and itineraries:
+            v["itinerary_id"] = itineraries[0]["id"]
+        else:
+            v["itinerary_id"] = None
         if dest_lower and dest_lower not in [d.lower() for d in (v.get("destinations") or [])]:
             continue
         if style_lower and style_lower not in [s.lower() for s in (v.get("travel_styles") or [])]:
