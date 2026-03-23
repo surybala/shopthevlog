@@ -7,6 +7,7 @@ from app.core.security import get_current_user, UserClaims
 from app.db.client import get_supabase
 from app.schemas.booking import HotelSearchRequest, HotelBookRequest, BookingResponse
 from app.services import liteapi_service, duffel_service
+from app.core.config import settings
 
 router = APIRouter(prefix="/hotels", tags=["hotels"])
 logger = logging.getLogger(__name__)
