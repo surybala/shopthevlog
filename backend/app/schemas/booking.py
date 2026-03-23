@@ -28,7 +28,7 @@ class PassengerPayload(BaseModel):
     born_on: date
     email: str
     phone_number: str
-    passport: Optional[Any] = None  # {number, expiry_date, country, nationality} for Amadeus intl routes
+    passport: Optional[Any] = None
 
 
 class FlightBookRequest(BaseModel):
@@ -37,10 +37,19 @@ class FlightBookRequest(BaseModel):
     trip_id: str
 
 
+class HotelPrebookRequest(BaseModel):
+    rate_id: str
+
+
+class HotelPrebookResponse(BaseModel):
+    prebook_id: str
+
+
 class HotelBookRequest(BaseModel):
     rate_id: str
     guests: List[dict]
     trip_id: str
+    prebook_id: Optional[str] = None
 
 
 class BookingResponse(BaseModel):

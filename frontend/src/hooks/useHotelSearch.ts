@@ -11,12 +11,23 @@ export function useHotelSearch() {
   })
 }
 
+/** Call immediately after a LiteAPI hotel offer is selected to lock in the prebookId. */
+export function usePrebookHotel() {
+  return useMutation({
+    mutationFn: async (rate_id: string) => {
+      const { data } = await api.post<{ prebook_id: string }>('/hotels/prebook', { rate_id })
+      return data.prebook_id
+    },
+  })
+}
+
 export function useBookHotel() {
   return useMutation({
     mutationFn: (payload: {
       rate_id: string
       guests: unknown[]
       trip_id: string
+      prebook_id?: string | null
     }) => api.post('/hotels/book', payload),
   })
 }

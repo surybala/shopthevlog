@@ -1,11 +1,17 @@
 /**
  * HotelDetailSheet — slide-out panel showing full hotel offer details.
  * Opens when a user clicks a hotel card in HotelSearch instead of immediately
- * selecting the offer. The "Select this hotel" CTA commits the selection.
+ * selecting the offer. The "Select this hotel" CTA calls LiteAPI prebook first
+ * (to lock in the prebookId before offer expiry), then commits the selection.
  */
 import { createPortal } from 'react-dom'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import toast from 'react-hot-toast'
 import GlassButton from '../ui/GlassButton'
+import { usePrebookHotel } from '../../hooks/useHotelSearch'
+import { useBookingStore } from '../../stores/bookingStore'
+import { ApiError } from '../../lib/api'
 import type { HotelOffer } from '../../types/booking'
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -46,6 +52,28 @@ export default function HotelDetailSheet({
   onSelect,
 }: HotelDetailSheetProps) {
   const photos = offer?.accommodation.photos ?? []
+  const prebook = usePrebookHotel()
+  const setHotelPrebookId = useBookingStore((s) => s.setHotelPrebookId)
+  const isLiteApi = offer?.id.startsWith('liteapi_hotel_') ?? false
+
+  async function handleSelect() {
+    if (!offer) return
+    if (isLiteApi) {
+      try {
+        const prebookId = await prebook.mutateAsync(offer.id)
+        setHotelPrebookId(prebookId)
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409) {
+          toast.error('This offer has expired. Please search again.', { duration: 5000 })
+          onClose()
+        } else {
+          toast.error('Could not confirm this offer. Please try again.')
+        }
+        return
+      }
+    }
+    onSelect(offer)
+  }
 
   return createPortal(
     <AnimatePresence>
@@ -178,8 +206,20 @@ export default function HotelDetailSheet({
 
             {/* Footer CTA */}
             <div className="p-6 border-t border-white/10 flex-shrink-0">
-              <GlassButton onClick={() => onSelect(offer)} fullWidth data-testid="hotel-select-btn">
-                Select this hotel →
+              <GlassButton
+                onClick={handleSelect}
+                disabled={prebook.isPending}
+                fullWidth
+                data-testid="hotel-select-btn"
+              >
+                {prebook.isPending ? (
+                  <>
+                    <span className="inline-block animate-spin mr-1.5">🔒</span>
+                    Confirming offer…
+                  </>
+                ) : (
+                  'Select this hotel →'
+                )}
               </GlassButton>
             </div>
           </motion.div>

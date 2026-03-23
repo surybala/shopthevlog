@@ -52,6 +52,8 @@ interface BookingState {
   hotelParams: HotelSearchParams | null
   selectedFlightOffer: FlightOffer | null
   selectedHotelOffer: HotelOffer | null
+  /** prebookId obtained from LiteAPI right after hotel selection — used in the final /hotels/book call. */
+  hotelPrebookId: string | null
   passengers: Passenger[]
   open: (
     tripId: string,
@@ -69,6 +71,7 @@ interface BookingState {
   setHotelParams: (params: HotelSearchParams) => void
   selectFlight: (offer: FlightOffer) => void
   selectHotel: (offer: HotelOffer) => void
+  setHotelPrebookId: (id: string | null) => void
   setPassengers: (passengers: Passenger[]) => void
   reset: () => void
 }
@@ -83,6 +86,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   hotelParams: null,
   selectedFlightOffer: null,
   selectedHotelOffer: null,
+  hotelPrebookId: null,
   passengers: [],
 
   open: (tripId, tab = 'flights', flightParams = null, hotelParams = null, destinationLabel = null) => {
@@ -101,6 +105,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         passengers: draft.passengers,
         selectedFlightOffer: null,
         selectedHotelOffer: null,
+        hotelPrebookId: null,
       })
     } else {
       set({
@@ -113,6 +118,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         destinationLabel,
         selectedFlightOffer: null,
         selectedHotelOffer: null,
+        hotelPrebookId: null,
         passengers: [],
       })
     }
@@ -140,7 +146,8 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   setFlightParams: (flightParams) => set({ flightParams }),
   setHotelParams: (hotelParams) => set({ hotelParams }),
   selectFlight: (offer) => set({ selectedFlightOffer: offer, step: 'passengers' }),
-  selectHotel: (offer) => set({ selectedHotelOffer: offer, step: 'passengers' }),
+  selectHotel: (offer) => set({ selectedHotelOffer: offer, hotelPrebookId: null, step: 'passengers' }),
+  setHotelPrebookId: (id) => set({ hotelPrebookId: id }),
   setPassengers: (passengers) => set({ passengers }),
 
   reset: () => {
@@ -153,6 +160,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       destinationLabel: null,
       selectedFlightOffer: null,
       selectedHotelOffer: null,
+      hotelPrebookId: null,
       passengers: [],
     })
   },

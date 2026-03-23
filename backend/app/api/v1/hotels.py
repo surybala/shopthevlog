@@ -5,7 +5,7 @@ import logging
 
 from app.core.security import get_current_user, UserClaims
 from app.db.client import get_supabase
-from app.schemas.booking import HotelSearchRequest, HotelBookRequest, BookingResponse
+from app.schemas.booking import HotelSearchRequest, HotelBookRequest, HotelPrebookRequest, HotelPrebookResponse, BookingResponse
 from app.services import liteapi_service, duffel_service
 from app.core.config import settings
 from app.core.exceptions import StaleOfferError
@@ -41,6 +41,25 @@ async def search_hotels(body: HotelSearchRequest, user: UserClaims = Depends(get
     return results[:20]
 
 
+@router.post("/prebook", response_model=HotelPrebookResponse)
+async def prebook_hotel(body: HotelPrebookRequest, user: UserClaims = Depends(get_current_user)):
+    """
+    Call LiteAPI prebook immediately after the user selects a hotel offer.
+    Returns a short-lived prebookId that must be passed to /hotels/book.
+    Doing this early avoids the offer expiring while the user fills in passenger details.
+    """
+    if not body.rate_id.startswith("liteapi_hotel_"):
+        raise HTTPException(status_code=400, detail="Prebook is only supported for LiteAPI offers")
+    try:
+        prebook_id = liteapi_service.prebook_hotel(body.rate_id)
+    except StaleOfferError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        logger.error(f"Hotel prebook failed: {e}", exc_info=True)
+        raise HTTPException(status_code=502, detail=f"Prebook failed: {str(e)}")
+    return {"prebook_id": prebook_id}
+
+
 @router.post("/book", response_model=BookingResponse)
 async def book_hotel(body: HotelBookRequest, user: UserClaims = Depends(get_current_user)):
     db = get_supabase()
@@ -51,7 +70,7 @@ async def book_hotel(body: HotelBookRequest, user: UserClaims = Depends(get_curr
 
     try:
         if body.rate_id.startswith("liteapi_hotel_"):
-            order = liteapi_service.create_hotel_order(body.rate_id, body.guests)
+            order = liteapi_service.create_hotel_order(body.rate_id, body.guests, prebook_id=body.prebook_id)
         else:
             # Duffel Stays
             raw = duffel_service.create_hotel_order(body.rate_id, body.guests, body.trip_id)

@@ -106,8 +106,9 @@ export default function ItineraryPanel({ vlogId, initialStatus, initialItinerary
             estimated costs, and booking links.
           </p>
         </div>
-        <GlassButton onClick={handlePlan} loading={actionPending} size="sm">
-          🪄 Plan this vlog
+        <GlassButton onClick={handlePlan} disabled={actionPending} size="sm">
+          <span className={actionPending ? 'inline-block animate-spin' : ''}>🪄</span>
+          {actionPending ? 'Planning…' : 'Plan this vlog'}
         </GlassButton>
       </div>
     )

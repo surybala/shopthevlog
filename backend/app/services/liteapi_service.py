@@ -215,12 +215,18 @@ def prebook_hotel(offer_id: str) -> str:
         return prebook_id
 
 
-def create_hotel_order(offer_id: str, guests: list[dict]) -> dict:
+def create_hotel_order(
+    offer_id: str,
+    guests: list[dict],
+    prebook_id: str | None = None,
+) -> dict:
     """
     Book a LiteAPI hotel. Uses account-balance payment (B2B model — no card needed).
-    guests: list of dicts with given_name, family_name, email.
+    guests: list of dicts with given_name, family_name, email, phone_number.
+    prebook_id: if already obtained (preferred — avoids offer expiry), skip the prebook step.
     """
-    prebook_id = prebook_hotel(offer_id)
+    if prebook_id is None:
+        prebook_id = prebook_hotel(offer_id)
     # Use first guest as primary contact
     primary = guests[0] if guests else {}
 
@@ -233,6 +239,7 @@ def create_hotel_order(offer_id: str, guests: list[dict]) -> dict:
                     "guestFirstName": primary.get("given_name", ""),
                     "guestLastName": primary.get("family_name", ""),
                     "guestEmail": primary.get("email", ""),
+                    "guestPhone": primary.get("phone_number", ""),
                 },
             },
         )

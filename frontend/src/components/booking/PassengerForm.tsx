@@ -49,6 +49,7 @@ export default function PassengerForm() {
   const navigate = useNavigate()
   const {
     tab, tripId, selectedFlightOffer, selectedHotelOffer, flightParams,
+    hotelPrebookId,
     reset, close,
     passengers: storedPassengers, setPassengers: setStorePassengers,
   } = useBookingStore()
@@ -109,6 +110,7 @@ export default function PassengerForm() {
       } else if (tab === 'hotels' && selectedHotelOffer) {
         const { data } = await bookHotel.mutateAsync({
           rate_id: selectedHotelOffer.id,
+          prebook_id: hotelPrebookId,
           guests: passengers.map((p) => ({
             given_name: p.given_name,
             family_name: p.family_name,
