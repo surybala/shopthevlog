@@ -36,8 +36,39 @@ async def search_hotels(body: HotelSearchRequest, user: UserClaims = Depends(get
         except Exception as e:
             logger.warning(f"Duffel hotel search failed: {e}")
 
+    # Dev-mode mock fallback — returned when all live APIs are unreachable
+    if not results and settings.APP_ENV == "development":
+        logger.warning("All hotel APIs failed — returning mock data for development")
+        results = _mock_hotels(body.location)
+
     results.sort(key=lambda r: float(r.get("cheapest_rate_total_amount") or "999999"))
     return results[:20]
+
+
+def _mock_hotels(location: str) -> list:
+    names = [
+        ("The Grand Palace Hotel", "5", "450.00"),
+        ("Boutique Stay Central", "4", "180.00"),
+        ("City View Inn", "3", "95.00"),
+        ("Luxury Suites & Spa", "5", "620.00"),
+        ("Budget Traveller Lodge", "2", "55.00"),
+    ]
+    return [
+        {
+            "id": f"mock_hotel_{i}",
+            "provider": "mock",
+            "accommodation": {
+                "name": f"{name} — {location}",
+                "rating": stars,
+                "photos": [],
+                "location": {"geographic_coordinates": {"latitude": None, "longitude": None}},
+                "address": f"123 Example St, {location}",
+            },
+            "cheapest_rate_total_amount": price,
+            "cheapest_rate_currency": "USD",
+        }
+        for i, (name, stars, price) in enumerate(names)
+    ]
 
 
 @router.post("/book", response_model=BookingResponse)
