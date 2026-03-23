@@ -116,12 +116,17 @@ export default function VlogCard({ vlog, index = 0 }: VlogCardProps) {
         )}
 
         {/* Ready indicator */}
-        {vlog.processing_status === 'ready' && (
+        {vlog.itinerary_id ? (
           <div className="mt-3 flex items-center gap-1.5 text-xs text-emerald-400">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
             Itinerary ready
           </div>
-        )}
+        ) : vlog.processing_status === 'ready' ? (
+          <div className="mt-3 flex items-center gap-1.5 text-xs text-white/40">
+            <div className="w-1.5 h-1.5 rounded-full bg-white/40" />
+            Ready to plan
+          </div>
+        ) : null}
       </div>
     </motion.div>
   )

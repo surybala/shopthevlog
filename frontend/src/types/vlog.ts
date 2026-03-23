@@ -17,6 +17,7 @@ export interface Vlog {
   travel_styles: string[]
   processing_status: ProcessingStatus
   created_at: string
+  itinerary_id: string | null
 }
 
 export interface FeedPage {

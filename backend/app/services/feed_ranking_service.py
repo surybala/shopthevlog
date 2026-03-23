@@ -6,6 +6,7 @@ import math
 from datetime import datetime, timezone
 
 from app.db.client import get_supabase
+from app.services.youtube_service import get_user_subscriptions
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,8 @@ logger = logging.getLogger(__name__)
 _VLOG_COLS = (
     "id,platform,platform_video_id,title,thumbnail_url,channel_name,"
     "duration_seconds,published_at,view_count,like_count,"
-    "destinations,travel_styles,processing_status,created_at"
+    "destinations,travel_styles,processing_status,created_at,"
+    "itineraries(id)"
 )
 
 
@@ -54,18 +56,30 @@ def _engagement_score(view_count: int | None, like_count: int | None) -> float:
 def build_feed_for_user(user_id: str) -> None:
     """
     Score all ready vlogs for this user and upsert into feed_cache.
-    Called after onboarding, new vlog ingest, or explicit refresh.
+    Signals used:
+      - destination_match: overlap with user's preferred destinations
+      - style_match: overlap with user's travel styles
+      - subscription_score: boost for vlogs from YouTube channels the user subscribes to
+      - engagement: log-normalised view/like counts
+      - recency: exponential decay by publish date
+    Home location is used as a penalty (deprioritise content about where the user lives).
     """
     db = get_supabase()
 
-    # Load taste preferences
-    prefs_resp = db.table("taste_preferences").select("destinations,travel_styles").eq("user_id", user_id).execute()
+    # Load taste preferences (includes home_location)
+    prefs_resp = db.table("taste_preferences").select("destinations,travel_styles,home_location").eq("user_id", user_id).execute()
     prefs = prefs_resp.data[0] if prefs_resp.data else {}
     pref_destinations = prefs.get("destinations", [])
     pref_styles = prefs.get("travel_styles", [])
+    home_location = (prefs.get("home_location") or "").strip().lower()
 
-    # Load all ready vlogs (scoring columns only)
-    vlogs_resp = db.table("vlogs").select("id,destinations,travel_styles,published_at,view_count,like_count").eq("processing_status", "ready").execute()
+    # Load YouTube subscriptions for this user (empty set if not connected)
+    subscribed_channel_ids = get_user_subscriptions(user_id)
+
+    # Load all ready vlogs (scoring columns only, including channel_id)
+    vlogs_resp = db.table("vlogs").select(
+        "id,destinations,travel_styles,published_at,view_count,like_count,channel_id"
+    ).eq("processing_status", "ready").execute()
     vlogs = vlogs_resp.data or []
 
     # Load already-shown vlog IDs to de-prioritize
@@ -79,12 +93,25 @@ def build_feed_for_user(user_id: str) -> None:
         engagement = _engagement_score(vlog.get("view_count"), vlog.get("like_count"))
         recency = _recency_score(vlog.get("published_at"))
 
+        # 1.0 if the vlog is from a channel the user subscribes to, else 0.0
+        subscription_score = 1.0 if (
+            subscribed_channel_ids and vlog.get("channel_id") in subscribed_channel_ids
+        ) else 0.0
+
         score = (
-            destination_match * 0.35
-            + style_match * 0.30
-            + engagement * 0.20
+            destination_match * 0.25
+            + style_match * 0.20
+            + subscription_score * 0.25
+            + engagement * 0.15
             + recency * 0.15
         )
+
+        # Penalise vlogs whose destinations overlap with the user's home location —
+        # they already live there and are unlikely to want to travel there.
+        if home_location:
+            vlog_destinations_lower = [d.lower() for d in vlog.get("destinations", [])]
+            if any(home_location in d or d in home_location for d in vlog_destinations_lower):
+                score *= 0.4
 
         # Penalize already-shown
         if vlog["id"] in shown_ids:
@@ -97,6 +124,8 @@ def build_feed_for_user(user_id: str) -> None:
             reason_tags.append("style_match")
         if engagement > 0.6:
             reason_tags.append("trending")
+        if subscription_score > 0:
+            reason_tags.append("subscribed_creator")
 
         upsert_rows.append({
             "user_id": user_id,
@@ -154,14 +183,8 @@ def get_paginated_feed(
     resp = query.execute()
     rows = resp.data or []
 
-    # Cache miss on first page — build synchronously then retry once.
-    if not rows and not cursor:
-        logger.info(f"Feed cache empty for {user_id}, building now")
-        build_feed_for_user(user_id)
-        resp = query.execute()
-        rows = resp.data or []
-        if not rows:
-            return {"vlogs": [], "next_cursor": None, "total": 0}
+    if not rows:
+        return {"vlogs": [], "next_cursor": None, "total": 0, "_shown_ids": []}
 
     # Apply client-side filters (joined-column filtering not supported by Supabase SDK)
     dest_lower = destination.lower() if destination else None
@@ -172,6 +195,9 @@ def get_paginated_feed(
         v = row.get("vlogs") or {}
         if not v:
             continue
+        # Flatten nested itineraries join → itinerary_id scalar
+        itineraries = v.pop("itineraries", None) or []
+        v["itinerary_id"] = itineraries[0]["id"] if itineraries else None
         if dest_lower and dest_lower not in [d.lower() for d in v.get("destinations", [])]:
             continue
         if style_lower and style_lower not in [s.lower() for s in v.get("travel_styles", [])]:

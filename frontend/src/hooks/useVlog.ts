@@ -2,15 +2,11 @@ import { useQuery } from '@tanstack/react-query'
 import api from '../lib/api'
 import type { Vlog } from '../types/vlog'
 
-interface VlogWithItinerary extends Vlog {
-  itinerary_id: string | null
-}
-
 export function useVlog(id: string) {
   return useQuery({
     queryKey: ['vlog', id],
     queryFn: async () => {
-      const { data } = await api.get<VlogWithItinerary>(`/vlogs/${id}`)
+      const { data } = await api.get<Vlog>(`/vlogs/${id}`)
       return data
     },
     enabled: !!id,
