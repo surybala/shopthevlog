@@ -198,9 +198,9 @@ def get_paginated_feed(
         # Flatten nested itineraries join → itinerary_id scalar
         itineraries = v.pop("itineraries", None) or []
         v["itinerary_id"] = itineraries[0]["id"] if itineraries else None
-        if dest_lower and dest_lower not in [d.lower() for d in v.get("destinations", [])]:
+        if dest_lower and dest_lower not in [d.lower() for d in (v.get("destinations") or [])]:
             continue
-        if style_lower and style_lower not in [s.lower() for s in v.get("travel_styles", [])]:
+        if style_lower and style_lower not in [s.lower() for s in (v.get("travel_styles") or [])]:
             continue
         entries.append((v, float(row.get("score", 0))))
 
