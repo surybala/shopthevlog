@@ -190,11 +190,13 @@ def prebook_hotel(offer_id: str) -> str:
     """
     Pre-book the offer and return the prebookId required for the final book call.
     offer_id: full prefixed ID like "liteapi_hotel_RATE_ID"
+    Endpoint: POST /rates/prebook  (NOT /book/prebook)
     """
     raw_offer_id = offer_id.removeprefix("liteapi_hotel_")
+    logger.info(f"LiteAPI /rates/prebook → offerId={raw_offer_id!r}")
     with _client() as client:
         resp = client.post(
-            "/book/prebook",
+            "/rates/prebook",
             json={"offerId": raw_offer_id, "usePaymentSdk": False},
         )
         if not resp.is_success:
@@ -202,9 +204,9 @@ def prebook_hotel(offer_id: str) -> str:
                 detail = resp.json()
             except Exception:
                 detail = resp.text
-            logger.error(f"LiteAPI /book/prebook {resp.status_code}: {detail}")
+            logger.error(f"LiteAPI /rates/prebook {resp.status_code}: {detail}")
             raise ValueError(f"LiteAPI prebook {resp.status_code}: {detail}")
-        logger.debug(f"LiteAPI /book/prebook raw body: {resp.text[:500]}")
+        logger.debug(f"LiteAPI /rates/prebook raw body: {resp.text[:500]}")
         if not resp.text.strip():
             logger.warning(f"LiteAPI prebook empty body (status {resp.status_code}) — treating as stale offer")
             raise StaleOfferError("This hotel offer is no longer available. Please search again for fresh results.")
@@ -221,26 +223,41 @@ def create_hotel_order(
     prebook_id: str | None = None,
 ) -> dict:
     """
-    Book a LiteAPI hotel. Uses account-balance payment (B2B model — no card needed).
+    Book a LiteAPI hotel. Uses account-credit payment (B2B model — no card needed).
     guests: list of dicts with given_name, family_name, email, phone_number.
     prebook_id: if already obtained (preferred — avoids offer expiry), skip the prebook step.
+    Endpoint: POST /rates/book  (NOT /book/book)
     """
     if prebook_id is None:
         prebook_id = prebook_hotel(offer_id)
-    # Use first guest as primary contact
+    # Use first guest as holder (primary contact)
     primary = guests[0] if guests else {}
+
+    # Build the guests array — LiteAPI requires occupancyNumber (1-based room index)
+    guests_payload = [
+        {
+            "occupancyNumber": idx + 1,
+            "firstName": g.get("given_name", ""),
+            "lastName":  g.get("family_name", ""),
+            "email":     g.get("email", ""),
+            "phone":     g.get("phone_number", ""),
+        }
+        for idx, g in enumerate(guests)
+    ] if guests else [{"occupancyNumber": 1, "firstName": "", "lastName": "", "email": "", "phone": ""}]
 
     with _client() as client:
         resp = client.post(
-            "/book/book",
+            "/rates/book",
             json={
                 "prebookId": prebook_id,
-                "guestInfo": {
-                    "guestFirstName": primary.get("given_name", ""),
-                    "guestLastName": primary.get("family_name", ""),
-                    "guestEmail": primary.get("email", ""),
-                    "guestPhone": primary.get("phone_number", ""),
+                "holder": {
+                    "firstName": primary.get("given_name", ""),
+                    "lastName":  primary.get("family_name", ""),
+                    "email":     primary.get("email", ""),
+                    "phone":     primary.get("phone_number", ""),
                 },
+                "guests":  guests_payload,
+                "payment": {"method": "ACC_CREDIT_CARD"},
             },
         )
         if not resp.is_success:
@@ -248,16 +265,20 @@ def create_hotel_order(
                 detail = resp.json()
             except Exception:
                 detail = resp.text
-            logger.error(f"LiteAPI /book/book {resp.status_code}: {detail}")
+            logger.error(f"LiteAPI /rates/book {resp.status_code}: {detail}")
             resp.raise_for_status()
         data = resp.json().get("data", {})
 
-    booking = data.get("booking", data)
+    # Normalise across possible response shapes
+    booking_id  = data.get("bookingId") or data.get("confirmedBookingId") or data.get("id")
+    reference   = data.get("bookingReference") or data.get("confirmedBookingId") or booking_id
+    total       = data.get("price") or data.get("totalAmount") or data.get("total", "0")
+    currency    = data.get("currency", "USD")
     return {
-        "id": booking.get("bookingId") or booking.get("id"),
-        "reference": booking.get("bookingReference") or booking.get("reference"),
-        "total_amount": str(booking.get("totalAmount") or booking.get("total", "0")),
-        "currency": booking.get("currency", "USD"),
-        "provider": "liteapi",
-        "raw": data,
+        "id":           booking_id,
+        "reference":    reference,
+        "total_amount": str(total),
+        "currency":     currency,
+        "provider":     "liteapi",
+        "raw":          data,
     }

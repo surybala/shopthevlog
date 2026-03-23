@@ -29,7 +29,7 @@ def _mock_resp(status_code: int, text: str) -> MagicMock:
 
 
 def _patched_client(resp: MagicMock):
-    """Context manager that injects a fake HTTP response for /book/prebook."""
+    """Context manager that injects a fake HTTP response for /rates/prebook."""
     client_mock = MagicMock()
     client_mock.__enter__ = MagicMock(return_value=client_mock)
     client_mock.__exit__ = MagicMock(return_value=False)
@@ -53,6 +53,15 @@ class TestPrebookHotel:
             client_instance = patcher.return_value.__enter__.return_value
             _, kwargs = client_instance.post.call_args
             assert kwargs["json"]["offerId"] == "RAW_ID"
+
+    def test_calls_rates_prebook_not_book_prebook(self):
+        """Must POST to /rates/prebook — the old /book/prebook URL was wrong."""
+        resp = _mock_resp(200, '{"data": {"prebookId": "PB-789"}}')
+        with _patched_client(resp) as patcher:
+            prebook_hotel("liteapi_hotel_RATE_CHECK")
+            client_instance = patcher.return_value.__enter__.return_value
+            args, _ = client_instance.post.call_args
+            assert args[0] == "/rates/prebook"
 
     def test_empty_body_raises_stale_offer_error(self):
         """A 200 with empty body means the offer has expired — must raise StaleOfferError."""
@@ -107,12 +116,10 @@ def _book_client(resp_data: dict) -> MagicMock:
 
 _BOOK_RESP = {
     "data": {
-        "booking": {
-            "bookingId": "BK-42",
-            "bookingReference": "REF-42",
-            "totalAmount": 350.0,
-            "currency": "USD",
-        }
+        "bookingId": "BK-42",
+        "bookingReference": "REF-42",
+        "price": 350.0,
+        "currency": "USD",
     }
 }
 
@@ -139,8 +146,17 @@ class TestCreateHotelOrder:
             create_hotel_order("liteapi_hotel_RATE_XYZ", _GUESTS)
         mock_prebook.assert_called_once_with("liteapi_hotel_RATE_XYZ")
 
+    def test_calls_rates_book_not_book_book(self):
+        """Must POST to /rates/book — the old /book/book URL was wrong."""
+        client = _book_client(_BOOK_RESP)
+        with patch("app.services.liteapi_service._client", return_value=client), \
+             patch("app.services.liteapi_service.prebook_hotel"):
+            create_hotel_order("liteapi_hotel_RATE", _GUESTS, prebook_id="PB-X")
+        args, _ = client.post.call_args
+        assert args[0] == "/rates/book"
+
     def test_uses_provided_prebook_id_in_book_payload(self):
-        """The prebookId sent to /book/book must be exactly what was passed in."""
+        """The prebookId sent to /rates/book must be exactly what was passed in."""
         client = _book_client(_BOOK_RESP)
         with patch("app.services.liteapi_service._client", return_value=client), \
              patch("app.services.liteapi_service.prebook_hotel"):
@@ -157,41 +173,56 @@ class TestCreateHotelOrder:
         _, kwargs = client.post.call_args
         assert kwargs["json"]["prebookId"] == "PB-FROM-PREBOOK"
 
-    def test_includes_guest_phone_in_payload(self):
-        """guestPhone is now a required field — must be present in the /book/book body."""
+    def test_holder_uses_first_guest_as_primary_contact(self):
+        """holder must use firstName/lastName/email/phone from the first guest."""
         client = _book_client(_BOOK_RESP)
         with patch("app.services.liteapi_service._client", return_value=client), \
              patch("app.services.liteapi_service.prebook_hotel"):
             create_hotel_order("liteapi_hotel_RATE", _GUESTS, prebook_id="PB-X")
         _, kwargs = client.post.call_args
-        assert kwargs["json"]["guestInfo"]["guestPhone"] == "+15550001"
+        holder = kwargs["json"]["holder"]
+        assert holder["firstName"] == "Alice"
+        assert holder["lastName"] == "Smith"
+        assert holder["email"] == "alice@test.com"
+        assert holder["phone"] == "+15550001"
 
-    def test_first_guest_is_primary_contact(self):
-        """First element in the guests list supplies guestFirstName/LastName/Email/Phone."""
+    def test_guests_array_includes_all_guests_with_occupancy_numbers(self):
+        """Each guest in the guests array must have an occupancyNumber starting at 1."""
         client = _book_client(_BOOK_RESP)
         with patch("app.services.liteapi_service._client", return_value=client), \
              patch("app.services.liteapi_service.prebook_hotel"):
             create_hotel_order("liteapi_hotel_RATE", _GUESTS, prebook_id="PB-X")
         _, kwargs = client.post.call_args
-        gi = kwargs["json"]["guestInfo"]
-        assert gi["guestFirstName"] == "Alice"
-        assert gi["guestLastName"] == "Smith"
-        assert gi["guestEmail"] == "alice@test.com"
-        assert gi["guestPhone"] == "+15550001"
+        guests_arr = kwargs["json"]["guests"]
+        assert len(guests_arr) == 2
+        assert guests_arr[0]["occupancyNumber"] == 1
+        assert guests_arr[0]["firstName"] == "Alice"
+        assert guests_arr[1]["occupancyNumber"] == 2
+        assert guests_arr[1]["firstName"] == "Bob"
 
-    def test_empty_guest_list_sends_empty_strings(self):
-        """An empty guest list must not crash — sends empty strings for all guestInfo fields."""
+    def test_payment_method_is_acc_credit_card(self):
+        """B2B payment must use ACC_CREDIT_CARD (account balance), not card details."""
+        client = _book_client(_BOOK_RESP)
+        with patch("app.services.liteapi_service._client", return_value=client), \
+             patch("app.services.liteapi_service.prebook_hotel"):
+            create_hotel_order("liteapi_hotel_RATE", _GUESTS, prebook_id="PB-X")
+        _, kwargs = client.post.call_args
+        assert kwargs["json"]["payment"] == {"method": "ACC_CREDIT_CARD"}
+
+    def test_empty_guest_list_sends_placeholder_guest(self):
+        """An empty guest list must not crash — sends a single placeholder guest."""
         client = _book_client(_BOOK_RESP)
         with patch("app.services.liteapi_service._client", return_value=client), \
              patch("app.services.liteapi_service.prebook_hotel"):
             create_hotel_order("liteapi_hotel_RATE", [], prebook_id="PB-X")
         _, kwargs = client.post.call_args
-        gi = kwargs["json"]["guestInfo"]
-        assert gi["guestFirstName"] == ""
-        assert gi["guestPhone"] == ""
+        guests_arr = kwargs["json"]["guests"]
+        assert len(guests_arr) == 1
+        assert guests_arr[0]["firstName"] == ""
+        assert guests_arr[0]["occupancyNumber"] == 1
 
     def test_returns_normalised_booking_dict(self):
-        """Successful call must return the normalised id/reference/total_amount/currency/provider dict."""
+        """Successful call returns normalised id/reference/total_amount/currency/provider."""
         client = _book_client(_BOOK_RESP)
         with patch("app.services.liteapi_service._client", return_value=client), \
              patch("app.services.liteapi_service.prebook_hotel"):
@@ -208,3 +239,14 @@ class TestCreateHotelOrder:
              patch("app.services.liteapi_service.prebook_hotel"):
             result = create_hotel_order("liteapi_hotel_RATE", _GUESTS, prebook_id="PB-X")
         assert isinstance(result["total_amount"], str)
+
+    def test_normalises_price_field_when_bookingId_absent(self):
+        """If response uses 'price' instead of 'totalAmount', it must still be captured."""
+        resp_data = {"data": {"bookingId": "BK-99", "price": 450.0, "currency": "EUR"}}
+        client = _book_client(resp_data)
+        with patch("app.services.liteapi_service._client", return_value=client), \
+             patch("app.services.liteapi_service.prebook_hotel"):
+            result = create_hotel_order("liteapi_hotel_RATE", _GUESTS, prebook_id="PB-X")
+        assert result["id"] == "BK-99"
+        assert result["total_amount"] == "450.0"
+        assert result["currency"] == "EUR"
