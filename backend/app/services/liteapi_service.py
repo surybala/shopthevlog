@@ -9,6 +9,7 @@ from datetime import date
 import httpx
 
 from app.core.config import settings
+from app.core.exceptions import StaleOfferError
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +206,8 @@ def prebook_hotel(offer_id: str) -> str:
             raise ValueError(f"LiteAPI prebook {resp.status_code}: {detail}")
         logger.debug(f"LiteAPI /book/prebook raw body: {resp.text[:500]}")
         if not resp.text.strip():
-            raise ValueError(f"LiteAPI prebook returned empty body (status {resp.status_code})")
+            logger.warning(f"LiteAPI prebook empty body (status {resp.status_code}) — treating as stale offer")
+            raise StaleOfferError("This hotel offer is no longer available. Please search again for fresh results.")
         data = resp.json().get("data", {})
         prebook_id = data.get("prebookId")
         if not prebook_id:

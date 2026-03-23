@@ -9,6 +9,7 @@ from datetime import date
 import httpx
 
 from app.core.config import settings
+from app.core.exceptions import StaleOfferError
 
 logger = logging.getLogger(__name__)
 
@@ -188,9 +189,8 @@ def create_flight_order(offer_id: str, passengers: list[dict], trip_id: str) -> 
         return resp.json()["data"]
 
 
-class StaleOfferError(Exception):
-    """Raised when the Duffel offer request has already been used and can't be rebooked."""
-    pass
+# Re-export so existing imports from this module continue to work.
+__all__ = ["StaleOfferError"]
 
 
 def cancel_flight_order(duffel_order_id: str) -> bool:

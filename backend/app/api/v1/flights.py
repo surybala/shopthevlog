@@ -8,7 +8,7 @@ from app.core.security import get_current_user, UserClaims
 from app.db.client import get_supabase
 from app.schemas.booking import FlightSearchRequest, FlightBookRequest, BookingResponse
 from app.services import duffel_service
-from app.services.duffel_service import StaleOfferError
+from app.core.exceptions import StaleOfferError
 
 router = APIRouter(prefix="/flights", tags=["flights"])
 logger = logging.getLogger(__name__)

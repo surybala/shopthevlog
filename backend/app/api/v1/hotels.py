@@ -8,6 +8,7 @@ from app.db.client import get_supabase
 from app.schemas.booking import HotelSearchRequest, HotelBookRequest, BookingResponse
 from app.services import liteapi_service, duffel_service
 from app.core.config import settings
+from app.core.exceptions import StaleOfferError
 
 router = APIRouter(prefix="/hotels", tags=["hotels"])
 logger = logging.getLogger(__name__)
@@ -62,6 +63,8 @@ async def book_hotel(body: HotelBookRequest, user: UserClaims = Depends(get_curr
                 "provider": "duffel",
                 "raw": raw,
             }
+    except StaleOfferError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.error(f"Hotel booking failed: {type(e).__name__}: {e}", exc_info=True)
         raise HTTPException(status_code=502, detail=f"Booking failed: {str(e)}")
