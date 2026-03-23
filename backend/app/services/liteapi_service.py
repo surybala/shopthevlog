@@ -203,6 +203,9 @@ def prebook_hotel(offer_id: str) -> str:
                 detail = resp.text
             logger.error(f"LiteAPI /book/prebook {resp.status_code}: {detail}")
             raise ValueError(f"LiteAPI prebook {resp.status_code}: {detail}")
+        logger.debug(f"LiteAPI /book/prebook raw body: {resp.text[:500]}")
+        if not resp.text.strip():
+            raise ValueError(f"LiteAPI prebook returned empty body (status {resp.status_code})")
         data = resp.json().get("data", {})
         prebook_id = data.get("prebookId")
         if not prebook_id:
