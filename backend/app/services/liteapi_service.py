@@ -202,7 +202,7 @@ def prebook_hotel(offer_id: str) -> str:
             except Exception:
                 detail = resp.text
             logger.error(f"LiteAPI /book/prebook {resp.status_code}: {detail}")
-            resp.raise_for_status()
+            raise ValueError(f"LiteAPI prebook {resp.status_code}: {detail}")
         data = resp.json().get("data", {})
         prebook_id = data.get("prebookId")
         if not prebook_id:

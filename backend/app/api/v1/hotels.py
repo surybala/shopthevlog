@@ -63,6 +63,7 @@ async def book_hotel(body: HotelBookRequest, user: UserClaims = Depends(get_curr
                 "raw": raw,
             }
     except Exception as e:
+        logger.error(f"Hotel booking failed: {type(e).__name__}: {e}", exc_info=True)
         raise HTTPException(status_code=502, detail=f"Booking failed: {str(e)}")
 
     try:
