@@ -12,12 +12,17 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-LITEAPI_BASE = "https://api.liteapi.travel/v3.0"
+def _base_url() -> str:
+    """Use sandbox URL for sandbox keys (prefixed with 'sand_')."""
+    key = settings.LITEAPI_API_KEY or ""
+    if key.startswith("sand_"):
+        return "https://sandbox.liteapi.travel/v3.0"
+    return "https://api.liteapi.travel/v3.0"
 
 
 def _client() -> httpx.Client:
     return httpx.Client(
-        base_url=LITEAPI_BASE,
+        base_url=_base_url(),
         headers={
             "X-API-Key": settings.LITEAPI_API_KEY,
             "Content-Type": "application/json",
@@ -92,6 +97,7 @@ def search_hotels(
     """
     country = _country_code(location)
     city = _city_name(location)
+    logger.info(f"LiteAPI search: location={location!r} → city={city!r}, country={country}, base={_base_url()}")
 
     with _client() as client:
         # Step 1: get hotels in city
@@ -103,7 +109,10 @@ def search_hotels(
             logger.error(f"LiteAPI /data/hotels {hotels_resp.status_code}: {hotels_resp.text}")
             hotels_resp.raise_for_status()
 
-        hotels_data = hotels_resp.json().get("data", [])
+        hotels_raw = hotels_resp.json()
+        logger.debug(f"LiteAPI /data/hotels response keys: {list(hotels_raw.keys())}, sample: {str(hotels_raw)[:300]}")
+        hotels_data = hotels_raw.get("data", [])
+        logger.info(f"LiteAPI /data/hotels: {len(hotels_data)} hotels returned")
         if not hotels_data:
             return []
 
@@ -127,7 +136,10 @@ def search_hotels(
             logger.error(f"LiteAPI /hotels/rates {rates_resp.status_code}: {rates_resp.text}")
             rates_resp.raise_for_status()
 
-        rates_data = rates_resp.json().get("data", [])
+        rates_raw = rates_resp.json()
+        logger.debug(f"LiteAPI /hotels/rates response keys: {list(rates_raw.keys())}, sample: {str(rates_raw)[:300]}")
+        rates_data = rates_raw.get("data", [])
+        logger.info(f"LiteAPI /hotels/rates: {len(rates_data)} hotels with rates")
 
     results = []
     for hotel_rates in rates_data:
