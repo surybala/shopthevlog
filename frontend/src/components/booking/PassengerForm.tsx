@@ -6,7 +6,7 @@ import { useBookHotel } from '../../hooks/useHotelSearch'
 import GlassInput from '../ui/GlassInput'
 import GlassButton from '../ui/GlassButton'
 import toast from 'react-hot-toast'
-import axios from 'axios'
+import { ApiError } from '../../lib/api'
 
 function formatPrice(amount: string, currency: string) {
   return `${currency} ${parseFloat(amount).toLocaleString()}`
@@ -122,8 +122,8 @@ export default function PassengerForm() {
         navigate('/trips')
       }
     } catch (err: unknown) {
-      if (axios.isAxiosError(err) && err.response?.status === 409) {
-        // Offer request was consumed by a prior attempt — must search again
+      if (err instanceof ApiError && err.status === 409) {
+        // Offer expired or no longer available — must search again
         toast.error('This offer has expired. Please search again for fresh results.', { duration: 5000 })
         useBookingStore.getState().setStep('search')
       } else {

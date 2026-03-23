@@ -181,7 +181,8 @@ def create_flight_order(offer_id: str, passengers: list[dict], trip_id: str) -> 
             logger.error(f"Duffel /air/orders {resp.status_code}: {detail}")
             # Detect stale offer — offer request was already used in a prior attempt
             errors = detail.get("errors", []) if isinstance(detail, dict) else []
-            if any(e.get("code") == "offer_request_already_booked" for e in errors):
+            _STALE_CODES = {"offer_request_already_booked", "offer_no_longer_available"}
+            if any(e.get("code") in _STALE_CODES for e in errors):
                 raise StaleOfferError("This flight offer has expired. Please search again for fresh results.")
             raise ValueError(f"Duffel {resp.status_code}: {detail}")
         return resp.json()["data"]

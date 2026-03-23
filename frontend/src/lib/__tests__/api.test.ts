@@ -9,7 +9,6 @@
  *   - Error interceptor falls back to generic message
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import axios from 'axios'
 
 // ─── Mock supabase BEFORE importing api ───────────────────────────────────────
 vi.mock('../supabase', () => ({
@@ -22,7 +21,7 @@ vi.mock('../supabase', () => ({
 
 // Import after mock is in place
 import { supabase } from '../supabase'
-import api from '../api'
+import api, { ApiError } from '../api'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -122,14 +121,43 @@ describe('API client — response interceptor', () => {
     await expect(interceptor.rejected(err)).rejects.toThrow('Something went wrong')
   })
 
-  it('wraps error in Error instance', async () => {
+  it('wraps error in ApiError instance with status code', async () => {
     const interceptor = getErrorInterceptor()
-    const err = { response: { data: { detail: 'Forbidden' } }, message: 'nope' }
+    const err = { response: { status: 403, data: { detail: 'Forbidden' } }, message: 'nope' }
 
     try {
       await interceptor.rejected(err)
     } catch (e) {
-      expect(e).toBeInstanceOf(Error)
+      expect(e).toBeInstanceOf(ApiError)
+      expect((e as ApiError).status).toBe(403)
+      expect((e as ApiError).message).toBe('Forbidden')
+    }
+  })
+
+  it('preserves 409 status for stale offer detection', async () => {
+    const interceptor = getErrorInterceptor()
+    const err = {
+      response: { status: 409, data: { detail: 'This flight offer has expired.' } },
+      message: 'Request failed with status 409',
+    }
+
+    try {
+      await interceptor.rejected(err)
+    } catch (e) {
+      expect(e).toBeInstanceOf(ApiError)
+      expect((e as ApiError).status).toBe(409)
+    }
+  })
+
+  it('status is undefined when no response (network error)', async () => {
+    const interceptor = getErrorInterceptor()
+    const err = { message: 'Network Error' }
+
+    try {
+      await interceptor.rejected(err)
+    } catch (e) {
+      expect(e).toBeInstanceOf(ApiError)
+      expect((e as ApiError).status).toBeUndefined()
     }
   })
 
