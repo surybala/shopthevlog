@@ -12,17 +12,12 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-def _base_url() -> str:
-    """Use sandbox URL for sandbox keys (prefixed with 'sand_')."""
-    key = settings.LITEAPI_API_KEY or ""
-    if key.startswith("sand_"):
-        return "https://sandbox.liteapi.travel/v3.0"
-    return "https://api.liteapi.travel/v3.0"
+LITEAPI_BASE = "https://api.liteapi.travel/v3.0"
 
 
 def _client() -> httpx.Client:
     return httpx.Client(
-        base_url=_base_url(),
+        base_url=LITEAPI_BASE,
         headers={
             "X-API-Key": settings.LITEAPI_API_KEY,
             "Content-Type": "application/json",
@@ -97,7 +92,7 @@ def search_hotels(
     """
     country = _country_code(location)
     city = _city_name(location)
-    logger.info(f"LiteAPI search: location={location!r} → city={city!r}, country={country}, base={_base_url()}")
+    logger.info(f"LiteAPI search: location={location!r} → city={city!r}, country={country}")
 
     with _client() as client:
         # Step 1: get hotels in city
