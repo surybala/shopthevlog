@@ -45,7 +45,9 @@ function fmtPrice(amount: number, currency: string): string {
 }
 
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  // Parse as local date (not UTC) so '2024-05-01' always renders as "May 1".
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 function computeNights(checkIn: string, checkOut: string): number | null {
@@ -75,6 +77,7 @@ function PanelHotelCard({
   return (
     <button
       onClick={onClick}
+      data-testid={`hotel-card-${offer.id}`}
       className="w-full text-left glass rounded-2xl overflow-hidden transition-all hover:bg-white/[0.08] active:scale-[0.99]"
     >
       {/* Photo */}
@@ -382,6 +385,7 @@ export default function HotelResultsPanel({
                 {[0, 2, 3, 4, 5].map((stars) => (
                   <button
                     key={stars}
+                    data-testid={`filter-stars-${stars}`}
                     onClick={() => setFilters((f) => ({ ...f, minStars: stars }))}
                     className={`text-xs rounded-lg py-1.5 px-1 border transition-all text-center ${
                       filters.minStars === stars
@@ -407,6 +411,7 @@ export default function HotelResultsPanel({
                 ).map(({ key, label }) => (
                   <button
                     key={key}
+                    data-testid={`filter-provider-${key}`}
                     onClick={() => setFilters((f) => ({ ...f, provider: key }))}
                     className={`flex items-center gap-2 w-full text-left text-sm rounded-lg px-2.5 py-2 transition-colors ${
                       filters.provider === key
