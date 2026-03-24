@@ -186,16 +186,39 @@ class TestGenerateItinerary:
 
         assert result is True
 
-    def test_max_tokens_stop_reason_returns_false(self):
+    def test_max_tokens_stop_reason_triggers_compact_retry(self):
+        """When the primary call hits max_tokens, the compact fallback is tried."""
         db = _db_no_existing_itinerary()
-        claude_mock = _claude_response("{}")
-        claude_mock.stop_reason = "max_tokens"
+
+        # Primary: max_tokens; fallback: success
+        primary_mock = _claude_response("{}")
+        primary_mock.stop_reason = "max_tokens"
+        primary_mock.usage = MagicMock(output_tokens=16000)
+        fallback_mock = _claude_response(json.dumps(VALID_ITINERARY))
 
         with (
             patch("app.services.claude_service.get_supabase", return_value=db),
             patch("app.services.claude_service.claude") as mock_claude,
         ):
-            mock_claude.messages.create.return_value = claude_mock
+            mock_claude.messages.create.side_effect = [primary_mock, fallback_mock]
+            result = generate_itinerary("vlog-001", "transcript", "Title")
+
+        assert result is True
+        # Two API calls must have been made (primary + compact fallback)
+        assert mock_claude.messages.create.call_count == 2
+
+    def test_max_tokens_on_both_attempts_returns_false(self):
+        """If both primary and compact fallback hit max_tokens, return False."""
+        db = _db_no_existing_itinerary()
+        max_tokens_mock = _claude_response("{}")
+        max_tokens_mock.stop_reason = "max_tokens"
+        max_tokens_mock.usage = MagicMock(output_tokens=4096)
+
+        with (
+            patch("app.services.claude_service.get_supabase", return_value=db),
+            patch("app.services.claude_service.claude") as mock_claude,
+        ):
+            mock_claude.messages.create.return_value = max_tokens_mock
             result = generate_itinerary("vlog-001", "transcript", "Title")
 
         assert result is False
