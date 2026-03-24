@@ -194,18 +194,62 @@ __all__ = ["StaleOfferError"]
 
 
 def cancel_flight_order(duffel_order_id: str) -> bool:
-    """Request order cancellation. Returns True if cancellation was created."""
+    """
+    Request and confirm a Duffel Air order cancellation.
+    Returns True on success. Raises ValueError on non-retriable provider errors.
+    A 404 means the order is already cancelled/doesn't exist — treated as success.
+    """
     with _client() as client:
         resp = client.post("/air/order_cancellations", json={"data": {"order_id": duffel_order_id}})
-        if resp.status_code not in (200, 201):
-            logger.error(f"Duffel cancellation failed: {resp.text}")
-            return False
-        cancellation = resp.json()["data"]
+        if resp.status_code == 404:
+            logger.warning(f"Duffel order {duffel_order_id} not found — already cancelled?")
+            return True
+        if not resp.is_success:
+            try:
+                detail = resp.json()
+                errors = detail.get("errors", [])
+                msg = errors[0].get("message") if errors else resp.text
+            except Exception:
+                msg = resp.text
+            logger.error(f"Duffel order_cancellations {resp.status_code}: {msg}")
+            raise ValueError(f"Duffel declined the cancellation: {msg}")
 
-        # Confirm cancellation
+        cancellation = resp.json()["data"]
         cancellation_id = cancellation["id"]
         confirm_resp = client.post(f"/air/order_cancellations/{cancellation_id}/actions/confirm")
-        return confirm_resp.status_code in (200, 201)
+        if not confirm_resp.is_success:
+            try:
+                detail = confirm_resp.json()
+                errors = detail.get("errors", [])
+                msg = errors[0].get("message") if errors else confirm_resp.text
+            except Exception:
+                msg = confirm_resp.text
+            logger.error(f"Duffel cancellation confirm {confirm_resp.status_code}: {msg}")
+            raise ValueError(f"Duffel cancellation could not be confirmed: {msg}")
+        return True
+
+
+def cancel_hotel_order(duffel_booking_id: str) -> bool:
+    """
+    Cancel a Duffel Stays hotel booking via DELETE /stays/bookings/{id}.
+    Returns True on success. Raises ValueError on provider errors.
+    A 404 means the booking is already cancelled — treated as success.
+    """
+    with _stays_client() as client:
+        resp = client.delete(f"/stays/bookings/{duffel_booking_id}")
+        if resp.status_code == 404:
+            logger.warning(f"Duffel stays booking {duffel_booking_id} not found — already cancelled?")
+            return True
+        if not resp.is_success:
+            try:
+                detail = resp.json()
+                errors = detail.get("errors", [])
+                msg = errors[0].get("message") if errors else resp.text
+            except Exception:
+                msg = resp.text
+            logger.error(f"Duffel /stays/bookings DELETE {resp.status_code}: {msg}")
+            raise ValueError(f"Duffel declined the hotel cancellation: {msg}")
+        return True
 
 
 # ─── HOTELS (DUFFEL STAYS) ─────────────────────────────────────────────────────

@@ -217,6 +217,29 @@ def prebook_hotel(offer_id: str) -> str:
         return prebook_id
 
 
+def cancel_hotel_booking(booking_id: str) -> bool:
+    """
+    Cancel a LiteAPI hotel booking via DELETE /bookings/{bookingId}.
+    Returns True on success. Raises ValueError on provider errors.
+    A 404 means the booking is already cancelled — treated as success.
+    """
+    logger.info(f"LiteAPI cancel booking: bookingId={booking_id!r}")
+    with _client() as client:
+        resp = client.delete(f"/bookings/{booking_id}")
+        if resp.status_code == 404:
+            logger.warning(f"LiteAPI booking {booking_id} not found — already cancelled?")
+            return True
+        if not resp.is_success:
+            try:
+                detail = resp.json()
+                msg = detail.get("message") or detail.get("error") or resp.text
+            except Exception:
+                msg = resp.text
+            logger.error(f"LiteAPI DELETE /bookings/{booking_id} {resp.status_code}: {msg}")
+            raise ValueError(f"LiteAPI declined the cancellation: {msg}")
+        return True
+
+
 def create_hotel_order(
     offer_id: str,
     guests: list[dict],
