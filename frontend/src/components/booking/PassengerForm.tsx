@@ -147,9 +147,11 @@ export default function PassengerForm() {
       }
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 409) {
-        // Offer expired or no longer available — must search again
-        toast.error('This offer has expired. Please search again for fresh results.', { duration: 5000 })
-        useBookingStore.getState().setStep('search')
+        // Offer expired or no longer available — flag for auto-retry then step back
+        toast.error('This offer expired. Searching for fresh results…', { duration: 4000 })
+        const store = useBookingStore.getState()
+        store.setPendingAutoSearch(true)
+        store.setStep('search')
       } else {
         toast.error(err instanceof Error ? err.message : 'Booking failed. Please try again.')
       }

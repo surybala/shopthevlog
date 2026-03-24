@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useFlightSearch } from '../../hooks/useFlightSearch'
 import { useBookingStore } from '../../stores/bookingStore'
 import GlassInput from '../ui/GlassInput'
@@ -23,9 +23,11 @@ function formatDateTime(dt: string | null | undefined) {
 
 export default function FlightSearch() {
   const search = useFlightSearch()
-  const { selectFlight, setFlightParams } = useBookingStore((s) => ({
+  const { selectFlight, setFlightParams, pendingAutoSearch, setPendingAutoSearch } = useBookingStore((s) => ({
     selectFlight: s.selectFlight,
     setFlightParams: s.setFlightParams,
+    pendingAutoSearch: s.pendingAutoSearch,
+    setPendingAutoSearch: s.setPendingAutoSearch,
   }))
 
   // Read pre-populated params set by ItineraryPanel when the drawer opened.
@@ -46,6 +48,21 @@ export default function FlightSearch() {
 
   /** Offer currently shown in the detail sheet; null = sheet closed. */
   const [detailOffer, setDetailOffer] = useState<FlightOffer | null>(null)
+
+  /**
+   * Auto-search on mount when a stale-offer 409 redirected us back here.
+   * Clears the flag immediately so a subsequent unmount/remount doesn't repeat.
+   */
+  useEffect(() => {
+    if (pendingAutoSearch) {
+      setPendingAutoSearch(false)
+      // Only auto-search if all required fields are present
+      if (form.origin && form.destination && form.departure_date) {
+        search.mutate({ ...form, passengers: Number(form.passengers) })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally run once on mount
 
   /** Update local form state AND sync back to the store so "Save & Close" captures the latest values. */
   function updateForm(updates: Partial<typeof form>) {
