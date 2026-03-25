@@ -170,6 +170,36 @@ def search_hotels(
                         is_free = True
                         break
 
+        # Room photos
+        room_photos: list[dict] = []
+        for img in rt.get("images", rt.get("photos", [])):
+            if isinstance(img, str) and img:
+                room_photos.append({"url": img})
+            elif isinstance(img, dict):
+                url = (img.get("url") or img.get("link") or
+                       img.get("urlMax") or img.get("urlHd") or "")
+                if url:
+                    room_photos.append({"url": url})
+
+        # Bed configurations
+        beds: list[dict] = []
+        for b in rt.get("bedConfigurations", rt.get("beds", rt.get("bedTypes", []))):
+            if isinstance(b, dict):
+                btype = (b.get("bedType") or b.get("type") or b.get("name") or "").strip()
+                bcount = int(b.get("count", b.get("quantity", b.get("numberOfBeds", 1))) or 1)
+                if btype:
+                    beds.append({"type": btype, "count": bcount})
+
+        # Room-specific amenities
+        room_amenities: list[str] = []
+        for a in rt.get("roomFacilities", rt.get("roomAmenities", rt.get("features", []))):
+            if isinstance(a, str) and a.strip():
+                room_amenities.append(a.strip().upper())
+            elif isinstance(a, dict):
+                code = a.get("code") or a.get("name") or a.get("type") or ""
+                if code:
+                    room_amenities.append(str(code).strip().upper())
+
         return {
             "id": f"liteapi_hotel_{rt.get('offerId', '')}",
             "name": (rt.get("name") or rt.get("roomName") or "Standard Room").strip(),
@@ -180,6 +210,9 @@ def search_hotels(
             "is_cheapest": is_cheapest,
             "cancellation_type": "free" if is_free else "non_refundable",
             "board_type": rt.get("boardType") or rt.get("mealPlan"),
+            "photos": room_photos[:5],
+            "beds": beds[:3],
+            "room_amenities": room_amenities[:10],
         }
 
     results = []
@@ -283,6 +316,35 @@ def get_hotel_details(hotel_id: str) -> dict:
     review_score = data.get("reviewScore") or data.get("guestRating") or data.get("rating")
     review_count = data.get("reviewCount") or data.get("numberOfReviews") or data.get("reviewsCount")
 
+    # ── Guest reviews ─────────────────────────────────────────────────────────
+    reviews: list[dict] = []
+    review_source = (
+        data.get("guestReviews") or
+        data.get("reviews") or
+        data.get("customerReviews") or
+        []
+    )
+    # Handle nested structures like {"guestReviews": {"reviews": [...]}}
+    if isinstance(review_source, dict):
+        review_source = review_source.get("reviews") or review_source.get("items") or []
+    for r in review_source[:12]:
+        if not isinstance(r, dict):
+            continue
+        text = (r.get("text") or r.get("content") or r.get("review") or
+                r.get("comment") or r.get("reviewText") or "").strip()
+        if not text:
+            continue
+        raw_rating = r.get("rating") or r.get("score")
+        reviews.append({
+            "author": (r.get("author") or r.get("reviewerName") or
+                       r.get("authorName") or r.get("name") or "Guest"),
+            "rating": float(raw_rating) if raw_rating else None,
+            "title": r.get("title") or r.get("headline") or r.get("reviewTitle"),
+            "text": text,
+            "date": (r.get("date") or r.get("reviewDate") or
+                     r.get("createdAt") or r.get("submittedAt")),
+        })
+
     return {
         "hotel_id": hotel_id,
         "description": (
@@ -296,6 +358,7 @@ def get_hotel_details(hotel_id: str) -> dict:
         "review_count": int(review_count) if review_count else None,
         "check_in_time": data.get("checkInTime") or data.get("hotelCheckInTime"),
         "check_out_time": data.get("checkOutTime") or data.get("hotelCheckOutTime"),
+        "reviews": reviews,
     }
 
 

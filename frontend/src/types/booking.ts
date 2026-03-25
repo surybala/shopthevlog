@@ -120,6 +120,18 @@ export interface HotelRoomType {
   is_cheapest: boolean
   cancellation_type?: 'free' | 'non_refundable' | null
   board_type?: string | null
+  photos?: Array<{ url: string }>
+  beds?: Array<{ type: string; count: number }>
+  room_amenities?: string[]
+}
+
+/** A single guest review from the hotel detail endpoint. */
+export interface HotelReview {
+  author?: string
+  rating?: number | null
+  title?: string | null
+  text?: string
+  date?: string | null
 }
 
 /** Rich details fetched lazily from GET /hotels/detail. */
@@ -132,6 +144,7 @@ export interface HotelDetail {
   review_count?: number | null
   check_in_time?: string | null
   check_out_time?: string | null
+  reviews?: HotelReview[]
 }
 
 export interface HotelOffer {

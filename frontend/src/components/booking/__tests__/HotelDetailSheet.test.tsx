@@ -11,32 +11,44 @@
  *
  *  Photo carousel
  *  — Shows first photo, counter, prev/next arrows
- *  — Prev/next cycle correctly
- *  — Thumbnail clicks change active photo
+ *  — Prev/next cycle correctly; thumbnail clicks change active photo
+ *  — "X photos" button visible when multiple photos exist
+ *  — Photo grid overlay opens/closes; clicking a grid photo jumps to it
  *  — Placeholder shown when no photos
  *  — Photos from detail endpoint are merged (deduplicated)
  *
  *  Detail lazy-loading (useHotelDetail)
  *  — Description + amenities skeletons while loading
  *  — Review score badge + label shown once loaded
- *  — Hotel description text shown once loaded
+ *  — About section renders HTML tags (sanitized dangerouslySetInnerHTML)
  *  — Amenity chips shown once loaded
  *  — Check-in / check-out times appended once loaded
  *
  *  Room type cards
  *  — Room name, "Best price" badge, cancellation, occupancy shown
- *  — "Select room" calls prebook (LiteAPI) then onSelect with room's offer variant
+ *  — Bed info shown when room has bed configuration
+ *  — Room amenity chips shown when available
+ *  — Clicking "Select room" highlights card (✓ Selected) without prebooking
+ *  — Clicking a selected room deselects it
+ *  — Footer price updates to the selected room's price
+ *  — Clicking footer CTA after selecting a room calls prebook + onSelect with room variant
+ *  — Footer CTA label is "Reserve →" when a room is selected
  *
  *  Map section
- *  — OSM iframe src contains lat/lng
+ *  — iframe src contains openstreetmap.org with lat/lng + lang=en
  *  — "Open in Google Maps" link has correct href
  *  — Map section absent when no coordinates
+ *
+ *  Guest Reviews
+ *  — Reviews section shown when detail contains reviews
+ *  — Shows reviewer name, optional rating, and text
+ *  — Does not show reviews section when reviews list is empty
  *
  *  Navigation
  *  — "Back to results" calls onClose
  *  — Backdrop click calls onClose
  *
- *  LiteAPI prebook flow
+ *  LiteAPI prebook flow (via footer CTA — no room selected)
  *  — mutateAsync called with offer id, prebookId stored, onSelect called
  *  — 409 → toast + onClose, no onSelect
  *  — Other error → toast, no onClose, no onSelect
@@ -118,6 +130,20 @@ const liteapiOffer: HotelOffer = {
   ],
 }
 
+/** LiteAPI offer with enhanced room data (beds + room amenities) */
+const liteapiOfferWithRoomDetails: HotelOffer = {
+  ...liteapiOffer,
+  room_types: [
+    {
+      ...liteapiOffer.room_types![0],
+      photos: [{ url: 'https://example.com/room1.jpg' }],
+      beds: [{ type: 'King', count: 1 }],
+      room_amenities: ['TV', 'MINIBAR', 'BALCONY'],
+    },
+    liteapiOffer.room_types![1],
+  ],
+}
+
 /** Duffel offer — id does NOT start with "liteapi_hotel_", no prebook step. */
 const duffelOffer: HotelOffer = {
   id: 'duffel-hotel-1',
@@ -161,6 +187,27 @@ const DETAIL_DATA = {
   review_count: 1847,
   check_in_time: '15:00',
   check_out_time: '11:00',
+  reviews: [
+    {
+      author: 'Sarah M.',
+      rating: 9,
+      title: 'Outstanding stay',
+      text: 'The hotel was absolutely spectacular. Service was impeccable.',
+      date: '2024-03-15',
+    },
+    {
+      author: 'James K.',
+      rating: 8,
+      title: 'Great views',
+      text: 'Amazing panoramic views of Tokyo. The rooms are spacious and well-appointed.',
+      date: '2024-02-20',
+    },
+  ],
+}
+
+const DETAIL_DATA_HTML_DESC = {
+  ...DETAIL_DATA,
+  description: '<p>A <strong>luxury</strong> hotel in <em>Shinjuku</em>.</p><ul><li>City views</li><li>Fine dining</li></ul>',
 }
 
 const mockMutateAsync = vi.fn()
@@ -333,7 +380,6 @@ describe('HotelDetailSheet — rendering', () => {
 describe('HotelDetailSheet — photo gallery', () => {
   it('shows the first photo by default', () => {
     render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
-    // The main carousel image is the first img element in the carousel section
     const imgs = screen.getAllByRole('img').filter(
       (img) => (img as HTMLImageElement).alt.includes('Park Hyatt Tokyo')
     )
@@ -382,6 +428,46 @@ describe('HotelDetailSheet — photo gallery', () => {
     expect(screen.queryByLabelText('Next photo')).not.toBeInTheDocument()
   })
 
+  it('shows "X photos" button when multiple photos exist', () => {
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+    expect(screen.getByTestId('view-all-photos-btn')).toBeInTheDocument()
+    expect(screen.getByTestId('view-all-photos-btn').textContent).toMatch(/3 photos/)
+  })
+
+  it('does not show "X photos" button when only one photo', () => {
+    const singlePhoto: HotelOffer = {
+      ...duffelOffer,
+      accommodation: { ...duffelOffer.accommodation, photos: [{ url: 'https://example.com/only.jpg' }] },
+    }
+    render(<HotelDetailSheet offer={singlePhoto} onClose={vi.fn()} onSelect={vi.fn()} />)
+    expect(screen.queryByTestId('view-all-photos-btn')).not.toBeInTheDocument()
+  })
+
+  it('opens photo grid overlay when "X photos" button is clicked', () => {
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+    expect(screen.queryByTestId('photo-grid-overlay')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('view-all-photos-btn'))
+    expect(screen.getByTestId('photo-grid-overlay')).toBeInTheDocument()
+  })
+
+  it('closes photo grid overlay when close button is clicked', () => {
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+    fireEvent.click(screen.getByTestId('view-all-photos-btn'))
+    expect(screen.getByTestId('photo-grid-overlay')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('close-photo-grid-btn'))
+    expect(screen.queryByTestId('photo-grid-overlay')).not.toBeInTheDocument()
+  })
+
+  it('clicking a photo in the grid closes the grid and navigates to that photo', () => {
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+    fireEvent.click(screen.getByTestId('view-all-photos-btn'))
+    // The grid overlay contains: [0] close button, [1] photo 0, [2] photo 1, [3] photo 2
+    const gridBtns = screen.getByTestId('photo-grid-overlay').querySelectorAll('button')
+    fireEvent.click(gridBtns[3]) // 3rd photo (index 2)
+    expect(screen.queryByTestId('photo-grid-overlay')).not.toBeInTheDocument()
+    expect(screen.getByText('3 / 3')).toBeInTheDocument()
+  })
+
   it('merges extra photos from the detail endpoint', () => {
     // liteapiOffer has 3 photos; DETAIL_DATA adds 2 non-duplicate photos → total 5
     mockDetailLoaded()
@@ -390,7 +476,6 @@ describe('HotelDetailSheet — photo gallery', () => {
   })
 
   it('does not duplicate photos already in the offer', () => {
-    // detail photos overlap with base photos — only the new ones are appended
     mockDetailLoaded({
       photos: [
         { url: 'https://example.com/photo1.jpg' }, // already in offer
@@ -412,7 +497,6 @@ describe('HotelDetailSheet — detail loading state', () => {
     mockDetailLoading()
     render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
     expect(screen.getByText(/about/i)).toBeInTheDocument()
-    // Actual description is not yet visible
     expect(
       screen.queryByText('A luxury hotel in the heart of Shinjuku with stunning city views.')
     ).not.toBeInTheDocument()
@@ -455,12 +539,41 @@ describe('HotelDetailSheet — detail loaded', () => {
     expect(screen.getByText(/1,847 reviews/)).toBeInTheDocument()
   })
 
-  it('shows hotel description text', () => {
+  it('shows plain text hotel description', () => {
     mockDetailLoaded()
     render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
     expect(
       screen.getByText('A luxury hotel in the heart of Shinjuku with stunning city views.')
     ).toBeInTheDocument()
+  })
+
+  it('renders HTML description tags — <strong> text is visible in the DOM', () => {
+    vi.mocked(HotelSearchHooks.useHotelDetail).mockReturnValue({
+      data: DETAIL_DATA_HTML_DESC,
+      isLoading: false,
+      isError: false,
+    } as any)
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+    // The word "luxury" was wrapped in <strong> — it should still be visible as text
+    expect(screen.getByText(/luxury/i)).toBeInTheDocument()
+    // List item text should also be visible
+    expect(screen.getByText('City views')).toBeInTheDocument()
+    expect(screen.getByText('Fine dining')).toBeInTheDocument()
+  })
+
+  it('strips dangerous script tags from the description', () => {
+    vi.mocked(HotelSearchHooks.useHotelDetail).mockReturnValue({
+      data: {
+        ...DETAIL_DATA,
+        description: '<p>Safe text</p><script>window.hacked = true</script>',
+      },
+      isLoading: false,
+      isError: false,
+    } as any)
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+    // Script should not execute / be rendered as text
+    expect((window as any).hacked).toBeUndefined()
+    expect(screen.getByText('Safe text')).toBeInTheDocument()
   })
 
   it('renders amenity chips for each amenity code', () => {
@@ -529,19 +642,87 @@ describe('HotelDetailSheet — room types', () => {
     expect(screen.getByText(/Max 3/)).toBeInTheDocument()
   })
 
+  it('shows bed configuration when present', () => {
+    render(<HotelDetailSheet offer={liteapiOfferWithRoomDetails} onClose={vi.fn()} onSelect={vi.fn()} />)
+    expect(screen.getByText(/1 King/)).toBeInTheDocument()
+  })
+
+  it('shows room amenity chips when present', () => {
+    render(<HotelDetailSheet offer={liteapiOfferWithRoomDetails} onClose={vi.fn()} onSelect={vi.fn()} />)
+    expect(screen.getByText(/Flat-screen TV/)).toBeInTheDocument()
+    expect(screen.getByText(/Minibar/)).toBeInTheDocument()
+    expect(screen.getByText(/Balcony/)).toBeInTheDocument()
+  })
+
+  it('shows room photo when room has photos', () => {
+    render(<HotelDetailSheet offer={liteapiOfferWithRoomDetails} onClose={vi.fn()} onSelect={vi.fn()} />)
+    const roomPhoto = screen.getAllByRole('img').find(
+      (img) => (img as HTMLImageElement).src.includes('room1.jpg')
+    )
+    expect(roomPhoto).toBeInTheDocument()
+  })
+
   it('does not render the "Available Rooms" section when room_types is absent', () => {
     render(<HotelDetailSheet offer={noCoordsOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
     expect(screen.queryByText(/available rooms/i)).not.toBeInTheDocument()
   })
 
-  it('calls prebook then onSelect with the room offer variant on "Select room"', async () => {
+  // ── Two-step room selection flow ──────────────────────────────────────────
+
+  it('clicking "Select room" highlights that room with "✓ Selected" without triggering prebook', () => {
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+    const [firstSelectBtn] = screen.getAllByText('Select room')
+    fireEvent.click(firstSelectBtn)
+    // Button should now show "✓ Selected"
+    expect(screen.getByText('✓ Selected')).toBeInTheDocument()
+    // Prebook should NOT have been called yet
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('clicking the selected room again deselects it', () => {
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+    const [firstSelectBtn] = screen.getAllByText('Select room')
+    fireEvent.click(firstSelectBtn)
+    expect(screen.getByText('✓ Selected')).toBeInTheDocument()
+    // Click again to deselect
+    fireEvent.click(screen.getByText('✓ Selected'))
+    expect(screen.queryByText('✓ Selected')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Select room').length).toBe(2)
+  })
+
+  it('footer price updates to the selected room price when a room is chosen', () => {
+    render(
+      <HotelDetailSheet
+        offer={liteapiOffer}
+        checkIn="2024-05-01"
+        checkOut="2024-05-05"
+        onClose={vi.fn()}
+        onSelect={vi.fn()}
+      />
+    )
+    // Select the Park Suite (second room) at $1200 total / 4 nights = $300/night
+    const [, suiteSelectBtn] = screen.getAllByText('Select room')
+    fireEvent.click(suiteSelectBtn)
+    expect(screen.getAllByText(/\$300/)[0]).toBeInTheDocument()
+  })
+
+  it('footer CTA label changes to "Reserve →" when a room is selected', () => {
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+    expect(screen.getByTestId('hotel-select-btn').textContent).toMatch(/Select this hotel/)
+    fireEvent.click(screen.getAllByText('Select room')[0])
+    expect(screen.getByTestId('hotel-select-btn').textContent).toMatch(/Reserve/)
+  })
+
+  it('clicking footer CTA after selecting a room prebooks that room and calls onSelect', async () => {
     mockMutateAsync.mockResolvedValue('PB_ROOM')
     const onSelect = vi.fn()
-    render(
-      <HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={onSelect} />
-    )
-    const [firstSelectRoom] = screen.getAllByText('Select room')
-    fireEvent.click(firstSelectRoom)
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={onSelect} />)
+
+    // Step 1: select the Deluxe King Room
+    fireEvent.click(screen.getAllByText('Select room')[0])
+
+    // Step 2: click the footer CTA
+    fireEvent.click(screen.getByTestId('hotel-select-btn'))
 
     await waitFor(() =>
       expect(mockMutateAsync).toHaveBeenCalledWith('liteapi_hotel_room_deluxe')
@@ -571,6 +752,12 @@ describe('HotelDetailSheet — map', () => {
     expect(iframe?.src).toContain('139.7')
   })
 
+  it('includes lang=en parameter to request English labels', () => {
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+    const iframe = document.querySelector('iframe')
+    expect(iframe?.src).toContain('lang=en')
+  })
+
   it('shows a "Open in Google Maps" link pointing to correct coordinates', () => {
     render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
     const link = screen.getByText(/Open in Google Maps/).closest('a')
@@ -583,6 +770,45 @@ describe('HotelDetailSheet — map', () => {
     render(<HotelDetailSheet offer={noCoordsOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
     expect(document.querySelector('iframe')).not.toBeInTheDocument()
     expect(screen.queryByText(/Open in Google Maps/)).not.toBeInTheDocument()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GUEST REVIEWS
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('HotelDetailSheet — guest reviews', () => {
+  it('shows "Guest Reviews" section header when detail has reviews', () => {
+    mockDetailLoaded()
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+    expect(screen.getByText(/guest reviews/i)).toBeInTheDocument()
+  })
+
+  it('renders a card for each review with author name and text', () => {
+    mockDetailLoaded()
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+    expect(screen.getByText('Sarah M.')).toBeInTheDocument()
+    expect(screen.getByText(/impeccable/)).toBeInTheDocument()
+    expect(screen.getByText('James K.')).toBeInTheDocument()
+    expect(screen.getByText(/panoramic views/)).toBeInTheDocument()
+  })
+
+  it('shows the review title when present', () => {
+    mockDetailLoaded()
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+    expect(screen.getByText('Outstanding stay')).toBeInTheDocument()
+    expect(screen.getByText('Great views')).toBeInTheDocument()
+  })
+
+  it('does not show the reviews section when reviews list is empty', () => {
+    mockDetailLoaded({ reviews: [] })
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+    expect(screen.queryByText(/guest reviews/i)).not.toBeInTheDocument()
+  })
+
+  it('does not show the reviews section when no detail data is loaded', () => {
+    render(<HotelDetailSheet offer={liteapiOffer} onClose={vi.fn()} onSelect={vi.fn()} />)
+    expect(screen.queryByText(/guest reviews/i)).not.toBeInTheDocument()
   })
 })
 
@@ -607,7 +833,7 @@ describe('HotelDetailSheet — navigation', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LITEAPI PREBOOK FLOW
+// LITEAPI PREBOOK FLOW (via footer CTA, no room pre-selected)
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('HotelDetailSheet — LiteAPI prebook flow', () => {
