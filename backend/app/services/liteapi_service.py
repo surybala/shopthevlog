@@ -150,6 +150,38 @@ def search_hotels(
             return total[0] if total else {"amount": "999999", "currency": "USD"}
         return total if isinstance(total, dict) else {"amount": str(total), "currency": "USD"}
 
+    nights = max((check_out - check_in).days, 1)
+
+    def _normalize_room(rt: dict, is_cheapest: bool, currency: str) -> dict:
+        """Normalize a single LiteAPI room type to our HotelRoomType shape."""
+        rt_total = _rate_total(rt)
+        total_amt = float(rt_total.get("amount", 0))
+        room_currency = rt_total.get("currency", currency)
+
+        # Detect free cancellation
+        cancel_policies = rt.get("cancellationPolicies", [])
+        is_free = False
+        if cancel_policies:
+            for p in cancel_policies:
+                if isinstance(p, dict):
+                    amt = p.get("amount", 1)
+                    ptype = str(p.get("type", "")).upper()
+                    if amt == 0 or "FREE" in ptype or "REFUNDABLE" in ptype:
+                        is_free = True
+                        break
+
+        return {
+            "id": f"liteapi_hotel_{rt.get('offerId', '')}",
+            "name": (rt.get("name") or rt.get("roomName") or "Standard Room").strip(),
+            "max_occupancy": rt.get("maxOccupancy"),
+            "price_total": str(total_amt),
+            "price_per_night": str(round(total_amt / nights, 2)),
+            "currency": room_currency,
+            "is_cheapest": is_cheapest,
+            "cancellation_type": "free" if is_free else "non_refundable",
+            "board_type": rt.get("boardType") or rt.get("mealPlan"),
+        }
+
     results = []
     for hotel_rates in rates_data:
         hid = hotel_rates.get("hotelId")
@@ -158,13 +190,29 @@ def search_hotels(
             continue
         if logger.isEnabledFor(logging.DEBUG) and hotel_rates == rates_data[0]:
             logger.debug(f"LiteAPI room_type[0] sample: {str(room_types[0])[:400]}")
-        # Pick the cheapest room type
-        cheapest = min(room_types, key=lambda r: float(_rate_total(r).get("amount", "999999")))
+
+        # Sort all room types by price; pick cheapest for the card summary
+        sorted_rooms = sorted(
+            room_types,
+            key=lambda r: float(_rate_total(r).get("amount", "999999"))
+        )
+        cheapest = sorted_rooms[0]
         rate_total = _rate_total(cheapest)
+        currency = rate_total.get("currency", "USD")
+
         meta = hotel_meta.get(hid, {})
         thumbnail = meta.get("thumbnail", "") or meta.get("main_photo", "")
+
+        # Include up to 5 cheapest distinct room types
+        normalized_rooms = [
+            _normalize_room(rt, i == 0, currency)
+            for i, rt in enumerate(sorted_rooms[:5])
+            if rt.get("offerId")
+        ]
+
         results.append({
             "id": f"liteapi_hotel_{cheapest['offerId']}",
+            "hotel_id": hid,           # raw LiteAPI hotel ID for detail fetching
             "provider": "liteapi",
             "accommodation": {
                 "name": meta.get("name", "Unknown Hotel"),
@@ -177,13 +225,78 @@ def search_hotels(
                     }
                 },
                 "address": meta.get("address", ""),
+                "city": meta.get("city") or meta.get("cityName"),
+                "country": meta.get("country") or meta.get("countryCode"),
             },
             "cheapest_rate_total_amount": str(rate_total.get("amount", "0")),
-            "cheapest_rate_currency": rate_total.get("currency", "USD"),
+            "cheapest_rate_currency": currency,
+            "room_types": normalized_rooms,
         })
 
     results.sort(key=lambda r: float(r["cheapest_rate_total_amount"] or "999999"))
     return results[:20]
+
+
+def get_hotel_details(hotel_id: str) -> dict:
+    """
+    Fetch rich hotel detail from LiteAPI /data/hotel.
+    Returns description, amenities, all photos, review score, check-in/out times.
+    """
+    with _client() as client:
+        resp = client.get("/data/hotel", params={"hotelId": hotel_id})
+        if not resp.is_success:
+            logger.warning(f"LiteAPI /data/hotel {resp.status_code} for {hotel_id}: {resp.text[:200]}")
+            resp.raise_for_status()
+        data = resp.json().get("data", {})
+
+    # ── Photos ────────────────────────────────────────────────────────────────
+    photos = []
+    for img in data.get("images", data.get("photos", [])):
+        if isinstance(img, str):
+            url = img
+        elif isinstance(img, dict):
+            url = (
+                img.get("url") or img.get("link") or
+                img.get("urlMax") or img.get("urlHd") or ""
+            )
+        else:
+            url = ""
+        if url:
+            photos.append({"url": url})
+
+    # Thumbnail fallback
+    thumb = data.get("thumbnail") or data.get("main_photo")
+    if thumb and not photos:
+        photos.append({"url": thumb})
+
+    # ── Amenities ─────────────────────────────────────────────────────────────
+    amenities: list[str] = []
+    for a in data.get("amenities", data.get("facilities", data.get("hotelFacilities", []))):
+        if isinstance(a, str) and a.strip():
+            amenities.append(a.strip().upper())
+        elif isinstance(a, dict):
+            code = a.get("code") or a.get("name") or a.get("description") or ""
+            if code:
+                amenities.append(str(code).strip().upper())
+
+    # ── Review score ──────────────────────────────────────────────────────────
+    review_score = data.get("reviewScore") or data.get("guestRating") or data.get("rating")
+    review_count = data.get("reviewCount") or data.get("numberOfReviews") or data.get("reviewsCount")
+
+    return {
+        "hotel_id": hotel_id,
+        "description": (
+            data.get("description") or
+            data.get("hotelDescription") or
+            data.get("shortDescription") or ""
+        ).strip(),
+        "amenities": amenities,
+        "photos": photos,
+        "review_score": float(review_score) if review_score else None,
+        "review_count": int(review_count) if review_count else None,
+        "check_in_time": data.get("checkInTime") or data.get("hotelCheckInTime"),
+        "check_out_time": data.get("checkOutTime") or data.get("hotelCheckOutTime"),
+    }
 
 
 def prebook_hotel(offer_id: str) -> str:

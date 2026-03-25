@@ -109,18 +109,47 @@ export interface FlightOffer {
   }>
 }
 
+/** A single room type / rate option returned from hotel search. */
+export interface HotelRoomType {
+  id: string                   // liteapi_hotel_{offerId}
+  name: string
+  max_occupancy?: number | null
+  price_total: string
+  price_per_night?: string | null
+  currency: string
+  is_cheapest: boolean
+  cancellation_type?: 'free' | 'non_refundable' | null
+  board_type?: string | null
+}
+
+/** Rich details fetched lazily from GET /hotels/detail. */
+export interface HotelDetail {
+  hotel_id: string
+  description?: string
+  amenities?: string[]         // uppercase codes e.g. "WIFI", "POOL", "FITNESS_CENTER"
+  photos?: Array<{ url: string }>
+  review_score?: number | null
+  review_count?: number | null
+  check_in_time?: string | null
+  check_out_time?: string | null
+}
+
 export interface HotelOffer {
   id: string
   provider: 'liteapi' | 'duffel'
+  hotel_id?: string            // Raw provider hotel ID — used to fetch HotelDetail
   accommodation: {
     name: string
     rating: number | null
     photos: Array<{ url: string }>
     location: { geographic_coordinates: { latitude: number; longitude: number } | null }
     address?: string
+    city?: string
+    country?: string
   }
   cheapest_rate_total_amount: string
   cheapest_rate_currency: string
+  room_types?: HotelRoomType[]
 }
 
 export interface Passenger {

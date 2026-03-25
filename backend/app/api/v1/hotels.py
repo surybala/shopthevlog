@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from datetime import datetime, timezone
 import logging
@@ -39,6 +39,27 @@ async def search_hotels(body: HotelSearchRequest, user: UserClaims = Depends(get
 
     results.sort(key=lambda r: float(r.get("cheapest_rate_total_amount") or "999999"))
     return results[:20]
+
+
+@router.get("/detail")
+async def hotel_detail(
+    hotel_id: str = Query(..., description="Provider hotel ID"),
+    provider: str = Query("liteapi"),
+    user: UserClaims = Depends(get_current_user),
+):
+    """
+    Fetch rich hotel details: description, amenities, all photos, review score, policies.
+    Currently only supported for LiteAPI (provider=liteapi).
+    """
+    if provider != "liteapi":
+        raise HTTPException(status_code=400, detail="Detail fetch only supported for LiteAPI")
+    if not settings.LITEAPI_API_KEY:
+        raise HTTPException(status_code=503, detail="LiteAPI not configured")
+    try:
+        return liteapi_service.get_hotel_details(hotel_id)
+    except Exception as e:
+        logger.warning(f"Hotel detail fetch failed for {hotel_id}: {e}")
+        raise HTTPException(status_code=502, detail=f"Could not fetch hotel details: {str(e)}")
 
 
 @router.post("/prebook", response_model=HotelPrebookResponse)

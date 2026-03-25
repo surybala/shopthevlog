@@ -1,6 +1,6 @@
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import api from '../lib/api'
-import type { HotelOffer, HotelSearchParams } from '../types/booking'
+import type { HotelOffer, HotelSearchParams, HotelDetail } from '../types/booking'
 
 export function useHotelSearch() {
   return useMutation({
@@ -8,6 +8,25 @@ export function useHotelSearch() {
       const { data } = await api.post<HotelOffer[]>('/hotels/search', params)
       return data
     },
+  })
+}
+
+/**
+ * Lazily fetch rich hotel details (description, amenities, all photos, review score).
+ * Only enabled for LiteAPI hotels — Duffel doesn't have an equivalent detail endpoint.
+ */
+export function useHotelDetail(hotelId: string | null | undefined, provider: string) {
+  return useQuery({
+    queryKey: ['hotel-detail', provider, hotelId],
+    queryFn: async () => {
+      const { data } = await api.get<HotelDetail>('/hotels/detail', {
+        params: { hotel_id: hotelId, provider },
+      })
+      return data
+    },
+    enabled: !!hotelId && provider === 'liteapi',
+    staleTime: 5 * 60 * 1000,   // 5 min — details don't change often
+    retry: 1,
   })
 }
 

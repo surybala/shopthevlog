@@ -57,10 +57,11 @@ vi.mock('../HotelDetailSheet', () => ({
     ) : null,
 }))
 
-// usePrebookHotel is only needed in the real HotelDetailSheet, which is mocked
+// usePrebookHotel / useHotelDetail are only needed in the real HotelDetailSheet, which is mocked
 vi.mock('../../../hooks/useHotelSearch', () => ({
   useHotelSearch: vi.fn(),
   usePrebookHotel: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useHotelDetail: vi.fn(() => ({ data: null, isLoading: false, isError: false })),
   useBookHotel: vi.fn(),
 }))
 
