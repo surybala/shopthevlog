@@ -74,7 +74,7 @@ async def hotel_detail(
     # ── 2. Enrich with external photos / reviews if requested ─────────────────
     if hotel_name:
         try:
-            enriched = hotel_content_service.enrich_hotel(hotel_name, lat, lng)
+            enriched = hotel_content_service.enrich_hotel(hotel_id, hotel_name, lat, lng)
 
             # Merge photos: deduplicate by URL; external photos go first (higher quality)
             existing_urls: set[str] = {p.get("url", "") for p in detail.get("photos", [])}
