@@ -127,14 +127,28 @@ def _db_is_fresh(row: dict, ttl_days: int = _L2_TTL_DAYS) -> bool:
 
 
 def _merge_photos(existing: list[dict], new: list[dict]) -> list[dict]:
-    """Union existing + new photos, deduplicated by URL, capped at _MAX_PHOTOS."""
-    seen: set[str] = {p["url"] for p in existing if p.get("url")}
+    """Union existing + new photos, deduplicated by stable ref then URL, capped at _MAX_PHOTOS.
+
+    Google Places photo URIs are signed CDN URLs that can change between API
+    calls for the same underlying photo.  We store the stable photo resource
+    name as ``ref`` (e.g. ``places/ChIJ.../photos/AUacShh...``) and use that
+    as the primary dedup key.  Foursquare and LiteAPI photos have no ``ref``,
+    so they fall back to URL-based dedup.
+    """
+    seen_refs: set[str] = {p["ref"] for p in existing if p.get("ref")}
+    seen_urls: set[str] = {p["url"] for p in existing if p.get("url") and not p.get("ref")}
     merged = list(existing)
     for p in new:
+        ref = p.get("ref", "")
         url = p.get("url", "")
-        if url and url not in seen:
-            merged.append(p)
-            seen.add(url)
+        if ref:
+            if ref not in seen_refs:
+                merged.append(p)
+                seen_refs.add(ref)
+        elif url:
+            if url not in seen_urls:
+                merged.append(p)
+                seen_urls.add(url)
     return merged[:_MAX_PHOTOS]
 
 
@@ -227,7 +241,15 @@ _GOOGLE_PLACE_DETAILS_URL = "https://places.googleapis.com/v1/places/{id}"
 _GOOGLE_PHOTO_MEDIA_URL = "https://places.googleapis.com/v1/{name}/media"
 
 
-async def _google_fetch_photo_url(client: httpx.AsyncClient, photo_name: str, api_key: str) -> str | None:
+async def _google_fetch_photo_url(
+    client: httpx.AsyncClient, photo_name: str, api_key: str
+) -> tuple[str, str] | None:
+    """Resolve a Google photo resource name to its CDN URI.
+
+    Returns ``(photo_name, photoUri)`` so the caller can store the stable
+    resource name alongside the URL for dedup purposes.  Returns ``None`` on
+    any error.
+    """
     try:
         resp = await client.get(
             _GOOGLE_PHOTO_MEDIA_URL.format(name=photo_name),
@@ -235,7 +257,10 @@ async def _google_fetch_photo_url(client: httpx.AsyncClient, photo_name: str, ap
             timeout=8,
         )
         resp.raise_for_status()
-        return resp.json().get("photoUri")
+        uri = resp.json().get("photoUri")
+        if uri:
+            return (photo_name, uri)
+        return None
     except Exception as exc:
         logger.debug(f"Google photo fetch failed for {photo_name}: {exc}")
         return None
@@ -302,14 +327,22 @@ async def _google_enrich(hotel_name: str, lat: float | None, lng: float | None) 
             logger.warning(f"Google Places detail fetch failed for {place_id}: {exc}")
             return _empty()
 
-        # Step 3: Resolve photo media URLs in parallel
+        # Step 3: Resolve photo media URLs in parallel.
+        # Each result is (resource_name, photoUri) so we can store both:
+        #   - "url"  → the CDN URL used by the browser
+        #   - "ref"  → the stable Google resource name used for dedup on re-fetch
         photo_resources = place.get("photos", [])[:10]
         photo_tasks = [
             _google_fetch_photo_url(client, p["name"], api_key)
             for p in photo_resources if p.get("name")
         ]
-        photo_urls_raw = await asyncio.gather(*photo_tasks)
-        photos = [{"url": u} for u in photo_urls_raw if u]
+        photo_results = await asyncio.gather(*photo_tasks)
+        photos = [
+            {"url": uri, "ref": name}
+            for result in photo_results
+            if result is not None
+            for name, uri in (result,)
+        ]
 
         # Step 4: Parse reviews
         reviews: list[dict] = []
