@@ -362,8 +362,16 @@ export default function HotelDetailSheet({
   const prebook = usePrebookHotel()
   const setHotelPrebookId = useBookingStore((s) => s.setHotelPrebookId)
 
-  // Lazy-load rich details for LiteAPI hotels
-  const detail = useHotelDetail(offer?.hotel_id, offer?.provider ?? '')
+  // Lazy-load rich details for LiteAPI hotels.
+  // Pass hotel name + coords so the backend can enrich with Google/Foursquare photos & reviews.
+  const _geoCoords = offer?.accommodation.location.geographic_coordinates
+  const detail = useHotelDetail(
+    offer?.hotel_id,
+    offer?.provider ?? '',
+    offer?.accommodation.name,
+    _geoCoords?.latitude,
+    _geoCoords?.longitude,
+  )
   const isLiteApi = offer?.id.startsWith('liteapi_hotel_') ?? false
 
   // Merge photos from offer + detail (deduplicate by URL)

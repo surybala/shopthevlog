@@ -6,7 +6,7 @@ import logging
 from app.core.security import get_current_user, UserClaims
 from app.db.client import get_supabase
 from app.schemas.booking import HotelSearchRequest, HotelBookRequest, HotelPrebookRequest, HotelPrebookResponse, BookingResponse
-from app.services import liteapi_service, duffel_service
+from app.services import liteapi_service, duffel_service, hotel_content_service
 from app.core.config import settings
 from app.core.exceptions import StaleOfferError
 
@@ -45,21 +45,58 @@ async def search_hotels(body: HotelSearchRequest, user: UserClaims = Depends(get
 async def hotel_detail(
     hotel_id: str = Query(..., description="Provider hotel ID"),
     provider: str = Query("liteapi"),
+    # Optional enrichment params — pass hotel name + coords to enable Google/Foursquare photos & reviews
+    hotel_name: str | None = Query(None, description="Hotel display name for content enrichment lookup"),
+    lat: float | None = Query(None, description="Hotel latitude for content enrichment lookup"),
+    lng: float | None = Query(None, description="Hotel longitude for content enrichment lookup"),
     user: UserClaims = Depends(get_current_user),
 ):
     """
     Fetch rich hotel details: description, amenities, all photos, review score, policies.
     Currently only supported for LiteAPI (provider=liteapi).
+
+    When hotel_name (+ optionally lat/lng) is provided, photos and reviews are also
+    enriched from Google Places API or Foursquare, giving a much richer result than
+    LiteAPI alone.
     """
     if provider != "liteapi":
         raise HTTPException(status_code=400, detail="Detail fetch only supported for LiteAPI")
     if not settings.LITEAPI_API_KEY:
         raise HTTPException(status_code=503, detail="LiteAPI not configured")
+
+    # ── 1. Fetch base LiteAPI details ─────────────────────────────────────────
     try:
-        return liteapi_service.get_hotel_details(hotel_id)
+        detail = liteapi_service.get_hotel_details(hotel_id)
     except Exception as e:
         logger.warning(f"Hotel detail fetch failed for {hotel_id}: {e}")
         raise HTTPException(status_code=502, detail=f"Could not fetch hotel details: {str(e)}")
+
+    # ── 2. Enrich with external photos / reviews if requested ─────────────────
+    if hotel_name:
+        try:
+            enriched = hotel_content_service.enrich_hotel(hotel_name, lat, lng)
+
+            # Merge photos: deduplicate by URL; external photos go first (higher quality)
+            existing_urls: set[str] = {p.get("url", "") for p in detail.get("photos", [])}
+            extra_photos = [p for p in enriched["photos"] if p.get("url") not in existing_urls]
+            detail["photos"] = extra_photos + detail.get("photos", [])
+
+            # Merge reviews: external reviews first, then any LiteAPI reviews
+            existing_texts: set[str] = {r.get("text", "") for r in detail.get("reviews", [])}
+            extra_reviews = [r for r in enriched["reviews"] if r.get("text", "") not in existing_texts]
+            detail["reviews"] = extra_reviews + detail.get("reviews", [])
+
+            # Use enriched aggregate rating if LiteAPI didn't provide one
+            if enriched.get("rating") and not detail.get("review_score"):
+                detail["review_score"] = enriched["rating"]
+            if enriched.get("rating_count") and not detail.get("review_count"):
+                detail["review_count"] = enriched["rating_count"]
+
+        except Exception as exc:
+            # Enrichment is best-effort — don't fail the entire detail request
+            logger.warning(f"Hotel content enrichment failed for '{hotel_name}': {exc}")
+
+    return detail
 
 
 @router.post("/prebook", response_model=HotelPrebookResponse)

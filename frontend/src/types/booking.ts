@@ -132,6 +132,8 @@ export interface HotelReview {
   title?: string | null
   text?: string
   date?: string | null
+  /** Which enrichment source this review came from, if any. */
+  source?: 'google' | 'foursquare' | 'liteapi' | null
 }
 
 /** Rich details fetched lazily from GET /hotels/detail. */

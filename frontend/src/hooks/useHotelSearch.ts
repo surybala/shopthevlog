@@ -14,14 +14,24 @@ export function useHotelSearch() {
 /**
  * Lazily fetch rich hotel details (description, amenities, all photos, review score).
  * Only enabled for LiteAPI hotels — Duffel doesn't have an equivalent detail endpoint.
+ *
+ * Pass hotelName + lat/lng to enable Google Places / Foursquare photo & review enrichment.
  */
-export function useHotelDetail(hotelId: string | null | undefined, provider: string) {
+export function useHotelDetail(
+  hotelId: string | null | undefined,
+  provider: string,
+  hotelName?: string | null,
+  lat?: number | null,
+  lng?: number | null,
+) {
   return useQuery({
-    queryKey: ['hotel-detail', provider, hotelId],
+    queryKey: ['hotel-detail', provider, hotelId, hotelName, lat, lng],
     queryFn: async () => {
-      const { data } = await api.get<HotelDetail>('/hotels/detail', {
-        params: { hotel_id: hotelId, provider },
-      })
+      const params: Record<string, string | number> = { hotel_id: hotelId!, provider }
+      if (hotelName) params.hotel_name = hotelName
+      if (lat != null) params.lat = lat
+      if (lng != null) params.lng = lng
+      const { data } = await api.get<HotelDetail>('/hotels/detail', { params })
       return data
     },
     enabled: !!hotelId && provider === 'liteapi',

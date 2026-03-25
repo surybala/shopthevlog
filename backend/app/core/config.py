@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # AI
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
+    # Local Whisper — set WHISPER_LOCAL_ENABLED=true to enable (requires openai-whisper + ffmpeg + GPU/CPU)
+    WHISPER_LOCAL_ENABLED: bool = False
+    WHISPER_LOCAL_MODEL: str = "base"  # tiny, base, small, medium, large
 
     # Duffel (flights)
     DUFFEL_ACCESS_TOKEN: str = ""
@@ -37,13 +40,9 @@ class Settings(BaseSettings):
     # LiteAPI (hotels — primary)
     LITEAPI_API_KEY: str = ""
 
-    # Amadeus (hotels — fallback; also available for flights)
-    AMADEUS_CLIENT_ID: str = ""
-    AMADEUS_CLIENT_SECRET: str = ""
-    # Production payment card for Amadeus hotel orders (leave blank → sandbox test card used)
-    AMADEUS_PAYMENT_VENDOR_CODE: str = ""
-    AMADEUS_PAYMENT_CARD_NUMBER: str = ""
-    AMADEUS_PAYMENT_EXPIRY: str = ""
+    # Hotel content enrichment
+    GOOGLE_PLACES_API_KEY: str = ""   # Google Places New API (v1) — for photos/reviews
+    FOURSQUARE_API_KEY: str = ""      # Foursquare Places v3 — fallback photos/tips
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379"
