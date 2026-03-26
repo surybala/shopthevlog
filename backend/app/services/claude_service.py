@@ -56,7 +56,7 @@ JSON schema (follow exactly):
 Rules:
 - If the input is a full transcript, extract locations/activities mentioned.
 - If the input is a short title or description, infer the destination(s) and generate a realistic sample itinerary for that location (assume a typical tourist trip).
-- Always include at least 3 days with 3-5 activities per day.
+- Always include at least 3 days with 2-3 activities per day.
 - For each destination, include approximate lat/lng coordinates.
 - estimated_cost_usd is per-person per day in USD (use realistic estimates; null if truly unknown).
 - booking_url should be a real booking link if identifiable, otherwise null.
