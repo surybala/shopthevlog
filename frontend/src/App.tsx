@@ -24,7 +24,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
-        <div className="w-10 h-10 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
+        <div className="w-10 h-10 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }

@@ -242,6 +242,49 @@ def _parse_vtt(vtt: str) -> str:
     return " ".join(deduped)
 
 
+def get_user_subscriptions(user_id: str) -> set[str]:
+    """
+    Return the set of YouTube channel IDs the user subscribes to.
+    Returns an empty set if the user hasn't connected YouTube or on any API error.
+    Caps at 500 subscriptions to avoid excessive API usage.
+    """
+    db = get_supabase()
+    conn_resp = (
+        db.table("social_connections")
+        .select("access_token,refresh_token")
+        .eq("user_id", user_id)
+        .eq("platform", "youtube")
+        .execute()
+    )
+    if not conn_resp.data:
+        return set()
+
+    conn = conn_resp.data[0]
+    try:
+        yt, _ = _build_youtube_client(conn["access_token"], conn["refresh_token"])
+        channel_ids: set[str] = set()
+        next_page = None
+        while len(channel_ids) < 500:
+            resp = yt.subscriptions().list(
+                part="snippet",
+                mine=True,
+                maxResults=50,
+                pageToken=next_page,
+            ).execute()
+            for item in resp.get("items", []):
+                cid = item.get("snippet", {}).get("resourceId", {}).get("channelId")
+                if cid:
+                    channel_ids.add(cid)
+            next_page = resp.get("nextPageToken")
+            if not next_page:
+                break
+        logger.info(f"Loaded {len(channel_ids)} YouTube subscriptions for user {user_id}")
+        return channel_ids
+    except Exception as e:
+        logger.warning(f"get_user_subscriptions failed for user {user_id}: {e}")
+        return set()
+
+
 async def ingest_new_vlogs_for_user(user_id: str) -> list[str]:
     """
     Fetch new vlogs from all of a user's connected YouTube channels,

@@ -24,6 +24,7 @@ class OnboardingRequest(BaseModel):
     destinations: list[str] = []
     trip_durations: list[str] = []
     budget_range: Optional[str] = None
+    home_location: Optional[str] = None
 
 
 @router.post("/webhook")
@@ -85,6 +86,7 @@ async def complete_onboarding(body: OnboardingRequest, user: UserClaims = Depend
         "destinations": body.destinations,
         "trip_durations": body.trip_durations,
         "budget_range": body.budget_range,
+        "home_location": body.home_location,
     }, on_conflict="user_id").execute()
 
     # Mark profile as onboarded

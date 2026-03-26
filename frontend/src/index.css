@@ -22,73 +22,73 @@
     height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.03);
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.15);
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.28);
   }
 }
 
 @layer components {
   /* Glass card base */
   .glass {
-    @apply backdrop-blur-glass bg-white/10 border border-white/[0.18] rounded-2xl shadow-glass;
+    @apply backdrop-blur-glass bg-white/[0.06] border border-white/[0.13] rounded-2xl shadow-glass;
   }
 
   .glass-sm {
-    @apply backdrop-blur-glass bg-white/10 border border-white/[0.18] rounded-xl shadow-glass-sm;
+    @apply backdrop-blur-glass bg-white/[0.06] border border-white/[0.13] rounded-xl shadow-glass-sm;
   }
 
   .glass-hover {
-    @apply glass transition-all duration-200 hover:bg-white/[0.16] hover:shadow-glass-lg hover:-translate-y-0.5 cursor-pointer;
+    @apply glass transition-all duration-200 hover:bg-white/[0.10] hover:border-white/[0.22] hover:shadow-glass-lg hover:-translate-y-0.5 cursor-pointer;
   }
 
   /* Glass input */
   .glass-input {
-    @apply bg-white/[0.08] border border-white/20 rounded-xl text-white placeholder:text-white/40
-           focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/30
+    @apply bg-white/[0.06] border border-white/20 rounded-xl text-white placeholder:text-white/30
+           focus:outline-none focus:border-white/50 focus:ring-2 focus:ring-white/20
            backdrop-blur-xs transition-all duration-200 px-4 py-3 w-full;
   }
 
   /* Glass button variants */
   .btn-primary {
-    @apply bg-brand-500 hover:bg-brand-600 text-white font-semibold px-6 py-3 rounded-xl
-           transition-all duration-200 hover:shadow-glow-indigo hover:-translate-y-0.5
-           focus:outline-none focus:ring-2 focus:ring-brand-400/50 active:translate-y-0;
+    @apply bg-white hover:bg-white/90 text-black font-semibold px-6 py-3 rounded-xl
+           transition-all duration-200 hover:shadow-glow-white hover:-translate-y-0.5
+           focus:outline-none focus:ring-2 focus:ring-white/50 active:translate-y-0;
   }
 
   .btn-glass {
     @apply glass text-white font-semibold px-6 py-3 rounded-xl
-           transition-all duration-200 hover:bg-white/[0.16] hover:shadow-glass-lg hover:-translate-y-0.5
+           transition-all duration-200 hover:bg-white/[0.12] hover:border-white/25 hover:shadow-glass-lg hover:-translate-y-0.5
            focus:outline-none focus:ring-2 focus:ring-white/20 active:translate-y-0;
   }
 
   .btn-ghost {
-    @apply text-white/70 hover:text-white font-medium px-4 py-2 rounded-lg
-           transition-all duration-200 hover:bg-white/10
+    @apply text-white/60 hover:text-white font-medium px-4 py-2 rounded-lg
+           transition-all duration-200 hover:bg-white/[0.08]
            focus:outline-none focus:ring-2 focus:ring-white/20;
   }
 
   /* Glass badge */
   .badge {
-    @apply bg-brand-500/20 border border-brand-400/30 text-brand-200 rounded-full text-xs px-2.5 py-1 font-medium;
+    @apply bg-white/[0.10] border border-white/20 text-white/75 rounded-full text-xs px-2.5 py-1 font-medium;
   }
 
   .badge-green {
-    @apply bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 rounded-full text-xs px-2.5 py-1 font-medium;
+    @apply bg-emerald-500/15 border border-emerald-400/25 text-emerald-300 rounded-full text-xs px-2.5 py-1 font-medium;
   }
 
   .badge-amber {
-    @apply bg-amber-500/20 border border-amber-400/30 text-amber-200 rounded-full text-xs px-2.5 py-1 font-medium;
+    @apply bg-amber-500/15 border border-amber-400/25 text-amber-300 rounded-full text-xs px-2.5 py-1 font-medium;
   }
 
   /* Skeleton shimmer */
   .skeleton {
-    @apply bg-white/[0.08] rounded-xl animate-pulse;
+    @apply bg-white/[0.06] rounded-xl animate-pulse;
   }
 
   /* Page section */

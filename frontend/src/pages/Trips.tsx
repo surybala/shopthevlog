@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useTrips, useDeleteTrip } from '../hooks/useTrip'
+import { useTrips, useDeleteTrip, useTripBookings, useCancelBooking } from '../hooks/useTrip'
 import GlassCard from '../components/ui/GlassCard'
 import Spinner from '../components/ui/Spinner'
 import BookingDrawer from '../components/booking/BookingDrawer'
@@ -19,13 +19,19 @@ function TripCard({ trip }: { trip: Trip }) {
   const navigate = useNavigate()
   const openBooking = useBookingStore((s) => s.open)
   const deleteTrip = useDeleteTrip()
+  const cancelBooking = useCancelBooking()
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const { data: bookings = [] } = useTripBookings(trip.id)
+
+  const confirmedFlight = bookings.find((b) => b.booking_type === 'flight' && b.status === 'confirmed')
+  const confirmedHotel  = bookings.find((b) => b.booking_type === 'hotel'  && b.status === 'confirmed')
+  const isActive = trip.status !== 'cancelled' && trip.status !== 'completed'
 
   async function handleDelete(e: React.MouseEvent) {
     e.stopPropagation()
     if (!confirmDelete) {
       setConfirmDelete(true)
-      // Auto-cancel after 3 s if user doesn't confirm
       setTimeout(() => setConfirmDelete(false), 3000)
       return
     }
@@ -35,6 +41,19 @@ function TripCard({ trip }: { trip: Trip }) {
     } catch {
       toast.error('Failed to delete trip')
       setConfirmDelete(false)
+    }
+  }
+
+  async function handleCancelBooking(e: React.MouseEvent, bookingId: string) {
+    e.stopPropagation()
+    setCancellingId(bookingId)
+    try {
+      await cancelBooking.mutateAsync(bookingId)
+      toast.success('Booking cancelled')
+    } catch {
+      toast.error('Failed to cancel booking')
+    } finally {
+      setCancellingId(null)
     }
   }
 
@@ -65,19 +84,71 @@ function TripCard({ trip }: { trip: Trip }) {
           )}
         </div>
       </div>
+
       {(trip.start_date || trip.end_date) && (
         <p className="text-white/60 text-sm mb-3">
           📅 {trip.start_date ?? '?'} → {trip.end_date ?? '?'}
         </p>
       )}
-      <p className="text-white/40 text-sm">👥 {trip.traveller_count} traveller{trip.traveller_count !== 1 ? 's' : ''}</p>
-      {trip.status === 'planning' && (
-        <button
-          onClick={(e) => { e.stopPropagation(); openBooking(trip.id) }}
-          className="mt-4 btn-primary text-sm py-2 px-4"
-        >
-          ✈️ Book flights & hotels
-        </button>
+      <p className="text-white/40 text-sm mb-4">👥 {trip.traveller_count} traveller{trip.traveller_count !== 1 ? 's' : ''}</p>
+
+      {isActive && (
+        <div className="space-y-2 border-t border-white/[0.08] pt-3" onClick={(e) => e.stopPropagation()}>
+          {/* Flight row */}
+          <div className="flex items-center justify-between gap-2">
+            {confirmedFlight ? (
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <span className="text-emerald-400 text-xs shrink-0">✓ Flight booked</span>
+                {confirmedFlight.duffel_booking_reference && (
+                  <span className="text-white/30 text-xs truncate font-mono">
+                    #{confirmedFlight.duffel_booking_reference}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => openBooking(trip.id, 'flights')}
+                className="text-xs py-1.5 px-3 rounded-lg bg-white text-black font-medium hover:bg-white/90 transition-colors"
+              >
+                ✈️ Book flight
+              </button>
+            )}
+            {confirmedFlight && (
+              <button
+                disabled={cancellingId === confirmedFlight.id}
+                onClick={(e) => handleCancelBooking(e, confirmedFlight.id)}
+                className="text-xs text-red-400/60 hover:text-red-400 transition-colors shrink-0"
+              >
+                {cancellingId === confirmedFlight.id ? 'Cancelling…' : 'Cancel'}
+              </button>
+            )}
+          </div>
+
+          {/* Hotel row */}
+          <div className="flex items-center justify-between gap-2">
+            {confirmedHotel ? (
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <span className="text-emerald-400 text-xs shrink-0">✓ Hotel booked</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => openBooking(trip.id, 'hotels')}
+                className="text-xs py-1.5 px-3 rounded-lg bg-white text-black font-medium hover:bg-white/90 transition-colors"
+              >
+                🏨 Book hotel
+              </button>
+            )}
+            {confirmedHotel && (
+              <button
+                disabled={cancellingId === confirmedHotel.id}
+                onClick={(e) => handleCancelBooking(e, confirmedHotel.id)}
+                className="text-xs text-red-400/60 hover:text-red-400 transition-colors shrink-0"
+              >
+                {cancellingId === confirmedHotel.id ? 'Cancelling…' : 'Cancel'}
+              </button>
+            )}
+          </div>
+        </div>
       )}
     </GlassCard>
   )

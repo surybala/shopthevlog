@@ -60,7 +60,7 @@ export default function BookingDrawer() {
                     key={t}
                     onClick={() => setTab(t)}
                     className={`px-4 py-2 rounded-full text-sm font-medium capitalize transition-all duration-200 ${
-                      tab === t ? 'bg-brand-500 text-white' : 'glass text-white/60 hover:text-white'
+                      tab === t ? 'bg-white text-black' : 'glass text-white/60 hover:text-white'
                     }`}
                   >
                     {t === 'flights' ? '✈️ Flights' : '🏨 Hotels'}

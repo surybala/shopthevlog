@@ -15,12 +15,19 @@ api.interceptors.request.use(async (config) => {
   return config
 })
 
-// Surface API errors cleanly
+// Surface API errors cleanly, preserving the HTTP status code on the Error object.
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number | undefined) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     const message = err.response?.data?.detail || err.message || 'Something went wrong'
-    return Promise.reject(new Error(message))
+    return Promise.reject(new ApiError(message, err.response?.status))
   }
 )
 

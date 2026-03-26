@@ -28,7 +28,7 @@ class PassengerPayload(BaseModel):
     born_on: date
     email: str
     phone_number: str
-    passport: Optional[Any] = None  # {number, expiry_date, country, nationality} for Amadeus intl routes
+    passport: Optional[Any] = None
 
 
 class FlightBookRequest(BaseModel):
@@ -37,10 +37,50 @@ class FlightBookRequest(BaseModel):
     trip_id: str
 
 
+class HotelPrebookRequest(BaseModel):
+    rate_id: str
+
+
+class HotelPrebookResponse(BaseModel):
+    prebook_id: str
+
+
 class HotelBookRequest(BaseModel):
     rate_id: str
     guests: List[dict]
     trip_id: str
+    prebook_id: Optional[str] = None
+    # Structured metadata stored alongside the booking so the UI can display
+    # hotel name / dates without parsing raw provider responses.
+    hotel_name: Optional[str] = None
+    check_in: Optional[str] = None
+    check_out: Optional[str] = None
+    hotel_address: Optional[str] = None
+    hotel_rating: Optional[float] = None
+
+
+class CarSearchRequest(BaseModel):
+    pickup_location: str
+    dropoff_location: Optional[str] = None   # defaults to pickup_location when absent
+    pickup_datetime: str                      # ISO 8601 datetime string
+    dropoff_datetime: str
+    driver_age: int = 30
+    currency: str = "USD"
+
+
+class CarBookRequest(BaseModel):
+    car_id: str
+    driver: dict                              # {first_name, last_name, email, phone, …}
+    trip_id: str
+    metadata: Optional[dict] = None
+
+
+class ExperienceSearchRequest(BaseModel):
+    location: str
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    category: Optional[str] = None
+    currency: str = "USD"
 
 
 class BookingResponse(BaseModel):
@@ -53,3 +93,7 @@ class BookingResponse(BaseModel):
     currency: str = "USD"
     booked_at: Optional[datetime] = None
     created_at: datetime
+    # Additional fields persisted to the database and returned to the client
+    provider: Optional[str] = None
+    passenger_details: Optional[List[Any]] = None
+    search_params: Optional[Any] = None

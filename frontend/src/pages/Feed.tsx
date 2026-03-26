@@ -48,8 +48,17 @@ export default function Feed() {
       ) : vlogs.length === 0 ? (
         <div className="text-center py-20">
           <div className="text-5xl mb-4">🎬</div>
-          <h3 className="text-white text-lg font-semibold mb-2">No vlogs yet</h3>
-          <p className="text-white/50 text-sm">Connect your YouTube account to start discovering travel content.</p>
+          {destination || style ? (
+            <>
+              <h3 className="text-white text-lg font-semibold mb-2">No matches</h3>
+              <p className="text-white/50 text-sm">No vlogs match this filter — try a different style or destination.</p>
+            </>
+          ) : (
+            <>
+              <h3 className="text-white text-lg font-semibold mb-2">No vlogs yet</h3>
+              <p className="text-white/50 text-sm">Connect your YouTube account to start discovering travel content.</p>
+            </>
+          )}
         </div>
       ) : (
         <>

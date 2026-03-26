@@ -5,8 +5,9 @@ import { useBookFlight } from '../../hooks/useFlightSearch'
 import { useBookHotel } from '../../hooks/useHotelSearch'
 import GlassInput from '../ui/GlassInput'
 import GlassButton from '../ui/GlassButton'
+import BookingSuccessModal, { type BookingSuccessInfo } from './BookingSuccessModal'
 import toast from 'react-hot-toast'
-import axios from 'axios'
+import { ApiError } from '../../lib/api'
 
 function formatPrice(amount: string, currency: string) {
   return `${currency} ${parseFloat(amount).toLocaleString()}`
@@ -48,7 +49,8 @@ function formatPhoneInput(raw: string): string {
 export default function PassengerForm() {
   const navigate = useNavigate()
   const {
-    tab, tripId, selectedFlightOffer, selectedHotelOffer, flightParams,
+    tab, tripId, selectedFlightOffer, selectedHotelOffer, flightParams, hotelParams,
+    hotelPrebookId,
     reset, close,
     passengers: storedPassengers, setPassengers: setStorePassengers,
   } = useBookingStore()
@@ -56,9 +58,9 @@ export default function PassengerForm() {
   const bookFlight = useBookFlight()
   const bookHotel = useBookHotel()
 
-  const passengerCount = flightParams?.passengers ?? 1
+  const [successInfo, setSuccessInfo] = useState<BookingSuccessInfo | null>(null)
 
-  const needsPassport = tab === 'flights' && selectedFlightOffer?.provider === 'amadeus'
+  const passengerCount = flightParams?.passengers ?? 1
 
   const emptyPassenger = () => ({
     title: 'mr' as const,
@@ -68,7 +70,6 @@ export default function PassengerForm() {
     born_on: '',
     email: '',
     phone_number: '',
-    passport: needsPassport ? { number: '', expiry_date: '', country: '', nationality: '' } : undefined,
   })
 
   // Restore previously saved passengers (from draft), or start fresh
@@ -85,14 +86,6 @@ export default function PassengerForm() {
   function updatePassenger(index: number, field: string, value: string) {
     setPassengers(
       passengers.map((p, i) => (i === index ? { ...p, [field]: value } : p))
-    )
-  }
-
-  function updatePassport(index: number, field: string, value: string) {
-    setPassengers(
-      passengers.map((p, i) =>
-        i === index ? { ...p, passport: { ...(p.passport ?? { number: '', expiry_date: '', country: '', nationality: '' }), [field]: value } } : p
-      )
     )
   }
 
@@ -113,13 +106,22 @@ export default function PassengerForm() {
           passengers,
           trip_id: tripId,
         })
-        // Don't reset — keep hotel params alive so confirmation page can offer hotel booking
-        close()
-        navigate(`/booking/confirmation?ref=${data.duffel_booking_reference}&type=flight&trip_id=${tripId}`)
+        const route = selectedFlightOffer.slices
+          .map((s) => `${s.origin.iata_code} → ${s.destination.iata_code}`)
+          .join(' · ')
+        setSuccessInfo({
+          type: 'flight',
+          reference: data.duffel_booking_reference ?? data.booking_reference ?? undefined,
+          bookingId: data.id ?? undefined,
+          summary: route,
+          totalAmount: selectedFlightOffer.total_amount,
+          currency: selectedFlightOffer.total_currency,
+        })
 
       } else if (tab === 'hotels' && selectedHotelOffer) {
         const { data } = await bookHotel.mutateAsync({
           rate_id: selectedHotelOffer.id,
+          prebook_id: hotelPrebookId,
           guests: passengers.map((p) => ({
             given_name: p.given_name,
             family_name: p.family_name,
@@ -127,16 +129,29 @@ export default function PassengerForm() {
             phone_number: p.phone_number,
           })),
           trip_id: tripId,
+          // Send structured metadata so TripDetail can display hotel info
+          hotel_name: selectedHotelOffer.accommodation.name,
+          check_in: hotelParams?.check_in ?? null,
+          check_out: hotelParams?.check_out ?? null,
+          hotel_address: selectedHotelOffer.accommodation.address ?? null,
+          hotel_rating: selectedHotelOffer.accommodation.rating ?? null,
         })
-        reset()
-        close()
-        navigate('/trips')
+        setSuccessInfo({
+          type: 'hotel',
+          reference: data.reference ?? data.bookingReference ?? undefined,
+          bookingId: data.id ?? data.bookingId ?? undefined,
+          summary: selectedHotelOffer.accommodation.name,
+          totalAmount: data.total_amount ?? selectedHotelOffer.cheapest_rate_total_amount,
+          currency: data.currency ?? selectedHotelOffer.cheapest_rate_currency,
+        })
       }
     } catch (err: unknown) {
-      if (axios.isAxiosError(err) && err.response?.status === 409) {
-        // Offer request was consumed by a prior attempt — must search again
-        toast.error('This offer has expired. Please search again for fresh results.', { duration: 5000 })
-        useBookingStore.getState().setStep('search')
+      if (err instanceof ApiError && err.status === 409) {
+        // Offer expired or no longer available — flag for auto-retry then step back
+        toast.error('This offer expired. Searching for fresh results…', { duration: 4000 })
+        const store = useBookingStore.getState()
+        store.setPendingAutoSearch(true)
+        store.setStep('search')
       } else {
         toast.error(err instanceof Error ? err.message : 'Booking failed. Please try again.')
       }
@@ -145,7 +160,22 @@ export default function PassengerForm() {
 
   const isPending = bookFlight.isPending || bookHotel.isPending
 
+  function handleSuccessClose() {
+    const wasHotel = successInfo?.type === 'hotel'
+    setSuccessInfo(null)
+    reset()
+    close()
+    if (!wasHotel) {
+      // For flights, navigate to trips (confirmation already shown in modal)
+      navigate('/trips')
+    } else {
+      navigate('/trips')
+    }
+  }
+
   return (
+    <>
+    <BookingSuccessModal info={successInfo} onClose={handleSuccessClose} />
     <div className="space-y-5">
       {/* Selected offer summary */}
       {tab === 'flights' && selectedFlightOffer && (
@@ -157,7 +187,7 @@ export default function PassengerForm() {
               )}
               <span className="text-white font-medium text-sm">{selectedFlightOffer.owner.name}</span>
             </div>
-            <span className="text-brand-300 font-bold text-sm">
+            <span className="text-white font-bold text-sm">
               {formatPrice(selectedFlightOffer.total_amount, selectedFlightOffer.total_currency)}
             </span>
           </div>
@@ -180,7 +210,7 @@ export default function PassengerForm() {
           )}
           <div className="flex-1 min-w-0">
             <p className="text-white font-medium text-sm truncate">{selectedHotelOffer.accommodation.name}</p>
-            <p className="text-brand-300 text-xs font-bold">
+            <p className="text-white text-xs font-bold">
               {formatPrice(selectedHotelOffer.cheapest_rate_total_amount, selectedHotelOffer.cheapest_rate_currency)}
             </p>
           </div>
@@ -273,51 +303,6 @@ export default function PassengerForm() {
               <p className="text-white/30 text-xs mt-1 pl-1">Include country code, e.g. +44 7700 900000</p>
             </div>
 
-            {needsPassport && (
-              <div className="space-y-3 pt-2 border-t border-white/10">
-                <p className="text-white/50 text-xs font-medium uppercase tracking-wide">Passport</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <GlassInput
-                    label="Passport number"
-                    placeholder="P1234567"
-                    value={passenger.passport?.number ?? ''}
-                    onChange={(e) => updatePassport(idx, 'number', e.target.value.toUpperCase())}
-                    required
-                  />
-                  <GlassInput
-                    label="Expiry date"
-                    type="date"
-                    value={passenger.passport?.expiry_date ?? ''}
-                    onChange={(e) => updatePassport(idx, 'expiry_date', e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <GlassInput
-                      label="Issuing country"
-                      placeholder="US"
-                      maxLength={2}
-                      value={passenger.passport?.country ?? ''}
-                      onChange={(e) => updatePassport(idx, 'country', e.target.value.toUpperCase())}
-                      required
-                    />
-                    <p className="text-white/30 text-xs mt-1 pl-1">2-letter ISO code</p>
-                  </div>
-                  <div>
-                    <GlassInput
-                      label="Nationality"
-                      placeholder="US"
-                      maxLength={2}
-                      value={passenger.passport?.nationality ?? ''}
-                      onChange={(e) => updatePassport(idx, 'nationality', e.target.value.toUpperCase())}
-                      required
-                    />
-                    <p className="text-white/30 text-xs mt-1 pl-1">2-letter ISO code</p>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         ))}
 
@@ -335,5 +320,6 @@ export default function PassengerForm() {
         </div>
       </form>
     </div>
+    </>
   )
 }

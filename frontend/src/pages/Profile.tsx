@@ -141,7 +141,7 @@ export default function Profile() {
               <button
                 onClick={connectYouTube}
                 disabled={connecting}
-                className="text-brand-400 hover:text-brand-300 text-xs transition-colors disabled:opacity-40"
+                className="text-white/60 hover:text-white text-xs transition-colors disabled:opacity-40"
               >
                 {connecting ? 'Waiting…' : 'Connect'}
               </button>

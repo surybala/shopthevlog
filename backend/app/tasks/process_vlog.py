@@ -17,8 +17,17 @@ async def process_vlog_task(vlog_id: str) -> None:
     db = get_supabase()
 
     try:
+        # Guard: skip only if actively transcribing or already done.
+        # "planning" means "queued but not started" — let it through so stuck-task
+        # re-queues (which reset status to "planning") actually run.
+        status_resp = db.table("vlogs").select("processing_status").eq("id", vlog_id).single().execute()
+        current_status = status_resp.data.get("processing_status") if status_resp.data else None
+        if current_status in ("transcribing", "ready"):
+            logger.info(f"Vlog {vlog_id} is already in status '{current_status}', skipping duplicate task")
+            return
+
         # Stamp 'transcribing' immediately so callers can distinguish
-        # "queued but not started" (planning) from "actively running" (transcribing).
+        # "queued but not started" (pending) from "actively running" (transcribing).
         db.table("vlogs").update({"processing_status": "transcribing"}).eq("id", vlog_id).execute()
 
         # Step 1: Transcribe

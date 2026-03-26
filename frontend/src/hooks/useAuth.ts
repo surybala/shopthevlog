@@ -14,6 +14,8 @@ export function useAuth() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
       if (session) {
+        // Unblock the UI immediately — profile loads in the background.
+        setLoading(false)
         fetchProfile()
       } else {
         // No session — stop loading so AuthGuard can redirect to /login
@@ -33,8 +35,6 @@ export function useAuth() {
     } catch {
       // Profile row may not exist yet for brand-new OAuth users —
       // the Supabase webhook creates it asynchronously
-    } finally {
-      setLoading(false)
     }
   }
 

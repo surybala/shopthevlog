@@ -15,6 +15,8 @@ from app.db.client import get_supabase
 logger = logging.getLogger(__name__)
 claude = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
+# ─── Prompts ──────────────────────────────────────────────────────────────────
+
 ITINERARY_SYSTEM_PROMPT = """You are a professional travel itinerary expert. Given a travel vlog title and transcript (or description), create a detailed day-by-day itinerary.
 
 CRITICAL: Your entire response must be a single valid JSON object. Do not use markdown code blocks, backticks, or any other wrapper. Start your response with { and end with }.
@@ -58,58 +60,141 @@ Rules:
 - For each destination, include approximate lat/lng coordinates.
 - estimated_cost_usd is per-person per day in USD (use realistic estimates; null if truly unknown).
 - booking_url should be a real booking link if identifiable, otherwise null.
+
+TOKEN BUDGET — follow these limits to avoid truncation:
+- Maximum 10 days total (group multiple destinations into combined days if needed).
+- Exactly 4 activities per day — no more, no fewer.
+- Keep every "description" field to 1-2 sentences (under 30 words).
+- Set unknown fields to null; never write "N/A", "unknown", or empty strings.
 - YOUR ENTIRE RESPONSE IS THE JSON OBJECT. Nothing before {, nothing after }."""
 
+# Compact fallback — used when the full prompt hits max_tokens
+ITINERARY_SYSTEM_PROMPT_COMPACT = """You are a travel itinerary expert. Return ONE valid JSON object (no markdown, no backticks). Start with { end with }.
+
+Schema:
+{"title":"string","summary":"string","total_days":integer,"destinations":["string"],"estimated_budget_usd":integer|null,"days":[{"day_number":integer,"location":"string","title":"string","description":"string","activities":[{"order_index":integer,"type":"activity|meal|accommodation|transport|note","name":"string","description":"string","location_name":"string|null","lat":number|null,"lng":number|null,"estimated_cost_usd":integer|null,"duration_minutes":integer|null,"booking_url":null,"image_url":null}]}]}
+
+Strict limits to keep response small:
+- Exactly 5 days total.
+- Exactly 3 activities per day.
+- Each description: one sentence, under 15 words.
+- All optional fields set to null.
+- YOUR ENTIRE RESPONSE IS THE JSON OBJECT."""
 
 DESTINATION_EXTRACTION_PROMPT = """Extract all travel destination names from this text. Return ONLY a JSON array of destination strings (countries, cities, regions). Example: ["Tokyo", "Japan", "Kyoto"]. No explanation."""
 
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def _strip_code_fences(text: str) -> str:
+    """Remove markdown ``` wrappers that some models add despite instructions."""
+    text = text.strip()
+    if not text.startswith("```"):
+        return text
+    lines = text.splitlines()
+    # Find the closing fence (last line that is exactly ```)
+    end = len(lines)
+    for i in range(len(lines) - 1, 0, -1):
+        if lines[i].strip() == "```":
+            end = i
+            break
+    # Drop first line (```json or ```) and everything after the closing fence
+    return "\n".join(lines[1:end]).strip()
+
+
+def _call_claude(system: str, user_content: str, max_tokens: int) -> anthropic.types.Message:
+    return claude.messages.create(
+        model="claude-haiku-4-5",
+        max_tokens=max_tokens,
+        system=system,
+        messages=[{"role": "user", "content": user_content}],
+    )
+
+
+def _parse_response(message: anthropic.types.Message, vlog_id: str, attempt: str) -> Optional[dict]:
+    """
+    Extract and parse JSON from a Claude message.
+    Returns the parsed dict or None on failure.
+    Logs all errors with vlog_id + attempt context.
+    """
+    if message.stop_reason == "max_tokens":
+        logger.warning(
+            f"Claude hit max_tokens on {attempt} attempt for vlog {vlog_id} "
+            f"(used {message.usage.output_tokens} output tokens)"
+        )
+        return None
+
+    raw = message.content[0].text.strip()
+    logger.debug(
+        f"Claude raw response [{attempt}] for vlog {vlog_id} "
+        f"(first 400 chars): {raw[:400]}"
+    )
+
+    cleaned = _strip_code_fences(raw)
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        logger.error(
+            f"Claude returned invalid JSON [{attempt}] for vlog {vlog_id}: {e}. "
+            f"Raw (first 600 chars): {raw[:600]}"
+        )
+        return None
+
+
+# ─── Public API ──────────────────────────────────────────────────────────────
 
 def generate_itinerary(vlog_id: str, transcript: str, title: str, constraints: Optional[dict] = None) -> bool:
     """
     Generate and persist a shoppable itinerary for a vlog.
     Returns True on success, False on failure.
+
+    Strategy:
+    1. Primary call: full prompt, transcript up to ~7 500 tokens, max_tokens=16000.
+    2. If max_tokens hit OR JSON parse fails: compact fallback with tighter limits.
+    3. If both fail: mark vlog as failed and return False.
     """
     db = get_supabase()
 
-    # Build user prompt
-    user_content = f"Vlog title: {title}\n\nTranscript:\n{transcript[:30000]}"  # ~7,500 tokens
+    # Guard: skip if an itinerary already exists for this vlog.
+    existing = db.table("itineraries").select("id").eq("vlog_id", vlog_id).limit(1).execute()
+    if existing.data:
+        logger.info(f"Itinerary already exists for vlog {vlog_id}, skipping Claude call")
+        db.table("vlogs").update({"processing_status": "ready"}).eq("id", vlog_id).execute()
+        return True
+
+    # ── Attempt 1: full prompt ────────────────────────────────────────────────
+    user_content = f"Vlog title: {title}\n\nTranscript:\n{transcript[:30000]}"  # ~7 500 tokens
     if constraints:
         user_content += f"\n\nUser constraints: {json.dumps(constraints)}"
 
+    itinerary_data: Optional[dict] = None
     try:
-        message = claude.messages.create(
-            model="claude-haiku-4-5",
-            max_tokens=8192,
-            system=ITINERARY_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_content}],
-        )
-
-        if message.stop_reason == "max_tokens":
-            logger.error(f"Claude hit max_tokens for vlog {vlog_id} — response truncated")
-            db.table("vlogs").update({"processing_status": "failed", "processing_error": "Response too long, hit token limit"}).eq("id", vlog_id).execute()
-            return False
-
-        raw_response = message.content[0].text.strip()
-        logger.debug(f"Claude raw response for vlog {vlog_id} (first 300 chars): {raw_response[:300]}")
-
-        # Strip markdown code fences if Claude wraps the JSON despite instructions
-        if raw_response.startswith("```"):
-            lines = raw_response.splitlines()
-            # Drop first line (```json or ```) and last line (```)
-            end = -1 if lines[-1].strip() == "```" else len(lines)
-            raw_response = "\n".join(lines[1:end]).strip()
-
-        itinerary_data = json.loads(raw_response)
-    except json.JSONDecodeError as e:
-        logger.error(f"Claude returned invalid JSON for vlog {vlog_id}: {e}. Raw (first 500): {raw_response[:500] if 'raw_response' in dir() else 'N/A'}")
-        db.table("vlogs").update({"processing_status": "failed", "processing_error": f"Claude returned invalid JSON: {e}"}).eq("id", vlog_id).execute()
-        return False
+        msg = _call_claude(ITINERARY_SYSTEM_PROMPT, user_content, max_tokens=16000)
+        itinerary_data = _parse_response(msg, vlog_id, "primary")
     except Exception as e:
-        logger.error(f"Claude API error for vlog {vlog_id}: {e}")
-        db.table("vlogs").update({"processing_status": "failed", "processing_error": str(e)}).eq("id", vlog_id).execute()
+        logger.error(f"Claude API error (primary) for vlog {vlog_id}: {e}")
+
+    # ── Attempt 2: compact fallback ───────────────────────────────────────────
+    if itinerary_data is None:
+        logger.info(f"Retrying with compact prompt for vlog {vlog_id}")
+        compact_content = (
+            f"Vlog title: {title}\n\n"
+            f"Transcript excerpt:\n{transcript[:8000]}"
+        )
+        try:
+            msg2 = _call_claude(ITINERARY_SYSTEM_PROMPT_COMPACT, compact_content, max_tokens=4096)
+            itinerary_data = _parse_response(msg2, vlog_id, "compact")
+        except Exception as e:
+            logger.error(f"Claude API error (compact) for vlog {vlog_id}: {e}")
+
+    if itinerary_data is None:
+        db.table("vlogs").update({
+            "processing_status": "failed",
+            "processing_error": "Could not generate a valid itinerary after two attempts. Try again.",
+        }).eq("id", vlog_id).execute()
         return False
 
-    # Persist itinerary
+    # ── Persist itinerary ─────────────────────────────────────────────────────
     try:
         itin_resp = db.table("itineraries").insert({
             "vlog_id": vlog_id,
@@ -163,7 +248,10 @@ def generate_itinerary(vlog_id: str, transcript: str, title: str, constraints: O
 
     except Exception as e:
         logger.error(f"DB write failed after Claude response for vlog {vlog_id}: {e}")
-        db.table("vlogs").update({"processing_status": "failed", "processing_error": "DB write failed"}).eq("id", vlog_id).execute()
+        db.table("vlogs").update({
+            "processing_status": "failed",
+            "processing_error": "DB write failed after successful Claude response",
+        }).eq("id", vlog_id).execute()
         return False
 
 

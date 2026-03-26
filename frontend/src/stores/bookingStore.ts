@@ -52,7 +52,15 @@ interface BookingState {
   hotelParams: HotelSearchParams | null
   selectedFlightOffer: FlightOffer | null
   selectedHotelOffer: HotelOffer | null
+  /** prebookId obtained from LiteAPI right after hotel selection — used in the final /hotels/book call. */
+  hotelPrebookId: string | null
   passengers: Passenger[]
+  /**
+   * When true, FlightSearch should auto-submit the current flightParams on mount.
+   * Set to true when a stale-offer 409 is caught in PassengerForm so the user
+   * doesn't have to manually re-click "Search Flights".
+   */
+  pendingAutoSearch: boolean
   open: (
     tripId: string,
     tab?: BookingTab,
@@ -69,7 +77,9 @@ interface BookingState {
   setHotelParams: (params: HotelSearchParams) => void
   selectFlight: (offer: FlightOffer) => void
   selectHotel: (offer: HotelOffer) => void
+  setHotelPrebookId: (id: string | null) => void
   setPassengers: (passengers: Passenger[]) => void
+  setPendingAutoSearch: (val: boolean) => void
   reset: () => void
 }
 
@@ -83,7 +93,9 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   hotelParams: null,
   selectedFlightOffer: null,
   selectedHotelOffer: null,
+  hotelPrebookId: null,
   passengers: [],
+  pendingAutoSearch: false,
 
   open: (tripId, tab = 'flights', flightParams = null, hotelParams = null, destinationLabel = null) => {
     // Restore a previously saved draft for this trip (if any)
@@ -101,6 +113,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         passengers: draft.passengers,
         selectedFlightOffer: null,
         selectedHotelOffer: null,
+        hotelPrebookId: null,
       })
     } else {
       set({
@@ -113,6 +126,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         destinationLabel,
         selectedFlightOffer: null,
         selectedHotelOffer: null,
+        hotelPrebookId: null,
         passengers: [],
       })
     }
@@ -140,8 +154,10 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   setFlightParams: (flightParams) => set({ flightParams }),
   setHotelParams: (hotelParams) => set({ hotelParams }),
   selectFlight: (offer) => set({ selectedFlightOffer: offer, step: 'passengers' }),
-  selectHotel: (offer) => set({ selectedHotelOffer: offer, step: 'passengers' }),
+  selectHotel: (offer) => set({ selectedHotelOffer: offer, hotelPrebookId: null, step: 'passengers' }),
+  setHotelPrebookId: (id) => set({ hotelPrebookId: id }),
   setPassengers: (passengers) => set({ passengers }),
+  setPendingAutoSearch: (val) => set({ pendingAutoSearch: val }),
 
   reset: () => {
     const { tripId } = get()
@@ -153,7 +169,9 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       destinationLabel: null,
       selectedFlightOffer: null,
       selectedHotelOffer: null,
+      hotelPrebookId: null,
       passengers: [],
+      pendingAutoSearch: false,
     })
   },
 }))

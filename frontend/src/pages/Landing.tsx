@@ -26,9 +26,9 @@ export default function Landing() {
     <div className="min-h-screen overflow-hidden">
       {/* Ambient blobs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-brand-500/20 blur-[120px] animate-float" />
-        <div className="absolute top-1/3 -right-40 w-80 h-80 rounded-full bg-violet-500/15 blur-[120px] animate-float" style={{ animationDelay: '2s' }} />
-        <div className="absolute bottom-0 left-1/3 w-96 h-96 rounded-full bg-blue-500/10 blur-[120px] animate-float" style={{ animationDelay: '4s' }} />
+        <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-white/[0.04] blur-[120px] animate-float" />
+        <div className="absolute top-1/3 -right-40 w-80 h-80 rounded-full bg-white/[0.03] blur-[120px] animate-float" style={{ animationDelay: '2s' }} />
+        <div className="absolute bottom-0 left-1/3 w-96 h-96 rounded-full bg-white/[0.02] blur-[120px] animate-float" style={{ animationDelay: '4s' }} />
       </div>
 
       {/* Nav */}

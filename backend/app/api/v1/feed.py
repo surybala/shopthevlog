@@ -1,8 +1,11 @@
 import asyncio
+import logging
 from fastapi import APIRouter, Depends, Query, BackgroundTasks
 from typing import Optional
 
 from app.core.security import get_current_user, UserClaims
+
+logger = logging.getLogger(__name__)
 from app.db.client import get_supabase
 from app.services.feed_ranking_service import get_paginated_feed, build_feed_for_user, _mark_shown
 from app.schemas.vlog import FeedPage, VlogInteractionRequest
@@ -31,6 +34,11 @@ async def get_feed(
             style=style,
         ),
     )
+
+    # Cache miss on first page — rebuild in background, return empty immediately.
+    if not result["vlogs"] and not cursor:
+        logger.info("Feed cache empty for %s, queuing background rebuild", user.user_id)
+        background_tasks.add_task(build_feed_for_user, user.user_id)
 
     # Mark vlogs as shown after the response is sent — zero added latency
     shown_ids = result.pop("_shown_ids", [])

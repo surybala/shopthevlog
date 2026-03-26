@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useFlightSearch } from '../../hooks/useFlightSearch'
 import { useBookingStore } from '../../stores/bookingStore'
 import GlassInput from '../ui/GlassInput'
 import GlassButton from '../ui/GlassButton'
+import FlightDetailSheet from './FlightDetailSheet'
 import type { FlightOffer } from '../../types/booking'
 
 function formatDuration(iso: string) {
@@ -22,9 +23,11 @@ function formatDateTime(dt: string | null | undefined) {
 
 export default function FlightSearch() {
   const search = useFlightSearch()
-  const { selectFlight, setFlightParams } = useBookingStore((s) => ({
+  const { selectFlight, setFlightParams, pendingAutoSearch, setPendingAutoSearch } = useBookingStore((s) => ({
     selectFlight: s.selectFlight,
     setFlightParams: s.setFlightParams,
+    pendingAutoSearch: s.pendingAutoSearch,
+    setPendingAutoSearch: s.setPendingAutoSearch,
   }))
 
   // Read pre-populated params set by ItineraryPanel when the drawer opened.
@@ -42,6 +45,24 @@ export default function FlightSearch() {
     cabin_class: (storedParams?.cabin_class ?? 'economy') as
       'economy' | 'premium_economy' | 'business' | 'first',
   })
+
+  /** Offer currently shown in the detail sheet; null = sheet closed. */
+  const [detailOffer, setDetailOffer] = useState<FlightOffer | null>(null)
+
+  /**
+   * Auto-search on mount when a stale-offer 409 redirected us back here.
+   * Clears the flag immediately so a subsequent unmount/remount doesn't repeat.
+   */
+  useEffect(() => {
+    if (pendingAutoSearch) {
+      setPendingAutoSearch(false)
+      // Only auto-search if all required fields are present
+      if (form.origin && form.destination && form.departure_date) {
+        search.mutate({ ...form, passengers: Number(form.passengers) })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally run once on mount
 
   /** Update local form state AND sync back to the store so "Save & Close" captures the latest values. */
   function updateForm(updates: Partial<typeof form>) {
@@ -61,8 +82,8 @@ export default function FlightSearch() {
     <div className="space-y-5">
       {/* Auto-populated hint */}
       {destinationLabel && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-500/10 border border-brand-500/20">
-          <span className="text-brand-400 text-sm">✨</span>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.06] border border-white/15">
+          <span className="text-white/60 text-sm">✨</span>
           <p className="text-white/70 text-xs">
             Pre-filled for <span className="text-white font-medium">{destinationLabel}</span> based on your itinerary.
             Adjust any field below.
@@ -140,14 +161,14 @@ export default function FlightSearch() {
         </GlassButton>
       </form>
 
-      {/* Results */}
+      {/* Results — clicking a card opens the detail sheet */}
       {search.data && (
         <div className="space-y-3">
           <p className="text-white/50 text-sm">{search.data.length} offers found</p>
           {(search.data as FlightOffer[]).map((offer) => (
             <button
               key={offer.id}
-              onClick={() => selectFlight(offer)}
+              onClick={() => setDetailOffer(offer)}
               className="w-full glass-hover p-4 text-left"
             >
               <div className="flex items-center justify-between mb-2">
@@ -156,13 +177,8 @@ export default function FlightSearch() {
                     <img src={offer.owner.logo_symbol_url} className="w-5 h-5 object-contain" alt="" />
                   )}
                   <span className="text-white font-medium text-sm">{offer.owner.name}</span>
-                  {offer.provider === 'amadeus' ? (
-                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300">Amadeus</span>
-                  ) : (
-                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 border border-white/20 text-white/50">Duffel</span>
-                  )}
                 </div>
-                <span className="text-brand-300 font-bold">
+                <span className="text-white font-bold">
                   {offer.total_currency} {parseFloat(offer.total_amount).toLocaleString()}
                 </span>
               </div>
@@ -181,6 +197,7 @@ export default function FlightSearch() {
                   </div>
                 )
               })}
+              <p className="text-white/30 text-xs mt-2">Tap to view details →</p>
             </button>
           ))}
         </div>
@@ -189,6 +206,17 @@ export default function FlightSearch() {
       {search.isError && (
         <p className="text-red-400 text-sm">{(search.error as Error).message}</p>
       )}
+
+      {/* Flight detail sheet */}
+      <FlightDetailSheet
+        offer={detailOffer}
+        cabinClass={form.cabin_class}
+        onClose={() => setDetailOffer(null)}
+        onSelect={(offer) => {
+          selectFlight(offer)
+          setDetailOffer(null)
+        }}
+      />
     </div>
   )
 }
