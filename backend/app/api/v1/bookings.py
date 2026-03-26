@@ -5,7 +5,7 @@ from typing import List, Optional
 from app.core.security import get_current_user, UserClaims
 from app.db.client import get_supabase
 from app.schemas.booking import BookingResponse
-from app.services import duffel_service, liteapi_service
+from app.services import booking_com_service, duffel_service, liteapi_service
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ async def get_booking(booking_id: str, user: UserClaims = Depends(get_current_us
 
 
 @router.delete("/{booking_id}")
-async def cancel_booking(booking_id: str, user: UserClaims = Depends(get_current_user)):
+async def cancel_booking(booking_id: str, user: UserClaims = Depends(get_current_user)):  # noqa: RUF029
     db = get_supabase()
     resp = db.table("bookings").select("*").eq("id", booking_id).eq("user_id", user.user_id).single().execute()
     if not resp.data:
@@ -62,6 +62,18 @@ async def cancel_booking(booking_id: str, user: UserClaims = Depends(get_current
             elif booking_type == "hotel" and provider == "duffel":
                 # Duffel Stays: DELETE /stays/bookings/{id}
                 duffel_service.cancel_hotel_order(order_id)
+            elif provider == "booking_com":
+                # Booking.com Demand API: the order_id is stored in metadata.
+                bcom_order_id = (
+                    (booking.get("metadata") or {}).get("booking_com_order_id")
+                    or order_id
+                )
+                cancelled = await booking_com_service.cancel_order(bcom_order_id)
+                if not cancelled:
+                    raise ValueError(
+                        f"Booking.com could not cancel order {bcom_order_id}. "
+                        "The reservation may be non-refundable or already cancelled."
+                    )
             else:
                 logger.warning(
                     f"cancel_booking: no downstream handler for "

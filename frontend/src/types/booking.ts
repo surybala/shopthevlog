@@ -70,7 +70,7 @@ export interface PassengerDetail {
 export interface Booking {
   id: string
   trip_id: string
-  booking_type: 'flight' | 'hotel'
+  booking_type: 'flight' | 'hotel' | 'car' | 'experience'
   duffel_booking_reference: string | null
   status: 'pending' | 'confirmed' | 'cancelled' | 'failed'
   total_amount: number | null
@@ -151,7 +151,7 @@ export interface HotelDetail {
 
 export interface HotelOffer {
   id: string
-  provider: 'liteapi' | 'duffel'
+  provider: 'liteapi' | 'duffel' | 'booking_com'
   hotel_id?: string            // Raw provider hotel ID — used to fetch HotelDetail
   accommodation: {
     name: string
@@ -175,4 +175,71 @@ export interface Passenger {
   born_on: string  // ISO date
   email: string
   phone_number: string
+}
+
+// ── Car Rentals ──────────────────────────────────────────────────────────────
+
+export interface CarSearchParams {
+  pickup_location: string
+  dropoff_location?: string   // defaults to pickup_location when omitted
+  pickup_datetime: string     // ISO 8601 datetime string
+  dropoff_datetime: string
+  driver_age?: number
+  currency?: string
+}
+
+export interface CarOffer {
+  id: string
+  provider: 'booking_com'
+  car_category: string        // 'Economy' | 'Compact' | 'SUV' | etc.
+  car_model?: string
+  supplier?: string
+  pickup_location: string
+  dropoff_location: string
+  pickup_datetime: string
+  dropoff_datetime: string
+  total_amount: string
+  currency: string
+  passengers: number
+  bags?: number
+  photos?: Array<{ url: string }>
+  features?: string[]         // 'AC' | 'GPS' | 'Automatic' | etc.
+  cancellation_type?: string
+  metadata?: Record<string, unknown>
+}
+
+// ── Experiences / Attractions ─────────────────────────────────────────────────
+
+export interface ExperienceSearchParams {
+  location: string
+  lat?: number
+  lng?: number
+  category?: string
+  currency?: string
+}
+
+export interface ExperienceOffer {
+  id: string
+  provider: 'booking_com'
+  name: string
+  description?: string
+  category?: string
+  location: string
+  lat?: number
+  lng?: number
+  photos?: Array<{ url: string }>
+  review_score?: number
+  review_count?: number
+  min_price?: string
+  currency?: string
+  duration_minutes?: number
+  metadata?: Record<string, unknown>
+}
+
+export interface ExperienceDetail extends ExperienceOffer {
+  reviews?: HotelReview[]     // reuses the same review shape
+  highlights?: string[]
+  included?: string[]
+  excluded?: string[]
+  booking_url?: string
 }

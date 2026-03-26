@@ -7,7 +7,7 @@ from app.db.client import get_supabase
 from app.schemas.vlog import VlogResponse, VlogStatusResponse
 from app.tasks.process_vlog import process_vlog_task
 
-STUCK_TASK_THRESHOLD = timedelta(minutes=3)
+STUCK_TASK_THRESHOLD = timedelta(minutes=10)  # must exceed local Whisper timeout (5 min) + overhead
 
 router = APIRouter(prefix="/vlogs", tags=["vlogs"])
 

@@ -14,6 +14,7 @@ export interface TastePreferences {
   destinations: string[]
   trip_durations: string[]
   budget_range: 'budget' | 'mid' | 'luxury' | null
+  home_location: string | null
 }
 
 export interface SocialConnection {

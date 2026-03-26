@@ -59,6 +59,30 @@ class HotelBookRequest(BaseModel):
     hotel_rating: Optional[float] = None
 
 
+class CarSearchRequest(BaseModel):
+    pickup_location: str
+    dropoff_location: Optional[str] = None   # defaults to pickup_location when absent
+    pickup_datetime: str                      # ISO 8601 datetime string
+    dropoff_datetime: str
+    driver_age: int = 30
+    currency: str = "USD"
+
+
+class CarBookRequest(BaseModel):
+    car_id: str
+    driver: dict                              # {first_name, last_name, email, phone, …}
+    trip_id: str
+    metadata: Optional[dict] = None
+
+
+class ExperienceSearchRequest(BaseModel):
+    location: str
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    category: Optional[str] = None
+    currency: str = "USD"
+
+
 class BookingResponse(BaseModel):
     id: str
     trip_id: str

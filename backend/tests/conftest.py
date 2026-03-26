@@ -13,6 +13,8 @@ os.environ.setdefault("SUPABASE_JWT_SECRET", "test-jwt-secret-long-enough-for-hm
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-anthropic-key")
 os.environ.setdefault("DUFFEL_ACCESS_TOKEN", "test-duffel-token")
 os.environ.setdefault("LITEAPI_API_KEY", "test-liteapi-key")
+# Use in-process memory backend so slowapi rate limiting works without Redis in tests.
+os.environ.setdefault("REDIS_URL", "memory://")
 
 from unittest.mock import MagicMock
 import pytest

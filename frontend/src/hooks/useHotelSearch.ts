@@ -34,7 +34,8 @@ export function useHotelDetail(
       const { data } = await api.get<HotelDetail>('/hotels/detail', { params })
       return data
     },
-    enabled: !!hotelId && provider === 'liteapi',
+    // Detail is supported for liteapi and booking_com; Duffel has no detail endpoint.
+    enabled: !!hotelId && provider !== 'duffel',
     staleTime: 5 * 60 * 1000,   // 5 min — details don't change often
     retry: 1,
   })

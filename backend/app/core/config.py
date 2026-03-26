@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     GOOGLE_PLACES_API_KEY: str = ""   # Google Places New API (v1) — for photos/reviews
     FOURSQUARE_API_KEY: str = ""      # Foursquare Places v3 — fallback photos/tips
 
+    # Booking.com Demand API
+    BOOKING_COM_API_TOKEN: str = ""         # Bearer token (shown once on creation)
+    BOOKING_COM_AFFILIATE_ID: str = ""      # Partner / affiliate ID
+    BOOKING_COM_SANDBOX: bool = True        # True = sandbox, False = production
+    BOOKING_COM_RATE_LIMIT_RPM: int = 45   # Outbound RPM cap (sandbox limit is 50; we leave 5 headroom)
+
     # Redis
     REDIS_URL: str = "redis://localhost:6379"
 
