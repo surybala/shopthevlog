@@ -247,10 +247,10 @@ async def book_hotel(
                 preview_token=body.prebook_id,
                 guests=[
                     {
-                        "first_name": g.given_name,
-                        "last_name": g.family_name,
-                        "email": getattr(g, "email", ""),
-                        "phone": getattr(g, "phone_number", ""),
+                        "first_name": g.get("given_name", "") if isinstance(g, dict) else getattr(g, "given_name", ""),
+                        "last_name": g.get("family_name", "") if isinstance(g, dict) else getattr(g, "family_name", ""),
+                        "email": g.get("email", "") if isinstance(g, dict) else getattr(g, "email", ""),
+                        "phone": g.get("phone_number", "") if isinstance(g, dict) else getattr(g, "phone_number", ""),
                     }
                     for g in (body.guests or [])
                 ],
@@ -285,7 +285,9 @@ async def book_hotel(
                 "raw": raw,
             }
 
-    except (StaleOfferError, HTTPException):
+    except StaleOfferError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except HTTPException:
         raise
     except Exception as exc:
         logger.error("Hotel booking failed: %s: %s", type(exc).__name__, exc, exc_info=True)

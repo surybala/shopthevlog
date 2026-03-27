@@ -67,7 +67,7 @@ async def cancel_booking(booking_id: str, user: UserClaims = Depends(get_current
                 cancelled = await booking_com_service.cancel_order(order_id)
                 if not cancelled:
                     raise ValueError(
-                        f"Booking.com could not cancel order {bcom_order_id}. "
+                        f"Booking.com could not cancel order {order_id}. "
                         "The reservation may be non-refundable or already cancelled."
                     )
             else:

@@ -21,6 +21,21 @@ import pytest
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Disable rate limiting globally so repeated test requests don't hit 429
+# ─────────────────────────────────────────────────────────────────────────────
+
+@pytest.fixture(autouse=True)
+def disable_rate_limits():
+    """Turn off slowapi for every test.  Rate-limit logic is tested separately."""
+    from app.core.rate_limit import limiter
+    # slowapi stores the flag as `enabled` (public attribute)
+    original = limiter.enabled
+    limiter.enabled = False
+    yield
+    limiter.enabled = original
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Supabase mock factory
 # ─────────────────────────────────────────────────────────────────────────────
 
