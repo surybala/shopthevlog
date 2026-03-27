@@ -440,32 +440,61 @@ class TestFoursquareEnrich:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# _fetch_external — Google-first with Foursquare fallback
+# _fetch_external — always queries Google + Foursquare in parallel and merges
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestFetchExternal:
-    async def test_uses_google_result_when_google_succeeds(self):
+    async def test_both_sources_always_queried_in_parallel(self):
+        """Google and Foursquare are both awaited even when Google succeeds."""
         google_result = {**_empty(), "source": "google",
-                         "photos": [{"url": "https://g.co/p.jpg", "ref": "ref/1"}]}
-        fsq_result = {**_empty(), "source": "foursquare"}
+                         "photos": [{"url": "https://g.co/p.jpg", "ref": "ref/1"}],
+                         "reviews": [{"text": "Great!", "author": "A"}]}
+        fsq_result = {**_empty(), "source": "foursquare",
+                      "photos": [{"url": "https://fsq.com/p.jpg"}],
+                      "reviews": [{"text": "Loved it.", "author": "B"}]}
 
         with patch.object(svc, "_google_enrich", new=AsyncMock(return_value=google_result)) as mock_g, \
              patch.object(svc, "_foursquare_enrich", new=AsyncMock(return_value=fsq_result)) as mock_f:
             result = await svc._fetch_external("Hotel X", 35.0, 139.0)
 
-        assert result["source"] == "google"
-        mock_f.assert_not_awaited()
+        mock_g.assert_awaited_once()
+        mock_f.assert_awaited_once()
+        # Source reflects both providers
+        assert result["source"] == "google+foursquare"
+        # Photos from both sources merged
+        assert len(result["photos"]) == 2
+        # Reviews from both sources merged
+        assert len(result["reviews"]) == 2
 
-    async def test_falls_back_to_foursquare_when_google_yields_nothing(self):
+    async def test_merged_source_is_foursquare_when_google_yields_nothing(self):
+        """When Google finds nothing, Foursquare result is used as primary."""
         google_empty = _empty()  # source is None
         fsq_result = {**_empty(), "source": "foursquare",
-                      "photos": [{"url": "https://fsq.com/p.jpg"}]}
+                      "photos": [{"url": "https://fsq.com/p.jpg"}],
+                      "reviews": [{"text": "Nice place.", "author": "C"}]}
 
         with patch.object(svc, "_google_enrich", new=AsyncMock(return_value=google_empty)), \
              patch.object(svc, "_foursquare_enrich", new=AsyncMock(return_value=fsq_result)):
             result = await svc._fetch_external("Hotel X", 35.0, 139.0)
 
         assert result["source"] == "foursquare"
+        assert len(result["photos"]) == 1
+        assert len(result["reviews"]) == 1
+
+    async def test_merged_source_is_google_when_foursquare_yields_nothing(self):
+        """When Foursquare finds nothing, Google result is used as primary."""
+        google_result = {**_empty(), "source": "google",
+                         "photos": [{"url": "https://g.co/p.jpg", "ref": "ref/1"}],
+                         "reviews": [{"text": "Superb!", "author": "D"}]}
+        fsq_empty = _empty()
+
+        with patch.object(svc, "_google_enrich", new=AsyncMock(return_value=google_result)), \
+             patch.object(svc, "_foursquare_enrich", new=AsyncMock(return_value=fsq_empty)):
+            result = await svc._fetch_external("Hotel X", 35.0, 139.0)
+
+        assert result["source"] == "google"
+        assert len(result["photos"]) == 1
+        assert len(result["reviews"]) == 1
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

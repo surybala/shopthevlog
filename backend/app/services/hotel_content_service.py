@@ -481,12 +481,41 @@ async def _foursquare_enrich(hotel_name: str, lat: float | None, lng: float | No
 # ─── Internal async orchestrator ─────────────────────────────────────────────
 
 async def _fetch_external(hotel_name: str, lat: float | None, lng: float | None) -> dict:
-    """Try Google Places, fall back to Foursquare."""
-    result = await _google_enrich(hotel_name, lat, lng)
-    if result["source"]:
-        return result
-    logger.debug(f"Google yielded nothing for '{hotel_name}', trying Foursquare…")
-    return await _foursquare_enrich(hotel_name, lat, lng)
+    """Fetch from Google Places AND Foursquare in parallel and merge results.
+
+    Google Places API caps at 5 reviews per call.  Foursquare tips are a
+    complementary source of guest opinions.  By running both concurrently and
+    merging the results we can surface up to _MAX_REVIEWS distinct reviews.
+
+    Photos are taken from Google first (they carry a stable ``ref`` for dedup);
+    Foursquare photos fill in any remaining slots up to _MAX_PHOTOS.
+    """
+    google_result, fsq_result = await asyncio.gather(
+        _google_enrich(hotel_name, lat, lng),
+        _foursquare_enrich(hotel_name, lat, lng),
+    )
+
+    # Determine which source wins for metadata (score, count)
+    # Prefer Google when it found the place; fall back to Foursquare.
+    primary = google_result if google_result["source"] else fsq_result
+    secondary = fsq_result if google_result["source"] else google_result
+
+    merged_photos = _merge_photos(primary["photos"], secondary["photos"])
+    merged_reviews = _merge_reviews(primary["reviews"], secondary["reviews"])
+
+    source: str | None
+    if google_result["source"] and fsq_result["source"]:
+        source = "google+foursquare"
+    else:
+        source = primary["source"]
+
+    return {
+        "photos": merged_photos,
+        "reviews": merged_reviews,
+        "review_score": primary.get("review_score"),
+        "review_count": primary.get("review_count"),
+        "source": source,
+    }
 
 
 # ─── Public entry-point ───────────────────────────────────────────────────────
