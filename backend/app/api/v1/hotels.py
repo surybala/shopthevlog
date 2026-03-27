@@ -154,7 +154,7 @@ async def hotel_detail(
     # ── Content enrichment (best-effort, applies to all providers) ─────────────
     if hotel_name:
         try:
-            enriched = hotel_content_service.enrich_hotel(hotel_id, hotel_name, lat, lng)
+            enriched = await hotel_content_service.enrich_hotel(hotel_id, hotel_name, lat, lng)
 
             existing_urls: set[str] = {p.get("url", "") for p in detail.get("photos", [])}
             extra_photos = [p for p in enriched["photos"] if p.get("url") not in existing_urls]

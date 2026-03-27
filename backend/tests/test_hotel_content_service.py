@@ -444,26 +444,26 @@ class TestFoursquareEnrich:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestFetchExternal:
-    def test_uses_google_result_when_google_succeeds(self):
+    async def test_uses_google_result_when_google_succeeds(self):
         google_result = {**_empty(), "source": "google",
                          "photos": [{"url": "https://g.co/p.jpg", "ref": "ref/1"}]}
         fsq_result = {**_empty(), "source": "foursquare"}
 
         with patch.object(svc, "_google_enrich", new=AsyncMock(return_value=google_result)) as mock_g, \
              patch.object(svc, "_foursquare_enrich", new=AsyncMock(return_value=fsq_result)) as mock_f:
-            result = asyncio.run(svc._fetch_external("Hotel X", 35.0, 139.0))
+            result = await svc._fetch_external("Hotel X", 35.0, 139.0)
 
         assert result["source"] == "google"
         mock_f.assert_not_awaited()
 
-    def test_falls_back_to_foursquare_when_google_yields_nothing(self):
+    async def test_falls_back_to_foursquare_when_google_yields_nothing(self):
         google_empty = _empty()  # source is None
         fsq_result = {**_empty(), "source": "foursquare",
                       "photos": [{"url": "https://fsq.com/p.jpg"}]}
 
         with patch.object(svc, "_google_enrich", new=AsyncMock(return_value=google_empty)), \
              patch.object(svc, "_foursquare_enrich", new=AsyncMock(return_value=fsq_result)):
-            result = asyncio.run(svc._fetch_external("Hotel X", 35.0, 139.0))
+            result = await svc._fetch_external("Hotel X", 35.0, 139.0)
 
         assert result["source"] == "foursquare"
 
@@ -473,26 +473,26 @@ class TestFetchExternal:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestEnrichHotel:
-    def test_returns_empty_for_blank_hotel_id(self):
-        assert enrich_hotel("", "Test Hotel") == _empty()
+    async def test_returns_empty_for_blank_hotel_id(self):
+        assert await enrich_hotel("", "Test Hotel") == _empty()
 
-    def test_returns_empty_for_blank_hotel_name(self):
-        assert enrich_hotel("hotel_123", "") == _empty()
+    async def test_returns_empty_for_blank_hotel_name(self):
+        assert await enrich_hotel("hotel_123", "") == _empty()
 
-    def test_l1_cache_hit_skips_db_and_external(self):
+    async def test_l1_cache_hit_skips_db_and_external(self):
         cached = {**_empty(), "source": "google",
                   "photos": [{"url": "https://cdn.test/1.jpg", "ref": "ref/p1"}]}
         _l1_set("hotel_123", cached)
 
         with patch.object(svc, "_db_load") as mock_db, \
              patch.object(svc, "_fetch_external", new=AsyncMock()) as mock_ext:
-            result = enrich_hotel("hotel_123", "Test Hotel")
+            result = await enrich_hotel("hotel_123", "Test Hotel")
 
         assert result == cached
         mock_db.assert_not_called()
         mock_ext.assert_not_awaited()
 
-    def test_l2_fresh_hit_populates_l1_and_skips_external(self):
+    async def test_l2_fresh_hit_populates_l1_and_skips_external(self):
         db_row = {
             "hotel_id": "hotel_456",
             "photos": [{"url": "https://cdn.test/2.jpg", "ref": "ref/p2"}],
@@ -506,7 +506,7 @@ class TestEnrichHotel:
         with patch.object(svc, "_db_load", return_value=db_row), \
              patch.object(svc, "_db_is_fresh", return_value=True), \
              patch.object(svc, "_fetch_external", new=AsyncMock()) as mock_ext:
-            result = enrich_hotel("hotel_456", "Hotel Y")
+            result = await enrich_hotel("hotel_456", "Hotel Y")
 
         assert result["source"] == "google"
         assert len(result["photos"]) == 1
@@ -514,7 +514,7 @@ class TestEnrichHotel:
         # L1 now populated
         assert _l1_get("hotel_456") is not None
 
-    def test_stale_db_row_triggers_external_fetch_and_upsert(self):
+    async def test_stale_db_row_triggers_external_fetch_and_upsert(self):
         stale_row = {
             "hotel_id": "hotel_789",
             "photos": [{"url": "https://fsq.com/old.jpg"}],
@@ -536,12 +536,12 @@ class TestEnrichHotel:
              patch.object(svc, "_db_is_fresh", return_value=False), \
              patch.object(svc, "_fetch_external", new=AsyncMock(return_value=new_data)), \
              patch.object(svc, "_db_upsert", return_value=new_data) as mock_upsert:
-            result = enrich_hotel("hotel_789", "Hotel Z", lat=35.0, lng=139.0)
+            result = await enrich_hotel("hotel_789", "Hotel Z", lat=35.0, lng=139.0)
 
         mock_upsert.assert_called_once()
         assert result["source"] == "google"
 
-    def test_missing_db_row_triggers_external_fetch_with_none_existing(self):
+    async def test_missing_db_row_triggers_external_fetch_with_none_existing(self):
         new_data = {
             "photos": [{"url": "https://lh3.goo.gl/A.jpg", "ref": "places/X/photos/PA"}],
             "reviews": [],
@@ -553,16 +553,16 @@ class TestEnrichHotel:
         with patch.object(svc, "_db_load", return_value=None), \
              patch.object(svc, "_fetch_external", new=AsyncMock(return_value=new_data)), \
              patch.object(svc, "_db_upsert", return_value=new_data) as mock_upsert:
-            result = enrich_hotel("hotel_new", "Brand New Hotel")
+            result = await enrich_hotel("hotel_new", "Brand New Hotel")
 
         mock_upsert.assert_called_once_with("hotel_new", "Brand New Hotel", None, None, new_data, None)
         assert result["source"] == "google"
 
-    def test_external_api_failure_is_non_fatal_and_upserts_empty(self):
+    async def test_external_api_failure_is_non_fatal_and_upserts_empty(self):
         with patch.object(svc, "_db_load", return_value=None), \
              patch.object(svc, "_fetch_external", new=AsyncMock(side_effect=Exception("API down"))), \
              patch.object(svc, "_db_upsert", return_value=_empty()) as mock_upsert:
-            result = enrich_hotel("hotel_fail", "Failing Hotel")
+            result = await enrich_hotel("hotel_fail", "Failing Hotel")
 
         # Still calls upsert (with empty data) — non-fatal
         mock_upsert.assert_called_once()

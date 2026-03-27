@@ -491,7 +491,7 @@ async def _fetch_external(hotel_name: str, lat: float | None, lng: float | None)
 
 # ─── Public entry-point ───────────────────────────────────────────────────────
 
-def enrich_hotel(
+async def enrich_hotel(
     hotel_id: str,
     hotel_name: str,
     lat: float | None = None,
@@ -541,7 +541,7 @@ def enrich_hotel(
     # ── External APIs ────────────────────────────────────────────────────────
     logger.debug(f"hotel_content fetching externally for {hotel_id} ('{hotel_name}')")
     try:
-        new_data = asyncio.run(_fetch_external(hotel_name, lat, lng))
+        new_data = await _fetch_external(hotel_name, lat, lng)
     except Exception as exc:
         logger.error(f"hotel_content external fetch failed for {hotel_id}: {exc}", exc_info=True)
         new_data = _empty()
