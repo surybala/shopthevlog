@@ -210,6 +210,9 @@ function ReviewCard({ review }: { review: HotelReview }) {
 
 // ── RoomCard ──────────────────────────────────────────────────────────────────
 
+// How many amenity tiles to show before the "Show more" toggle
+const AMENITY_PREVIEW = 8
+
 function RoomCard({
   room,
   nights,
@@ -224,15 +227,18 @@ function RoomCard({
   isPending: boolean
 }) {
   const [roomPhotoIdx, setRoomPhotoIdx] = useState(0)
+  const [amenitiesExpanded, setAmenitiesExpanded] = useState(false)
 
   const perNight = nights && nights > 0
     ? Math.round(Number(room.price_per_night ?? Number(room.price_total) / nights))
     : null
 
-  const roomPhotos = room.photos ?? []
+  const roomPhotos  = room.photos ?? []
   const totalRoomPhotos = roomPhotos.length
+  const roomAmenities   = room.room_amenities ?? []
+  const visibleAmenities = amenitiesExpanded ? roomAmenities : roomAmenities.slice(0, AMENITY_PREVIEW)
+  const hiddenCount  = roomAmenities.length - AMENITY_PREVIEW
   const hasBeds = (room.beds?.length ?? 0) > 0
-  const hasRoomAmenities = (room.room_amenities?.length ?? 0) > 0
 
   return (
     <div
@@ -242,59 +248,71 @@ function RoomCard({
           : 'border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.04]'
       }`}
     >
-      {/* ── Room photo carousel ─────────────────────────────────────────── */}
+      {/* ── Photo carousel ──────────────────────────────────────────────── */}
       {totalRoomPhotos > 0 && (
-        <div className="relative overflow-hidden select-none" style={{ height: 148 }}>
+        <div className="relative overflow-hidden select-none" style={{ height: 200 }}>
           <img
+            key={roomPhotoIdx}
             src={roomPhotos[roomPhotoIdx].url}
             alt={`${room.name} — photo ${roomPhotoIdx + 1}`}
             className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/10 pointer-events-none" />
+
+          {/* Counter */}
+          <div className="absolute top-2.5 right-2.5 bg-black/55 text-white/75 text-[10px] px-1.5 py-0.5 rounded-full backdrop-blur-sm">
+            {roomPhotoIdx + 1} / {totalRoomPhotos}
+          </div>
 
           {totalRoomPhotos > 1 && (
             <>
-              {/* Counter */}
-              <div className="absolute top-2 right-2 bg-black/55 text-white/75 text-[10px] px-1.5 py-0.5 rounded-full backdrop-blur-sm">
-                {roomPhotoIdx + 1}/{totalRoomPhotos}
-              </div>
-              {/* Prev */}
               <button
                 onClick={(e) => { e.stopPropagation(); setRoomPhotoIdx((i) => (i - 1 + totalRoomPhotos) % totalRoomPhotos) }}
-                className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 hover:bg-black/80 flex items-center justify-center text-white transition-colors backdrop-blur-sm"
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/80 flex items-center justify-center text-white transition-colors backdrop-blur-sm"
                 aria-label="Previous room photo"
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
-              {/* Next */}
               <button
                 onClick={(e) => { e.stopPropagation(); setRoomPhotoIdx((i) => (i + 1) % totalRoomPhotos) }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 hover:bg-black/80 flex items-center justify-center text-white transition-colors backdrop-blur-sm"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/80 flex items-center justify-center text-white transition-colors backdrop-blur-sm"
                 aria-label="Next room photo"
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
-              {/* Dot indicators */}
-              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-                {roomPhotos.slice(0, 8).map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={(e) => { e.stopPropagation(); setRoomPhotoIdx(i) }}
-                    className={`rounded-full transition-all ${i === roomPhotoIdx ? 'w-4 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/40 hover:bg-white/70'}`}
-                    aria-label={`Room photo ${i + 1}`}
-                  />
-                ))}
-              </div>
             </>
           )}
 
-          {/* Room name overlay */}
-          <div className="absolute bottom-0 left-0 right-0 px-3 pb-2">
-            <div className="flex items-center gap-2">
+          {/* Thumbnail strip */}
+          {totalRoomPhotos > 1 && (
+            <div
+              className="absolute bottom-[52px] left-0 right-0 flex gap-1 px-3 overflow-x-auto"
+              style={{ scrollbarWidth: 'none' }}
+            >
+              {roomPhotos.slice(0, 12).map((photo, i) => (
+                <button
+                  key={i}
+                  onClick={(e) => { e.stopPropagation(); setRoomPhotoIdx(i) }}
+                  className={`flex-shrink-0 rounded overflow-hidden transition-all ${
+                    i === roomPhotoIdx
+                      ? 'ring-2 ring-white opacity-100 w-12 h-8'
+                      : 'opacity-45 hover:opacity-80 w-10 h-7'
+                  }`}
+                  aria-label={`Room photo ${i + 1}`}
+                >
+                  <img src={photo.url} alt="" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Room name + badges overlay */}
+          <div className="absolute bottom-0 left-0 right-0 px-3.5 pb-3">
+            <div className="flex items-center gap-2 flex-wrap">
               <p className="text-white font-semibold text-sm drop-shadow">{room.name}</p>
               {room.is_cheapest && (
                 <span className="text-[10px] bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded-full backdrop-blur-sm">
@@ -306,10 +324,10 @@ function RoomCard({
         </div>
       )}
 
-      {/* ── Details ─────────────────────────────────────────────────────── */}
-      <div className="p-3.5 flex items-start justify-between gap-3 min-w-0">
+      {/* ── Core info row: beds / policy / price / select ────────────────── */}
+      <div className="px-3.5 pt-3 pb-2 flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0 space-y-1.5">
-          {/* Name + best price badge (when no photo carousel) */}
+          {/* Room name (no photo case) */}
           {totalRoomPhotos === 0 && (
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-white/90 font-medium text-sm">{room.name}</p>
@@ -323,13 +341,13 @@ function RoomCard({
 
           {/* Bed configuration */}
           {hasBeds && (
-            <p className="text-white/50 text-xs flex items-center gap-1">
+            <p className="text-white/55 text-xs flex items-center gap-1.5">
               <span>🛏️</span>
               <span>{room.beds!.map(b => `${b.count} ${b.type}`).join(' · ')}</span>
             </p>
           )}
 
-          {/* Cancellation + occupancy + board */}
+          {/* Cancellation · occupancy · board */}
           <div className="flex items-center gap-2.5 flex-wrap text-xs text-white/40">
             {room.max_occupancy && <span>👤 Max {room.max_occupancy}</span>}
             {room.cancellation_type === 'free' && (
@@ -342,26 +360,9 @@ function RoomCard({
               <span>🥐 {room.board_type.replace(/_/g, ' ').toLowerCase()}</span>
             )}
           </div>
-
-          {/* Room amenity chips */}
-          {hasRoomAmenities && (
-            <div className="flex flex-wrap gap-1 mt-0.5">
-              {room.room_amenities!.slice(0, 4).map((code) => {
-                const { icon, label } = amenityInfo(code)
-                return (
-                  <span
-                    key={code}
-                    className="text-[10px] text-white/35 bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded"
-                  >
-                    {icon} {label}
-                  </span>
-                )
-              })}
-            </div>
-          )}
         </div>
 
-        {/* Price + select button */}
+        {/* Price + select */}
         <div className="flex-shrink-0 flex flex-col items-end gap-2">
           <div className="text-right">
             {perNight !== null && (
@@ -387,6 +388,52 @@ function RoomCard({
           </button>
         </div>
       </div>
+
+      {/* ── Room amenities grid ──────────────────────────────────────────── */}
+      {roomAmenities.length > 0 && (
+        <div className="px-3.5 pb-3.5">
+          <div className="border-t border-white/[0.06] pt-3 space-y-2.5">
+            <p className="text-white/30 text-[10px] uppercase tracking-widest font-semibold">
+              Room amenities
+            </p>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              {visibleAmenities.map((code) => {
+                const { icon, label } = amenityInfo(code)
+                return (
+                  <div key={code} className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm flex-shrink-0 w-5 text-center">{icon}</span>
+                    <span className="text-white/60 text-xs truncate">{label}</span>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Show more / less toggle */}
+            {hiddenCount > 0 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setAmenitiesExpanded((v) => !v) }}
+                className="flex items-center gap-1 text-xs text-white/40 hover:text-white/70 transition-colors mt-1"
+              >
+                {amenitiesExpanded ? (
+                  <>
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                    </svg>
+                    Show fewer amenities
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                    Show {hiddenCount} more amenit{hiddenCount === 1 ? 'y' : 'ies'}
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -210,9 +210,9 @@ def search_hotels(
             "is_cheapest": is_cheapest,
             "cancellation_type": "free" if is_free else "non_refundable",
             "board_type": rt.get("boardType") or rt.get("mealPlan"),
-            "photos": room_photos[:5],
+            "photos": room_photos[:15],
             "beds": beds[:3],
-            "room_amenities": room_amenities[:10],
+            "room_amenities": room_amenities[:30],
         }
 
     results = []
