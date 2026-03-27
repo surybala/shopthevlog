@@ -18,7 +18,7 @@
  *  └─────────────────────────────────────────────────────────────┘
  */
 import { createPortal } from 'react-dom'
-import { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import GlassButton from '../ui/GlassButton'
@@ -168,8 +168,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`bg-white/[0.07] rounded animate-pulse ${className}`} />
+function Skeleton({ className = '', style }: { className?: string; style?: React.CSSProperties }) {
+  return <div className={`bg-white/[0.07] rounded animate-pulse ${className}`} style={style} />
 }
 
 // ── ReviewCard ────────────────────────────────────────────────────────────────
@@ -179,7 +179,7 @@ function ReviewCard({ review }: { review: HotelReview }) {
   const starsFull = review.rating ? Math.min(Math.round(review.rating / 2), 5) : null
 
   return (
-    <div className="flex-shrink-0 w-64 bg-white/[0.04] border border-white/[0.07] rounded-xl p-4 space-y-2.5">
+    <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl p-4 space-y-2.5">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-600/40 to-sky-600/30 flex items-center justify-center text-sm font-semibold text-white/80 flex-shrink-0">
@@ -202,7 +202,7 @@ function ReviewCard({ review }: { review: HotelReview }) {
         <p className="text-white/70 text-xs font-semibold leading-snug">{review.title}</p>
       )}
       {review.text && (
-        <p className="text-white/50 text-xs leading-relaxed line-clamp-4">{review.text}</p>
+        <p className="text-white/50 text-xs leading-relaxed line-clamp-5">{review.text}</p>
       )}
     </div>
   )
@@ -223,11 +223,14 @@ function RoomCard({
   onSelect: (room: HotelRoomType) => void
   isPending: boolean
 }) {
+  const [roomPhotoIdx, setRoomPhotoIdx] = useState(0)
+
   const perNight = nights && nights > 0
     ? Math.round(Number(room.price_per_night ?? Number(room.price_total) / nights))
     : null
 
-  const hasPhoto = (room.photos?.length ?? 0) > 0
+  const roomPhotos = room.photos ?? []
+  const totalRoomPhotos = roomPhotos.length
   const hasBeds = (room.beds?.length ?? 0) > 0
   const hasRoomAmenities = (room.room_amenities?.length ?? 0) > 0
 
@@ -239,22 +242,75 @@ function RoomCard({
           : 'border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.04]'
       }`}
     >
-      <div className="flex">
-        {/* Room photo */}
-        {hasPhoto && (
-          <div className="flex-shrink-0 w-24 h-auto overflow-hidden">
-            <img
-              src={room.photos![0].url}
-              alt={room.name}
-              className="w-full h-full object-cover min-h-[80px]"
-            />
-          </div>
-        )}
+      {/* ── Room photo carousel ─────────────────────────────────────────── */}
+      {totalRoomPhotos > 0 && (
+        <div className="relative overflow-hidden select-none" style={{ height: 148 }}>
+          <img
+            src={roomPhotos[roomPhotoIdx].url}
+            alt={`${room.name} — photo ${roomPhotoIdx + 1}`}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
 
-        {/* Details */}
-        <div className="flex-1 p-3.5 flex items-start justify-between gap-3 min-w-0">
-          <div className="flex-1 min-w-0 space-y-1.5">
-            {/* Name + best price badge */}
+          {totalRoomPhotos > 1 && (
+            <>
+              {/* Counter */}
+              <div className="absolute top-2 right-2 bg-black/55 text-white/75 text-[10px] px-1.5 py-0.5 rounded-full backdrop-blur-sm">
+                {roomPhotoIdx + 1}/{totalRoomPhotos}
+              </div>
+              {/* Prev */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setRoomPhotoIdx((i) => (i - 1 + totalRoomPhotos) % totalRoomPhotos) }}
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 hover:bg-black/80 flex items-center justify-center text-white transition-colors backdrop-blur-sm"
+                aria-label="Previous room photo"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              {/* Next */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setRoomPhotoIdx((i) => (i + 1) % totalRoomPhotos) }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 hover:bg-black/80 flex items-center justify-center text-white transition-colors backdrop-blur-sm"
+                aria-label="Next room photo"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+              {/* Dot indicators */}
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                {roomPhotos.slice(0, 8).map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={(e) => { e.stopPropagation(); setRoomPhotoIdx(i) }}
+                    className={`rounded-full transition-all ${i === roomPhotoIdx ? 'w-4 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/40 hover:bg-white/70'}`}
+                    aria-label={`Room photo ${i + 1}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Room name overlay */}
+          <div className="absolute bottom-0 left-0 right-0 px-3 pb-2">
+            <div className="flex items-center gap-2">
+              <p className="text-white font-semibold text-sm drop-shadow">{room.name}</p>
+              {room.is_cheapest && (
+                <span className="text-[10px] bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded-full backdrop-blur-sm">
+                  Best price
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Details ─────────────────────────────────────────────────────── */}
+      <div className="p-3.5 flex items-start justify-between gap-3 min-w-0">
+        <div className="flex-1 min-w-0 space-y-1.5">
+          {/* Name + best price badge (when no photo carousel) */}
+          {totalRoomPhotos === 0 && (
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-white/90 font-medium text-sm">{room.name}</p>
               {room.is_cheapest && (
@@ -263,72 +319,72 @@ function RoomCard({
                 </span>
               )}
             </div>
+          )}
 
-            {/* Bed configuration */}
-            {hasBeds && (
-              <p className="text-white/50 text-xs flex items-center gap-1">
-                <span>🛏️</span>
-                <span>{room.beds!.map(b => `${b.count} ${b.type}`).join(' · ')}</span>
-              </p>
+          {/* Bed configuration */}
+          {hasBeds && (
+            <p className="text-white/50 text-xs flex items-center gap-1">
+              <span>🛏️</span>
+              <span>{room.beds!.map(b => `${b.count} ${b.type}`).join(' · ')}</span>
+            </p>
+          )}
+
+          {/* Cancellation + occupancy + board */}
+          <div className="flex items-center gap-2.5 flex-wrap text-xs text-white/40">
+            {room.max_occupancy && <span>👤 Max {room.max_occupancy}</span>}
+            {room.cancellation_type === 'free' && (
+              <span className="text-emerald-400">✓ Free cancellation</span>
             )}
-
-            {/* Cancellation + occupancy + board */}
-            <div className="flex items-center gap-2.5 flex-wrap text-xs text-white/40">
-              {room.max_occupancy && <span>👤 Max {room.max_occupancy}</span>}
-              {room.cancellation_type === 'free' && (
-                <span className="text-emerald-400">✓ Free cancellation</span>
-              )}
-              {room.cancellation_type === 'non_refundable' && (
-                <span className="text-orange-400/80">Non-refundable</span>
-              )}
-              {room.board_type && room.board_type !== 'ROOM_ONLY' && (
-                <span>🥐 {room.board_type.replace(/_/g, ' ').toLowerCase()}</span>
-              )}
-            </div>
-
-            {/* Room amenity chips */}
-            {hasRoomAmenities && (
-              <div className="flex flex-wrap gap-1 mt-0.5">
-                {room.room_amenities!.slice(0, 4).map((code) => {
-                  const { icon, label } = amenityInfo(code)
-                  return (
-                    <span
-                      key={code}
-                      className="text-[10px] text-white/35 bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded"
-                    >
-                      {icon} {label}
-                    </span>
-                  )
-                })}
-              </div>
+            {room.cancellation_type === 'non_refundable' && (
+              <span className="text-orange-400/80">Non-refundable</span>
+            )}
+            {room.board_type && room.board_type !== 'ROOM_ONLY' && (
+              <span>🥐 {room.board_type.replace(/_/g, ' ').toLowerCase()}</span>
             )}
           </div>
 
-          {/* Price + select button */}
-          <div className="flex-shrink-0 flex flex-col items-end gap-2">
-            <div className="text-right">
-              {perNight !== null && (
-                <p className="text-white font-bold text-base leading-none">
-                  {fmtCurrency(perNight, room.currency)}
-                  <span className="text-white/35 text-[10px] font-normal">/night</span>
-                </p>
-              )}
-              <p className="text-white/35 text-[10px] mt-0.5">
-                {fmtCurrency(room.price_total, room.currency)} total
-              </p>
+          {/* Room amenity chips */}
+          {hasRoomAmenities && (
+            <div className="flex flex-wrap gap-1 mt-0.5">
+              {room.room_amenities!.slice(0, 4).map((code) => {
+                const { icon, label } = amenityInfo(code)
+                return (
+                  <span
+                    key={code}
+                    className="text-[10px] text-white/35 bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded"
+                  >
+                    {icon} {label}
+                  </span>
+                )
+              })}
             </div>
-            <button
-              onClick={() => onSelect(room)}
-              disabled={isPending}
-              className={`text-xs px-3 py-1.5 rounded-lg transition-all disabled:opacity-50 whitespace-nowrap ${
-                isSelected
-                  ? 'bg-emerald-500 text-white border border-emerald-400 font-medium'
-                  : 'bg-white/10 hover:bg-emerald-500/20 border border-white/20 hover:border-emerald-500/40 text-white/80 hover:text-white'
-              }`}
-            >
-              {isSelected ? '✓ Selected' : 'Select room'}
-            </button>
+          )}
+        </div>
+
+        {/* Price + select button */}
+        <div className="flex-shrink-0 flex flex-col items-end gap-2">
+          <div className="text-right">
+            {perNight !== null && (
+              <p className="text-white font-bold text-base leading-none">
+                {fmtCurrency(perNight, room.currency)}
+                <span className="text-white/35 text-[10px] font-normal">/night</span>
+              </p>
+            )}
+            <p className="text-white/35 text-[10px] mt-0.5">
+              {fmtCurrency(room.price_total, room.currency)} total
+            </p>
           </div>
+          <button
+            onClick={() => onSelect(room)}
+            disabled={isPending}
+            className={`text-xs px-3 py-1.5 rounded-lg transition-all disabled:opacity-50 whitespace-nowrap ${
+              isSelected
+                ? 'bg-emerald-500 text-white border border-emerald-400 font-medium'
+                : 'bg-white/10 hover:bg-emerald-500/20 border border-white/20 hover:border-emerald-500/40 text-white/80 hover:text-white'
+            }`}
+          >
+            {isSelected ? '✓ Selected' : 'Select room'}
+          </button>
         </div>
       </div>
     </div>
@@ -355,7 +411,9 @@ export default function HotelDetailSheet({
   onSelect,
 }: HotelDetailSheetProps) {
   const [photoIdx, setPhotoIdx] = useState(0)
-  const [showPhotoGrid, setShowPhotoGrid] = useState(false)
+  // null = closed; number = index of photo currently shown in fullscreen lightbox
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null)
+  const [reviewPage, setReviewPage] = useState(0)
   // Track which room the user has selected (two-step: select → highlight, CTA → prebook)
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
 
@@ -403,6 +461,24 @@ export default function HotelDetailSheet({
   const nextPhoto = useCallback(() => setPhotoIdx((i) => (i + 1) % numPhotos), [numPhotos])
   const prevPhoto = useCallback(() => setPhotoIdx((i) => (i - 1 + numPhotos) % numPhotos), [numPhotos])
 
+  // ── Lightbox keyboard navigation ──────────────────────────────────────────
+  useEffect(() => {
+    if (lightboxIdx === null) return
+    const n = allPhotos.length
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') setLightboxIdx((i) => (i !== null ? (i + 1) % n : null))
+      if (e.key === 'ArrowLeft')  setLightboxIdx((i) => (i !== null ? (i - 1 + n) % n : null))
+      if (e.key === 'Escape')     setLightboxIdx(null)
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [lightboxIdx, allPhotos.length])
+
+  // ── Review pagination ──────────────────────────────────────────────────────
+  const REVIEWS_PER_PAGE = 10
+  const totalReviewPages = Math.ceil(reviews.length / REVIEWS_PER_PAGE)
+  const pagedReviews = reviews.slice(reviewPage * REVIEWS_PER_PAGE, (reviewPage + 1) * REVIEWS_PER_PAGE)
+
   function handleSelectRoom(room: HotelRoomType) {
     // Toggle: clicking the already-selected room deselects it
     setSelectedRoomId((prev) => (prev === room.id ? null : room.id))
@@ -438,6 +514,96 @@ export default function HotelDetailSheet({
     }
     onSelect(targetOffer)
   }
+
+  // ── Full-screen photo lightbox ─────────────────────────────────────────────
+  const lightbox = lightboxIdx !== null && allPhotos.length > 0 ? (
+    <motion.div
+      key="photo-lightbox"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      className="fixed inset-0 z-[90] bg-black flex flex-col"
+      data-testid="photo-lightbox"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3.5 flex-shrink-0 border-b border-white/[0.07]">
+        <div>
+          <p className="text-white/80 text-sm font-medium">{offer?.accommodation.name}</p>
+          <p className="text-white/40 text-xs mt-0.5">{lightboxIdx + 1} / {allPhotos.length} photos</p>
+        </div>
+        <button
+          onClick={() => setLightboxIdx(null)}
+          className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+          aria-label="Close photo viewer"
+          data-testid="close-lightbox-btn"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Main photo area */}
+      <div className="flex-1 flex items-center justify-center relative min-h-0 px-14">
+        <img
+          key={lightboxIdx}
+          src={allPhotos[lightboxIdx]?.url}
+          alt={`Photo ${lightboxIdx + 1}`}
+          className="max-w-full max-h-full object-contain"
+        />
+
+        {allPhotos.length > 1 && (
+          <>
+            <button
+              onClick={() => setLightboxIdx((i) => (i !== null ? (i - 1 + allPhotos.length) % allPhotos.length : null))}
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-white/20 flex items-center justify-center text-white transition-colors backdrop-blur-sm"
+              aria-label="Previous photo"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setLightboxIdx((i) => (i !== null ? (i + 1) % allPhotos.length : null))}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-white/20 flex items-center justify-center text-white transition-colors backdrop-blur-sm"
+              aria-label="Next photo"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Thumbnail strip */}
+      {allPhotos.length > 1 && (
+        <div
+          className="flex-shrink-0 flex gap-1.5 px-4 py-3 overflow-x-auto border-t border-white/[0.07]"
+          style={{ scrollbarWidth: 'none' }}
+        >
+          {allPhotos.map((photo, i) => (
+            <button
+              key={i}
+              onClick={() => setLightboxIdx(i)}
+              className={`flex-shrink-0 rounded-lg overflow-hidden transition-all ${
+                i === lightboxIdx
+                  ? 'ring-2 ring-white opacity-100 w-[72px] h-12'
+                  : 'opacity-45 hover:opacity-75 w-14 h-10'
+              }`}
+              aria-label={`Go to photo ${i + 1}`}
+            >
+              <img src={photo.url} alt="" className="w-full h-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Keyboard hint */}
+      <p className="text-center text-white/20 text-[10px] pb-2">← → arrow keys · Esc to close</p>
+    </motion.div>
+  ) : null
 
   const content = (
     <AnimatePresence>
@@ -525,8 +691,9 @@ export default function HotelDetailSheet({
                       key={allPhotos[photoIdx]?.url}
                       src={allPhotos[photoIdx]?.url}
                       alt={`${offer.accommodation.name} — photo ${photoIdx + 1}`}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover cursor-zoom-in"
                       style={{ transition: 'opacity 0.2s' }}
+                      onClick={() => setLightboxIdx(photoIdx)}
                     />
 
                     {/* Gradient */}
@@ -537,10 +704,10 @@ export default function HotelDetailSheet({
                       {photoIdx + 1} / {allPhotos.length}
                     </div>
 
-                    {/* View all photos button */}
+                    {/* View all photos button → opens lightbox */}
                     {allPhotos.length > 1 && (
                       <button
-                        onClick={() => setShowPhotoGrid(true)}
+                        onClick={() => setLightboxIdx(photoIdx)}
                         className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/55 hover:bg-black/80 text-white/80 hover:text-white text-xs px-2.5 py-1.5 rounded-full backdrop-blur-sm transition-colors"
                         aria-label={`View all ${allPhotos.length} photos`}
                         data-testid="view-all-photos-btn"
@@ -609,54 +776,6 @@ export default function HotelDetailSheet({
                       </div>
                     )}
 
-                    {/* ── Photo grid overlay ──────────────────────── */}
-                    {showPhotoGrid && (
-                      <div
-                        className="absolute inset-0 z-10 bg-black overflow-y-auto"
-                        style={{ scrollbarWidth: 'none' }}
-                        data-testid="photo-grid-overlay"
-                      >
-                        {/* Grid header */}
-                        <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-black/90 backdrop-blur-sm border-b border-white/[0.08]">
-                          <span className="text-white/70 text-sm font-medium">
-                            {offer.accommodation.name} · {allPhotos.length} photos
-                          </span>
-                          <button
-                            onClick={() => setShowPhotoGrid(false)}
-                            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
-                            aria-label="Close photo gallery"
-                            data-testid="close-photo-grid-btn"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-
-                        {/* Photo grid */}
-                        <div className="grid grid-cols-2 gap-0.5 p-0.5">
-                          {allPhotos.map((photo, i) => (
-                            <button
-                              key={i}
-                              onClick={() => {
-                                setPhotoIdx(i)
-                                setShowPhotoGrid(false)
-                              }}
-                              className="relative aspect-[4/3] overflow-hidden hover:opacity-90 transition-opacity"
-                            >
-                              <img
-                                src={photo.url}
-                                alt={`Photo ${i + 1}`}
-                                className="w-full h-full object-cover"
-                              />
-                              {i === photoIdx && (
-                                <div className="absolute inset-0 ring-2 ring-inset ring-white/80" />
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </>
                 ) : (
                   // No photos placeholder
@@ -839,19 +958,44 @@ export default function HotelDetailSheet({
                   </Section>
                 )}
 
-                {/* Guest reviews */}
+                {/* Guest reviews — paginated, 10 per page */}
                 {reviews.length > 0 && (
                   <Section
                     title={`Guest Reviews${reviewCount ? ` · ${reviewCount.toLocaleString()} total` : ''}`}
                   >
-                    <div
-                      className="flex gap-3 overflow-x-auto pb-2"
-                      style={{ scrollbarWidth: 'none' }}
-                    >
-                      {reviews.map((review, i) => (
-                        <ReviewCard key={i} review={review} />
+                    <div className="space-y-3">
+                      {pagedReviews.map((review, i) => (
+                        <ReviewCard key={reviewPage * REVIEWS_PER_PAGE + i} review={review} />
                       ))}
                     </div>
+
+                    {totalReviewPages > 1 && (
+                      <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/[0.06]">
+                        <button
+                          onClick={() => setReviewPage((p) => Math.max(0, p - 1))}
+                          disabled={reviewPage === 0}
+                          className="flex items-center gap-1.5 text-xs text-white/55 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                          Previous
+                        </button>
+                        <span className="text-white/35 text-xs">
+                          Page {reviewPage + 1} of {totalReviewPages}
+                        </span>
+                        <button
+                          onClick={() => setReviewPage((p) => Math.min(totalReviewPages - 1, p + 1))}
+                          disabled={reviewPage === totalReviewPages - 1}
+                          className="flex items-center gap-1.5 text-xs text-white/55 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Next
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
                   </Section>
                 )}
               </div>
@@ -909,5 +1053,11 @@ export default function HotelDetailSheet({
     </AnimatePresence>
   )
 
-  return createPortal(content, document.body)
+  return createPortal(
+    <>
+      <AnimatePresence>{lightbox}</AnimatePresence>
+      {content}
+    </>,
+    document.body,
+  )
 }
