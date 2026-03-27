@@ -69,10 +69,29 @@ def _get_user_or_ip(request: Request) -> str:
     return get_remote_address(request)
 
 
+def _resolve_storage_uri() -> str:
+    """Return the configured Redis URL if Redis is reachable, else fall back to
+    in-process memory storage so the app starts even when Redis isn't running."""
+    try:
+        import redis as _redis
+
+        client = _redis.from_url(settings.REDIS_URL, socket_connect_timeout=1)
+        client.ping()
+        client.close()
+        logger.info("Redis reachable at %s — using Redis for rate-limit storage", settings.REDIS_URL)
+        return settings.REDIS_URL
+    except Exception as exc:
+        logger.warning(
+            "Redis not reachable (%s) — falling back to in-memory rate-limit storage. "
+            "Rate limits will NOT be shared across workers.",
+            exc,
+        )
+        return "memory://"
+
+
 limiter = Limiter(
     key_func=_get_user_or_ip,
-    storage_uri=settings.REDIS_URL,
-    # Don't raise on Redis connection errors — degrade gracefully.
+    storage_uri=_resolve_storage_uri(),
     enabled=True,
 )
 
