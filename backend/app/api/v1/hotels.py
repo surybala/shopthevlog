@@ -312,7 +312,6 @@ async def book_hotel(
                 "total_amount": float(order.get("total_amount") or 0),
                 "currency": order.get("currency", "USD"),
                 "duffel_response": order.get("raw") or order,
-                "metadata": order.get("metadata"),
                 "search_params": search_params,
                 "booked_at": datetime.now(timezone.utc).isoformat(),
             }

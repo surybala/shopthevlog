@@ -63,12 +63,8 @@ async def cancel_booking(booking_id: str, user: UserClaims = Depends(get_current
                 # Duffel Stays: DELETE /stays/bookings/{id}
                 duffel_service.cancel_hotel_order(order_id)
             elif provider == "booking_com":
-                # Booking.com Demand API: the order_id is stored in metadata.
-                bcom_order_id = (
-                    (booking.get("metadata") or {}).get("booking_com_order_id")
-                    or order_id
-                )
-                cancelled = await booking_com_service.cancel_order(bcom_order_id)
+                # duffel_order_id stores the Booking.com order_id (naming is provider-agnostic).
+                cancelled = await booking_com_service.cancel_order(order_id)
                 if not cancelled:
                     raise ValueError(
                         f"Booking.com could not cancel order {bcom_order_id}. "
