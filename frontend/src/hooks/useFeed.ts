@@ -1,8 +1,8 @@
-import { useInfiniteQuery, useMutation } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 import type { FeedPage, VlogInteraction } from '../types/vlog'
 
-interface FeedFilters {
+export interface FeedFilters {
   destination?: string
   style?: string
   duration?: string
@@ -22,12 +22,26 @@ export function useFeed(filters: FeedFilters = {}) {
     },
     initialPageParam: undefined,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
-    // Keep feed data fresh for 5 minutes — navigating away and back is instant
     staleTime: 5 * 60 * 1000,
-    // Hold pages in memory for 10 minutes after the component unmounts
     gcTime: 10 * 60 * 1000,
-    // Don't trigger a background refetch every time the user alt-tabs back
     refetchOnWindowFocus: false,
+  })
+}
+
+/**
+ * Live destination search — calls POST /feed/search which queries YouTube,
+ * inserts new results, and returns a single deduplicated page.
+ * Used when the user types a destination in the filter bar.
+ */
+export function useFeedSearch() {
+  return useMutation({
+    mutationFn: async (destination: string): Promise<FeedPage> => {
+      const { data } = await api.post<FeedPage>('/feed/search', {
+        destination,
+        limit: 20,
+      })
+      return data
+    },
   })
 }
 
@@ -39,7 +53,11 @@ export function useFeedInteract() {
 }
 
 export function useFeedRefresh() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: () => api.post('/feed/refresh'),
+    onSuccess: () => {
+      setTimeout(() => qc.invalidateQueries({ queryKey: ['feed'] }), 4000)
+    },
   })
 }

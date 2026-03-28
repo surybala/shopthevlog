@@ -10,68 +10,118 @@ from app.db.client import get_supabase
 
 logger = logging.getLogger(__name__)
 
+# Each entry: (search_query, destinations[], travel_styles[])
+# Destinations and styles are stored on the vlog row so filters work immediately,
+# before the async AI pipeline has had a chance to classify the video.
 SEED_QUERIES = [
-    "Japan travel vlog 2024",
-    "Bali Indonesia travel vlog",
-    "Europe backpacking trip",
-    "New York City travel guide",
-    "Southeast Asia travel vlog",
-    "Thailand travel 2024",
-    "Italy travel vlog",
-    "Morocco travel vlog",
+    ("Japan travel vlog 2024",          ["Japan"],                              ["cultural"]),
+    ("Bali Indonesia travel vlog",      ["Bali", "Indonesia"],                  ["adventure", "beach"]),
+    ("Europe backpacking trip",         ["Europe"],                             ["backpacking", "budget"]),
+    ("New York City travel guide",      ["New York City", "USA"],               ["city break"]),
+    ("Southeast Asia travel vlog",      ["Thailand", "Vietnam", "Cambodia"],    ["backpacking", "budget"]),
+    ("Thailand travel 2024",            ["Thailand"],                           ["adventure", "cultural"]),
+    ("Italy travel vlog",               ["Italy"],                              ["cultural", "food & culinary"]),
+    ("Morocco travel vlog",             ["Morocco"],                            ["cultural", "adventure"]),
+    ("luxury resort travel vlog",       [],                                     ["luxury"]),
+    ("solo female travel vlog",         [],                                     ["solo"]),
+    ("family vacation travel vlog",     [],                                     ["family"]),
+    ("hiking mountain adventure vlog",  [],                                     ["mountain", "adventure"]),
+    ("beach vacation travel vlog",      [],                                     ["beach"]),
+    ("food travel vlog street food",    [],                                     ["food & culinary"]),
+    ("road trip USA travel vlog",       ["USA"],                                ["road trip"]),
+    ("wildlife safari Africa vlog",     ["Africa"],                             ["wildlife", "adventure"]),
 ]
+
+
+def _insert_vlog_if_new(db, v, destinations: list, travel_styles: list) -> bool:
+    """Insert a vlog if not already in DB. Returns True if inserted."""
+    exists = (
+        db.table("vlogs")
+        .select("id")
+        .eq("platform_video_id", v.platform_video_id)
+        .eq("platform", "youtube")
+        .execute()
+    )
+    if exists.data:
+        return False
+    db.table("vlogs").insert({
+        "platform": "youtube",
+        "platform_video_id": v.platform_video_id,
+        "title": v.title,
+        "description": v.description,
+        "thumbnail_url": v.thumbnail_url,
+        "video_url": v.video_url,
+        "channel_name": v.channel_name,
+        "channel_id": v.channel_id,
+        "duration_seconds": v.duration_seconds,
+        "published_at": v.published_at.isoformat() if v.published_at else None,
+        "view_count": v.view_count,
+        "like_count": v.like_count,
+        # Marked ready immediately so the feed ranking picks them up.
+        # The AI pipeline can enrich destinations/styles later.
+        "processing_status": "ready",
+        "raw_transcript": v.description or v.title,
+        "destinations": destinations,
+        "travel_styles": travel_styles,
+    }).execute()
+    return True
 
 
 async def _seed_public_travel_vlogs(db) -> int:
     """
     Search public YouTube for popular travel vlogs and insert them as ready
     so the discovery feed has content immediately after a user connects.
+    Vlogs are tagged with destinations and travel_styles from the query context
+    so filters work before AI classification completes.
     Returns the number of newly inserted vlogs.
     """
     from app.services.youtube_service import search_travel_vlogs
 
     inserted = 0
-    for query in SEED_QUERIES:
+    for query, destinations, travel_styles in SEED_QUERIES:
         try:
             public_vlogs = search_travel_vlogs(query, max_results=10)
             for v in public_vlogs:
-                exists = (
-                    db.table("vlogs")
-                    .select("id")
-                    .eq("platform_video_id", v.platform_video_id)
-                    .eq("platform", "youtube")
-                    .execute()
-                )
-                if exists.data:
-                    continue
-
-                db.table("vlogs").insert({
-                    "platform": "youtube",
-                    "platform_video_id": v.platform_video_id,
-                    "title": v.title,
-                    "description": v.description,
-                    "thumbnail_url": v.thumbnail_url,
-                    "video_url": v.video_url,
-                    "channel_name": v.channel_name,
-                    "channel_id": v.channel_id,
-                    "duration_seconds": v.duration_seconds,
-                    "published_at": v.published_at.isoformat() if v.published_at else None,
-                    "view_count": v.view_count,
-                    "like_count": v.like_count,
-                    # Mark as ready so the feed ranking picks them up immediately.
-                    # Description serves as a lightweight transcript for now; the
-                    # full AI pipeline can re-process them in the background later.
-                    "processing_status": "ready",
-                    "raw_transcript": v.description or v.title,
-                    "destinations": [],
-                    "travel_styles": [],
-                }).execute()
-                inserted += 1
+                if _insert_vlog_if_new(db, v, destinations, travel_styles):
+                    inserted += 1
         except Exception as e:
             logger.warning(f"Seed query '{query}' failed: {e}")
 
     logger.info(f"Seeded {inserted} public travel vlogs")
     return inserted
+
+
+async def _seed_for_user_interests(
+    user_id: str,
+    travel_styles: list,
+    dest_prefs: list,
+) -> None:
+    """
+    Seed YouTube content matched to a user's stated travel interests and
+    preferred destinations, then rebuild their personalised feed.
+    Called as a background task when the user saves their preferences.
+    """
+    from app.services.youtube_service import search_travel_vlogs
+    from app.services.feed_ranking_service import build_feed_for_user
+
+    db = get_supabase()
+    queries: list[tuple[str, list, list]] = []
+
+    for style in travel_styles[:6]:
+        queries.append((f"{style} travel vlog", [], [style.lower()]))
+    for dest in dest_prefs[:4]:
+        queries.append((f"{dest} travel vlog", [dest], []))
+
+    for query, destinations, styles in queries:
+        try:
+            vlogs = search_travel_vlogs(query, max_results=10)
+            for v in vlogs:
+                _insert_vlog_if_new(db, v, destinations, styles)
+        except Exception as e:
+            logger.warning(f"Interest seed query '{query}' failed: {e}")
+
+    build_feed_for_user(user_id)
+    logger.info(f"Seeded interests-based vlogs and rebuilt feed for user {user_id}")
 
 
 async def _seed_and_build_feed(db, user_id: str) -> None:

@@ -1,10 +1,11 @@
 from fastapi import APIRouter
-from app.api.v1 import auth, social, feed, vlogs, itineraries, trips, flights, hotels, bookings, webhooks, cars, experiences
+from app.api.v1 import auth, social, feed, vlogs, itineraries, trips, flights, hotels, bookings, webhooks, cars, experiences, preferences
 
 api_router = APIRouter(prefix="/api/v1")
 
 api_router.include_router(auth.router)
 api_router.include_router(social.router)
+api_router.include_router(preferences.router)
 api_router.include_router(feed.router)
 api_router.include_router(vlogs.router)
 api_router.include_router(itineraries.router)

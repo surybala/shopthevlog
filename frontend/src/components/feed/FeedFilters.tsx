@@ -1,27 +1,112 @@
-interface FeedFiltersProps {
+import { useEffect, useRef, useState } from 'react'
+import { INTERESTS } from '../../constants/interests'
+
+export interface FilterState {
   destination: string
   style: string
-  onDestinationChange: (v: string) => void
-  onStyleChange: (v: string) => void
+  duration: string
 }
 
-const STYLES = ['Adventure', 'Luxury', 'Budget', 'Solo', 'Family', 'Backpacking', 'Cultural']
+interface Props extends FilterState {
+  onDestinationChange: (v: string) => void
+  onStyleChange: (v: string) => void
+  onDurationChange: (v: string) => void
+  isSearching?: boolean
+}
+
+const DURATIONS = [
+  { label: 'Any length', value: '' },
+  { label: 'Short  (< 10 min)', value: 'short' },
+  { label: 'Medium (10 – 30 min)', value: 'medium' },
+  { label: 'Long   (> 30 min)', value: 'long' },
+]
 
 export default function FeedFilters({
   destination,
   style,
+  duration,
   onDestinationChange,
   onStyleChange,
-}: FeedFiltersProps) {
+  onDurationChange,
+  isSearching = false,
+}: Props) {
+  // Local state for the input so we can debounce before firing the prop
+  const [localDest, setLocalDest] = useState(destination)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Keep local in sync when parent resets filters externally
+  useEffect(() => {
+    setLocalDest(destination)
+  }, [destination])
+
+  function handleDestInput(v: string) {
+    setLocalDest(v)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      onDestinationChange(v.trim())
+    }, 600)
+  }
+
+  const hasFilters = destination || style || duration
+
   return (
-    <div className="flex flex-wrap items-center gap-3 mb-6">
-      <input
-        type="text"
-        placeholder="Filter by destination..."
-        value={destination}
-        onChange={(e) => onDestinationChange(e.target.value)}
-        className="glass-input max-w-xs text-sm py-2"
-      />
+    <div className="space-y-3 mb-6">
+      {/* Row 1: Destination search + duration selector */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Destination */}
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="🌍  Filter by destination…"
+            value={localDest}
+            onChange={(e) => handleDestInput(e.target.value)}
+            className="glass-input max-w-xs text-sm py-2 pl-3 pr-8"
+          />
+          {isSearching && (
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 text-xs animate-pulse">
+              ⟳
+            </span>
+          )}
+          {localDest && !isSearching && (
+            <button
+              onClick={() => { setLocalDest(''); onDestinationChange('') }}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 text-xs"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        {/* Duration */}
+        <select
+          value={duration}
+          onChange={(e) => onDurationChange(e.target.value)}
+          className="glass-input text-sm py-2 pr-2 cursor-pointer"
+        >
+          {DURATIONS.map((d) => (
+            <option key={d.value} value={d.value} className="bg-gray-900 text-white">
+              {d.label}
+            </option>
+          ))}
+        </select>
+
+        {/* Clear all filters */}
+        {hasFilters && (
+          <button
+            onClick={() => {
+              setLocalDest('')
+              onDestinationChange('')
+              onStyleChange('')
+              onDurationChange('')
+            }}
+            className="text-white/40 hover:text-white/70 text-xs transition-colors"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
+      {/* Row 2: Style / interest pills */}
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => onStyleChange('')}
@@ -29,17 +114,20 @@ export default function FeedFilters({
             !style ? 'bg-white text-black' : 'glass text-white/60 hover:text-white'
           }`}
         >
-          All
+          All styles
         </button>
-        {STYLES.map((s) => (
+        {INTERESTS.map((interest) => (
           <button
-            key={s}
-            onClick={() => onStyleChange(style === s ? '' : s)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${
-              style === s ? 'bg-white text-black' : 'glass text-white/60 hover:text-white'
+            key={interest.tag}
+            onClick={() => onStyleChange(style === interest.tag ? '' : interest.tag)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 flex items-center gap-1 ${
+              style === interest.tag
+                ? 'bg-white text-black'
+                : 'glass text-white/60 hover:text-white'
             }`}
           >
-            {s}
+            <span>{interest.emoji}</span>
+            <span>{interest.label}</span>
           </button>
         ))}
       </div>

@@ -157,14 +157,20 @@ def get_paginated_feed(
     limit: int = 20,
     destination: str | None = None,
     style: str | None = None,
+    duration: str | None = None,
 ) -> dict:
-    """Return a scored, filtered feed page."""
+    """Return a scored, filtered feed page.
+
+    Filters applied client-side (Supabase SDK doesn't support joined-column WHERE):
+    - destination: substring match against destinations[] array, title, and channel_name
+    - style: substring match against travel_styles[] array and title
+    - duration: 'short' (<600s), 'medium' (600-1800s), 'long' (>1800s)
+    """
     db = get_supabase()
 
-    # Fetch limit+1 rows for has_next detection.
-    # When filters are active we fetch 2× to absorb filter drop-off — still
-    # far cheaper than the previous (limit+1)*3 = 63 rows with vlogs(*).
-    fetch_limit = (limit + 1) * 2 if (destination or style) else limit + 1
+    # Fetch extra rows to absorb filter drop-off when filters are active
+    active_filters = bool(destination or style or duration)
+    fetch_limit = (limit + 1) * 3 if active_filters else limit + 1
 
     query = (
         db.table("feed_cache")
@@ -186,17 +192,18 @@ def get_paginated_feed(
     if not rows:
         return {"vlogs": [], "next_cursor": None, "total": 0, "_shown_ids": []}
 
-    # Apply client-side filters (joined-column filtering not supported by Supabase SDK)
-    dest_lower = destination.lower() if destination else None
-    style_lower = style.lower() if style else None
+    # Normalise filter values once
+    dest_lower = destination.lower().strip() if destination else None
+    style_lower = style.lower().strip() if style else None
+    duration_lower = duration.lower().strip() if duration else None
 
     entries: list[tuple[dict, float]] = []
     for row in rows:
         v = row.get("vlogs") or {}
         if not v:
             continue
+
         # Flatten nested itineraries join → itinerary_id scalar
-        # PostgREST may return a dict (unique FK) or list depending on constraint
         itineraries = v.pop("itineraries", None)
         if isinstance(itineraries, dict):
             v["itinerary_id"] = itineraries.get("id")
@@ -204,10 +211,41 @@ def get_paginated_feed(
             v["itinerary_id"] = itineraries[0]["id"]
         else:
             v["itinerary_id"] = None
-        if dest_lower and dest_lower not in [d.lower() for d in (v.get("destinations") or [])]:
-            continue
-        if style_lower and style_lower not in [s.lower() for s in (v.get("travel_styles") or [])]:
-            continue
+
+        # ── Destination filter ─────────────────────────────────────────────
+        # Match against the destinations[] array (substring both ways) OR
+        # anywhere in the title / channel_name so that vlogs seeded before
+        # the AI classifier ran are still surfaced.
+        if dest_lower:
+            vlog_dests = [d.lower() for d in (v.get("destinations") or [])]
+            title_lower = (v.get("title") or "").lower()
+            channel_lower = (v.get("channel_name") or "").lower()
+            dest_in_array = any(dest_lower in d or d in dest_lower for d in vlog_dests)
+            dest_in_title = dest_lower in title_lower
+            dest_in_channel = dest_lower in channel_lower
+            if not (dest_in_array or dest_in_title or dest_in_channel):
+                continue
+
+        # ── Style filter ───────────────────────────────────────────────────
+        # Same generous matching: array OR title keyword.
+        if style_lower:
+            vlog_styles = [s.lower() for s in (v.get("travel_styles") or [])]
+            title_lower = (v.get("title") or "").lower()
+            style_in_array = any(style_lower in s or s in style_lower for s in vlog_styles)
+            style_in_title = style_lower in title_lower
+            if not (style_in_array or style_in_title):
+                continue
+
+        # ── Duration filter ────────────────────────────────────────────────
+        if duration_lower:
+            dur_secs = v.get("duration_seconds") or 0
+            if duration_lower == "short" and dur_secs >= 600:
+                continue
+            elif duration_lower == "medium" and not (600 <= dur_secs < 1800):
+                continue
+            elif duration_lower == "long" and dur_secs < 1800:
+                continue
+
         entries.append((v, float(row.get("score", 0))))
 
     has_next = len(entries) > limit
