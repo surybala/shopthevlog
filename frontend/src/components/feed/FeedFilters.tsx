@@ -15,10 +15,10 @@ interface Props extends FilterState {
 }
 
 const DURATIONS = [
-  { label: 'Any length', value: '' },
-  { label: 'Short  (< 10 min)', value: 'short' },
-  { label: 'Medium (10 – 30 min)', value: 'medium' },
-  { label: 'Long   (> 30 min)', value: 'long' },
+  { label: 'Any length', emoji: '⏱️', value: '' },
+  { label: 'Short',      emoji: '⚡',  value: 'short',  hint: '< 10 min' },
+  { label: 'Medium',     emoji: '☕',  value: 'medium', hint: '10–30 min' },
+  { label: 'Long',       emoji: '🎬',  value: 'long',   hint: '> 30 min' },
 ]
 
 export default function FeedFilters({
@@ -51,7 +51,7 @@ export default function FeedFilters({
 
   return (
     <div className="space-y-3 mb-6">
-      {/* Row 1: Destination search + duration selector */}
+      {/* Row 1: Destination search + clear */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Destination */}
         <div className="relative">
@@ -77,18 +77,22 @@ export default function FeedFilters({
           )}
         </div>
 
-        {/* Duration */}
-        <select
-          value={duration}
-          onChange={(e) => onDurationChange(e.target.value)}
-          className="glass-input text-sm py-2 pr-2 cursor-pointer"
-        >
-          {DURATIONS.map((d) => (
-            <option key={d.value} value={d.value} className="bg-gray-900 text-white">
-              {d.label}
-            </option>
-          ))}
-        </select>
+        {/* Duration pills */}
+        {DURATIONS.map((d) => (
+          <button
+            key={d.value}
+            onClick={() => onDurationChange(d.value)}
+            title={(d as { hint?: string }).hint}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 flex items-center gap-1 ${
+              duration === d.value
+                ? 'bg-white text-black'
+                : 'glass text-white/60 hover:text-white'
+            }`}
+          >
+            <span>{d.emoji}</span>
+            <span>{d.label}</span>
+          </button>
+        ))}
 
         {/* Clear all filters */}
         {hasFilters && (
@@ -99,7 +103,7 @@ export default function FeedFilters({
               onStyleChange('')
               onDurationChange('')
             }}
-            className="text-white/40 hover:text-white/70 text-xs transition-colors"
+            className="text-white/40 hover:text-white/70 text-xs transition-colors ml-1"
           >
             Clear filters
           </button>
