@@ -73,18 +73,26 @@ export default function Profile() {
     finally { setSaving(false) }
   }
 
-  // ── YouTube OAuth ──────────────────────────────────────────────────────
-  async function connectYouTube() {
+  // ── Generic OAuth popup helper ─────────────────────────────────────────
+  async function connectPlatform(platform: 'youtube' | 'tiktok' | 'instagram') {
+    const toastId = `${platform}-connect`
+    const labels: Record<string, string> = {
+      youtube: 'YouTube',
+      tiktok: 'TikTok',
+      instagram: 'Instagram',
+    }
+    const label = labels[platform]
+
     try {
-      const { data } = await api.get<{ url: string }>('/social/connect/youtube')
-      const popup = window.open(data.url, 'yt-oauth', 'width=520,height=650,left=200,top=100')
+      const { data } = await api.get<{ url: string }>(`/social/connect/${platform}`)
+      const popup = window.open(data.url, `${platform}-oauth`, 'width=560,height=680,left=200,top=100')
       if (!popup) {
         toast.error('Popup blocked — please allow popups for this site and try again.')
         return
       }
 
       setConnecting(true)
-      toast.loading('Waiting for YouTube authorization…', { id: 'yt-connect' })
+      toast.loading(`Waiting for ${label} authorization…`, { id: toastId })
 
       if (pollRef.current) clearInterval(pollRef.current)
       pollRef.current = setInterval(async () => {
@@ -93,32 +101,34 @@ export default function Profile() {
         clearInterval(pollRef.current!)
         pollRef.current = null
         setConnecting(false)
-        toast.dismiss('yt-connect')
+        toast.dismiss(toastId)
 
         await refetchConnections()
         let attempts = 0
         const retryTimer = setInterval(async () => {
           attempts++
           const { data: fresh } = await api.get<SocialConnection[]>('/social/status')
-          if (fresh.some((c) => c.platform === 'youtube')) {
+          if (fresh.some((c) => c.platform === platform)) {
             clearInterval(retryTimer)
             qc.setQueryData(['social-status'], fresh)
-            toast.success('YouTube connected! Seeding your feed…')
+            toast.success(`${label} connected! Refreshing your feed…`)
             setTimeout(() => qc.invalidateQueries({ queryKey: ['feed'] }), 8000)
           } else if (attempts >= 6) {
             clearInterval(retryTimer)
-            toast.error('YouTube connection not detected. Please try again.')
+            toast.error(`${label} connection not detected. Please try again.`)
           }
         }, 1500)
       }, 500)
     } catch {
-      toast.dismiss('yt-connect')
+      toast.dismiss(toastId)
       setConnecting(false)
-      toast.error('Failed to start YouTube connection')
+      toast.error(`Failed to start ${label} connection`)
     }
   }
 
   const ytConnected = connections?.find((c) => c.platform === 'youtube')
+  const ttConnected = connections?.find((c) => c.platform === 'tiktok')
+  const igConnected = connections?.find((c) => c.platform === 'instagram')
   const interestsChanged =
     JSON.stringify([...selectedStyles].sort()) !==
     JSON.stringify((prefs?.travel_styles ?? []).map((s) => s.toLowerCase()).sort())
@@ -197,13 +207,19 @@ export default function Profile() {
 
       {/* Connected accounts */}
       <GlassCard>
-        <h2 className="font-semibold text-white mb-4">Connected accounts</h2>
+        <h2 className="font-semibold text-white mb-1">Connected accounts</h2>
+        <p className="text-white/50 text-xs mb-4">
+          Link social accounts to personalise your feed with content from creators you follow.
+        </p>
         <div className="space-y-3">
+
           {/* YouTube */}
-          <div className="flex items-center justify-between p-3 glass-sm">
+          <div className="flex items-center justify-between p-3 glass-sm rounded-xl">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center">
-                <span className="text-red-400 text-xs font-bold">YT</span>
+              <div className="w-9 h-9 rounded-full bg-red-600/20 flex items-center justify-center">
+                <svg className="w-4 h-4 text-red-400" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1C4.5 20.5 12 20.5 12 20.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.75 15.5v-7l6.5 3.5-6.5 3.5z"/>
+                </svg>
               </div>
               {ytConnected ? (
                 <div>
@@ -211,9 +227,10 @@ export default function Profile() {
                   <p className="text-white/50 text-xs">@{ytConnected.platform_username ?? 'connected'}</p>
                 </div>
               ) : (
-                <p className="text-white/60 text-sm">
-                  {connecting ? 'Connecting…' : 'YouTube not connected'}
-                </p>
+                <div>
+                  <p className="text-white/80 text-sm font-medium">YouTube</p>
+                  <p className="text-white/40 text-xs">{connecting ? 'Connecting…' : 'Not connected'}</p>
+                </div>
               )}
             </div>
             {ytConnected ? (
@@ -225,24 +242,95 @@ export default function Profile() {
               </button>
             ) : (
               <button
-                onClick={connectYouTube}
+                onClick={() => connectPlatform('youtube')}
                 disabled={connecting}
-                className="text-white/60 hover:text-white text-xs transition-colors disabled:opacity-40"
+                className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white text-xs rounded-full transition-colors disabled:opacity-40"
               >
                 {connecting ? 'Waiting…' : 'Connect'}
               </button>
             )}
           </div>
 
-          {/* Instagram — coming soon */}
-          <div className="flex items-center justify-between p-3 glass-sm opacity-50">
+          {/* TikTok */}
+          <div className="flex items-center justify-between p-3 glass-sm rounded-xl">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-pink-500/20 flex items-center justify-center">
-                <span className="text-pink-400 text-xs">IG</span>
+              <div className="w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+                <svg className="w-4 h-4 text-white/80" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.69a8.15 8.15 0 0 0 4.77 1.52V6.76a4.85 4.85 0 0 1-1.01-.07z"/>
+                </svg>
               </div>
-              <p className="text-white/60 text-sm">Instagram — coming soon</p>
+              {ttConnected ? (
+                <div>
+                  <p className="text-white text-sm font-medium">TikTok</p>
+                  <p className="text-white/50 text-xs">@{ttConnected.platform_username ?? 'connected'}</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-white/80 text-sm font-medium">TikTok</p>
+                  <p className="text-white/40 text-xs">
+                    {connecting ? 'Connecting…' : 'Not connected'}
+                  </p>
+                </div>
+              )}
             </div>
+            {ttConnected ? (
+              <button
+                onClick={() => disconnect.mutate('tiktok')}
+                className="text-red-400 hover:text-red-300 text-xs transition-colors"
+              >
+                Disconnect
+              </button>
+            ) : (
+              <button
+                onClick={() => connectPlatform('tiktok')}
+                disabled={connecting}
+                className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white text-xs rounded-full transition-colors disabled:opacity-40"
+              >
+                {connecting ? 'Waiting…' : 'Connect'}
+              </button>
+            )}
           </div>
+
+          {/* Instagram */}
+          <div className="flex items-center justify-between p-3 glass-sm rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500/20 via-pink-500/20 to-orange-400/20 flex items-center justify-center">
+                <svg className="w-4 h-4 text-pink-400" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/>
+                </svg>
+              </div>
+              {igConnected ? (
+                <div>
+                  <p className="text-white text-sm font-medium">Instagram</p>
+                  <p className="text-white/50 text-xs">@{igConnected.platform_username ?? 'connected'}</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-white/80 text-sm font-medium">Instagram</p>
+                  <p className="text-white/40 text-xs">
+                    {connecting ? 'Connecting…' : 'Not connected'}
+                  </p>
+                </div>
+              )}
+            </div>
+            {igConnected ? (
+              <button
+                onClick={() => disconnect.mutate('instagram')}
+                className="text-red-400 hover:text-red-300 text-xs transition-colors"
+              >
+                Disconnect
+              </button>
+            ) : (
+              <button
+                onClick={() => connectPlatform('instagram')}
+                disabled={connecting}
+                className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white text-xs rounded-full transition-colors disabled:opacity-40"
+              >
+                {connecting ? 'Waiting…' : 'Connect'}
+              </button>
+            )}
+          </div>
+
         </div>
       </GlassCard>
     </div>

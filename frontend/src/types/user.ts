@@ -20,7 +20,7 @@ export interface TastePreferences {
 export interface SocialConnection {
   id: string
   user_id: string
-  platform: 'youtube' | 'instagram'
+  platform: 'youtube' | 'tiktok' | 'instagram'
   platform_username: string | null
   connected_at: string
 }
