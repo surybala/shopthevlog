@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     INSTAGRAM_CLIENT_SECRET: str = ""
     INSTAGRAM_REDIRECT_URI: str = "http://localhost:8000/api/v1/social/connect/instagram/callback"
 
+    # TikTok (Login Kit v2)
+    TIKTOK_CLIENT_KEY: str = ""
+    TIKTOK_CLIENT_SECRET: str = ""
+    TIKTOK_REDIRECT_URI: str = "http://localhost:8000/api/v1/social/connect/tiktok/callback"
+
     # AI
     ANTHROPIC_API_KEY: str = ""
     OPENAI_API_KEY: str = ""

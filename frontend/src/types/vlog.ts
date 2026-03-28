@@ -1,8 +1,9 @@
 export type ProcessingStatus = 'pending' | 'transcribing' | 'planning' | 'ready' | 'failed'
+export type Platform = 'youtube' | 'tiktok' | 'instagram'
 
 export interface Vlog {
   id: string
-  platform: 'youtube' | 'instagram'
+  platform: Platform
   platform_video_id: string
   title: string
   description: string | null
@@ -29,4 +30,15 @@ export interface FeedPage {
 export interface VlogInteraction {
   vlog_id: string
   action: 'view' | 'like' | 'save' | 'share' | 'book_started'
+}
+
+export interface FeedSection {
+  id: string
+  title: string
+  emoji: string
+  vlogs: Vlog[]
+}
+
+export interface FeedSectionsResponse {
+  sections: FeedSection[]
 }

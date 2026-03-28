@@ -3,7 +3,7 @@ Feed ranking: score vlogs per user based on taste preferences and engagement sig
 """
 import logging
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.db.client import get_supabase
 from app.services.youtube_service import get_user_subscriptions
@@ -60,6 +60,7 @@ def build_feed_for_user(user_id: str) -> None:
       - destination_match: overlap with user's preferred destinations
       - style_match: overlap with user's travel styles
       - subscription_score: boost for vlogs from YouTube channels the user subscribes to
+      - interaction_boost: lift for styles/destinations the user actively engages with
       - engagement: log-normalised view/like counts
       - recency: exponential decay by publish date
     Home location is used as a penalty (deprioritise content about where the user lives).
@@ -76,9 +77,43 @@ def build_feed_for_user(user_id: str) -> None:
     # Load YouTube subscriptions for this user (empty set if not connected)
     subscribed_channel_ids = get_user_subscriptions(user_id)
 
+    # ── Interaction-based interest signals ───────────────────────────────────
+    # Derive implicit preferences from recent interactions (saves, likes, views).
+    # Weight: save=3, like=2, view=1.
+    interactions_resp = (
+        db.table("vlog_interactions")
+        .select("vlog_id,action")
+        .eq("user_id", user_id)
+        .in_("action", ["view", "like", "save"])
+        .execute()
+    )
+    interacted_vlog_ids = {r["vlog_id"]: r["action"] for r in (interactions_resp.data or [])}
+    action_weight = {"save": 3, "like": 2, "view": 1}
+
+    # Collect the styles/destinations of vlogs the user has interacted with
+    implied_styles: dict[str, float] = {}   # style → accumulated weight
+    implied_dests: dict[str, float] = {}    # dest  → accumulated weight
+    if interacted_vlog_ids:
+        iv_resp = (
+            db.table("vlogs")
+            .select("id,destinations,travel_styles")
+            .in_("id", list(interacted_vlog_ids.keys()))
+            .execute()
+        )
+        for iv in (iv_resp.data or []):
+            w = action_weight.get(interacted_vlog_ids.get(iv["id"], "view"), 1)
+            for s in (iv.get("travel_styles") or []):
+                implied_styles[s.lower()] = implied_styles.get(s.lower(), 0) + w
+            for d in (iv.get("destinations") or []):
+                implied_dests[d.lower()] = implied_dests.get(d.lower(), 0) + w
+
+    # Normalise implied scores to [0, 1]
+    max_style_w = max(implied_styles.values(), default=1)
+    max_dest_w = max(implied_dests.values(), default=1)
+
     # Load all ready vlogs (scoring columns only, including channel_id)
     vlogs_resp = db.table("vlogs").select(
-        "id,destinations,travel_styles,published_at,view_count,like_count,channel_id"
+        "id,platform,destinations,travel_styles,published_at,view_count,like_count,channel_id"
     ).eq("processing_status", "ready").execute()
     vlogs = vlogs_resp.data or []
 
@@ -88,8 +123,11 @@ def build_feed_for_user(user_id: str) -> None:
 
     upsert_rows = []
     for vlog in vlogs:
-        destination_match = _overlap_score(vlog.get("destinations", []), pref_destinations)
-        style_match = _overlap_score(vlog.get("travel_styles", []), pref_styles)
+        vlog_styles = vlog.get("travel_styles") or []
+        vlog_dests = vlog.get("destinations") or []
+
+        destination_match = _overlap_score(vlog_dests, pref_destinations)
+        style_match = _overlap_score(vlog_styles, pref_styles)
         engagement = _engagement_score(vlog.get("view_count"), vlog.get("like_count"))
         recency = _recency_score(vlog.get("published_at"))
 
@@ -98,18 +136,32 @@ def build_feed_for_user(user_id: str) -> None:
             subscribed_channel_ids and vlog.get("channel_id") in subscribed_channel_ids
         ) else 0.0
 
+        # Implicit interaction boost: average normalised weight across matching styles/dests
+        style_boost = 0.0
+        if implied_styles:
+            matching = [implied_styles.get(s.lower(), 0) for s in vlog_styles if s.lower() in implied_styles]
+            style_boost = (sum(matching) / len(matching) / max_style_w) if matching else 0.0
+
+        dest_boost = 0.0
+        if implied_dests:
+            matching = [implied_dests.get(d.lower(), 0) for d in vlog_dests if d.lower() in implied_dests]
+            dest_boost = (sum(matching) / len(matching) / max_dest_w) if matching else 0.0
+
+        interaction_boost = (style_boost * 0.6 + dest_boost * 0.4)
+
         score = (
-            destination_match * 0.25
-            + style_match * 0.20
-            + subscription_score * 0.25
+            destination_match * 0.22
+            + style_match * 0.18
+            + subscription_score * 0.20
             + engagement * 0.15
             + recency * 0.15
+            + interaction_boost * 0.10
         )
 
         # Penalise vlogs whose destinations overlap with the user's home location —
         # they already live there and are unlikely to want to travel there.
         if home_location:
-            vlog_destinations_lower = [d.lower() for d in vlog.get("destinations", [])]
+            vlog_destinations_lower = [d.lower() for d in vlog_dests]
             if any(home_location in d or d in home_location for d in vlog_destinations_lower):
                 score *= 0.4
 
@@ -126,6 +178,8 @@ def build_feed_for_user(user_id: str) -> None:
             reason_tags.append("trending")
         if subscription_score > 0:
             reason_tags.append("subscribed_creator")
+        if interaction_boost > 0.4:
+            reason_tags.append("because_you_watched")
 
         upsert_rows.append({
             "user_id": user_id,
@@ -151,6 +205,144 @@ def _mark_shown(db, user_id: str, vlog_ids: list[str]) -> None:
         logger.warning(f"mark_shown failed for user {user_id}: {e}")
 
 
+def _flatten_vlog_itineraries(v: dict) -> dict:
+    """Inline-flatten the nested itineraries join into a scalar itinerary_id."""
+    itineraries = v.pop("itineraries", None)
+    if isinstance(itineraries, dict):
+        v["itinerary_id"] = itineraries.get("id")
+    elif isinstance(itineraries, list) and itineraries:
+        v["itinerary_id"] = itineraries[0]["id"]
+    else:
+        v["itinerary_id"] = None
+    return v
+
+
+def _matches_duration(dur_secs: int, duration_lower: str) -> bool:
+    if duration_lower == "short":
+        return dur_secs < 600
+    if duration_lower == "medium":
+        return 600 <= dur_secs < 1800
+    if duration_lower == "long":
+        return dur_secs >= 1800
+    return True
+
+
+def _query_vlogs_direct(
+    db,
+    style: str | None = None,
+    platform: str | None = None,
+    duration: str | None = None,
+    exclude_ids: set[str] | None = None,
+    limit: int = 20,
+) -> list[tuple[dict, float]]:
+    """
+    Query the vlogs table directly (bypassing feed_cache) when filters produce
+    too few results from the ranked cache.  Sorted by engagement (view_count desc).
+    Returns list of (vlog_dict, pseudo_score) tuples.
+    """
+    query = (
+        db.table("vlogs")
+        .select(_VLOG_COLS)
+        .eq("processing_status", "ready")
+        .order("view_count", desc=True)
+        .limit(limit * 5)  # over-fetch so we can apply in-Python filters
+    )
+
+    if platform:
+        query = query.eq("platform", platform)
+
+    # Apply duration at DB level when possible
+    if duration:
+        if duration == "short":
+            query = query.lt("duration_seconds", 600)
+        elif duration == "medium":
+            query = query.gte("duration_seconds", 600).lt("duration_seconds", 1800)
+        elif duration == "long":
+            query = query.gte("duration_seconds", 1800)
+
+    resp = query.execute()
+    rows = resp.data or []
+
+    style_lower = style.lower().strip() if style else None
+    results: list[tuple[dict, float]] = []
+
+    for v in rows:
+        if exclude_ids and v.get("id") in exclude_ids:
+            continue
+
+        # Style filter — generous: array match OR title keyword
+        if style_lower:
+            vlog_styles = [s.lower() for s in (v.get("travel_styles") or [])]
+            title_lower = (v.get("title") or "").lower()
+            style_in_array = any(style_lower in s or s in style_lower for s in vlog_styles)
+            style_in_title = style_lower in title_lower
+            if not (style_in_array or style_in_title):
+                continue
+
+        _flatten_vlog_itineraries(v)
+
+        # Pseudo-score based on engagement so caller can merge/sort uniformly
+        views = v.get("view_count") or 0
+        pseudo_score = math.log10(max(views, 1)) / 8
+        results.append((v, pseudo_score))
+
+        if len(results) >= limit:
+            break
+
+    return results
+
+
+def get_trending_vlogs(limit: int = 12, platform: str | None = None) -> list[dict]:
+    """
+    Return the most-viewed ready vlogs, optionally filtered by platform.
+    Used for the Trending Now section of the Discover page.
+    """
+    db = get_supabase()
+    query = (
+        db.table("vlogs")
+        .select(_VLOG_COLS)
+        .eq("processing_status", "ready")
+        .order("view_count", desc=True)
+        .limit(limit)
+    )
+    if platform:
+        query = query.eq("platform", platform)
+
+    resp = query.execute()
+    return [_flatten_vlog_itineraries(v) for v in (resp.data or [])]
+
+
+def get_new_this_week(limit: int = 12) -> list[dict]:
+    """Return vlogs added to the DB in the last 7 days, newest first."""
+    db = get_supabase()
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    resp = (
+        db.table("vlogs")
+        .select(_VLOG_COLS)
+        .eq("processing_status", "ready")
+        .gte("created_at", week_ago)
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return [_flatten_vlog_itineraries(v) for v in (resp.data or [])]
+
+
+def get_vlogs_by_platform(platform: str, limit: int = 12) -> list[dict]:
+    """Return top vlogs for a specific platform (tiktok, instagram, youtube)."""
+    db = get_supabase()
+    resp = (
+        db.table("vlogs")
+        .select(_VLOG_COLS)
+        .eq("processing_status", "ready")
+        .eq("platform", platform)
+        .order("view_count", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return [_flatten_vlog_itineraries(v) for v in (resp.data or [])]
+
+
 def get_paginated_feed(
     user_id: str,
     cursor: str | None = None,
@@ -158,19 +350,22 @@ def get_paginated_feed(
     destination: str | None = None,
     style: str | None = None,
     duration: str | None = None,
+    platform: str | None = None,
 ) -> dict:
     """Return a scored, filtered feed page.
 
-    Filters applied client-side (Supabase SDK doesn't support joined-column WHERE):
-    - destination: substring match against destinations[] array, title, and channel_name
-    - style: substring match against travel_styles[] array and title
-    - duration: 'short' (<600s), 'medium' (600-1800s), 'long' (>1800s)
+    Strategy:
+    1. Query feed_cache (personalized scores) with a generous over-fetch.
+    2. Apply destination / style / duration / platform filters in Python.
+    3. If style / platform filters still yield fewer than `limit` results,
+       fall back to a direct vlogs-table query sorted by engagement.
     """
     db = get_supabase()
 
-    # Fetch extra rows to absorb filter drop-off when filters are active
-    active_filters = bool(destination or style or duration)
-    fetch_limit = (limit + 1) * 3 if active_filters else limit + 1
+    # Fetch generously when filters are active so we don't miss matches
+    active_filters = bool(destination or style or duration or platform)
+    # Fetch up to 200 rows from feed_cache when filtering; otherwise just limit+1
+    fetch_limit = 200 if active_filters else limit + 1
 
     query = (
         db.table("feed_cache")
@@ -189,13 +384,14 @@ def get_paginated_feed(
     resp = query.execute()
     rows = resp.data or []
 
-    if not rows:
+    if not rows and not active_filters:
         return {"vlogs": [], "next_cursor": None, "total": 0, "_shown_ids": []}
 
     # Normalise filter values once
     dest_lower = destination.lower().strip() if destination else None
     style_lower = style.lower().strip() if style else None
     duration_lower = duration.lower().strip() if duration else None
+    platform_lower = platform.lower().strip() if platform else None
 
     entries: list[tuple[dict, float]] = []
     for row in rows:
@@ -203,19 +399,13 @@ def get_paginated_feed(
         if not v:
             continue
 
-        # Flatten nested itineraries join → itinerary_id scalar
-        itineraries = v.pop("itineraries", None)
-        if isinstance(itineraries, dict):
-            v["itinerary_id"] = itineraries.get("id")
-        elif isinstance(itineraries, list) and itineraries:
-            v["itinerary_id"] = itineraries[0]["id"]
-        else:
-            v["itinerary_id"] = None
+        _flatten_vlog_itineraries(v)
+
+        # ── Platform filter ────────────────────────────────────────────────
+        if platform_lower and (v.get("platform") or "").lower() != platform_lower:
+            continue
 
         # ── Destination filter ─────────────────────────────────────────────
-        # Match against the destinations[] array (substring both ways) OR
-        # anywhere in the title / channel_name so that vlogs seeded before
-        # the AI classifier ran are still surfaced.
         if dest_lower:
             vlog_dests = [d.lower() for d in (v.get("destinations") or [])]
             title_lower = (v.get("title") or "").lower()
@@ -227,7 +417,6 @@ def get_paginated_feed(
                 continue
 
         # ── Style filter ───────────────────────────────────────────────────
-        # Same generous matching: array OR title keyword.
         if style_lower:
             vlog_styles = [s.lower() for s in (v.get("travel_styles") or [])]
             title_lower = (v.get("title") or "").lower()
@@ -239,14 +428,27 @@ def get_paginated_feed(
         # ── Duration filter ────────────────────────────────────────────────
         if duration_lower:
             dur_secs = v.get("duration_seconds") or 0
-            if duration_lower == "short" and dur_secs >= 600:
-                continue
-            elif duration_lower == "medium" and not (600 <= dur_secs < 1800):
-                continue
-            elif duration_lower == "long" and dur_secs < 1800:
+            if not _matches_duration(dur_secs, duration_lower):
                 continue
 
         entries.append((v, float(row.get("score", 0))))
+
+    # ── Fallback: supplement with direct DB query when cache is thin ────────
+    # This covers style/platform filters where tag data quality may be low:
+    # vlogs seeded before the AI classifier ran may have empty arrays, so we
+    # fall back to a direct vlogs-table query sorted by engagement.
+    # Duration is always stored with the video and doesn't need a fallback.
+    if len(entries) < limit and (style_lower or platform_lower):
+        seen_ids = {e[0]["id"] for e in entries}
+        supplement = _query_vlogs_direct(
+            db,
+            style=style,
+            platform=platform_lower,
+            duration=duration_lower,
+            exclude_ids=seen_ids,
+            limit=limit - len(entries),
+        )
+        entries.extend(supplement)
 
     has_next = len(entries) > limit
     page_entries = entries[:limit]

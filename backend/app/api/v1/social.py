@@ -1,5 +1,7 @@
 import logging
+from urllib.parse import urlencode
 
+import httpx
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from google_auth_oauthlib.flow import Flow
@@ -11,6 +13,27 @@ from app.services.youtube_service import search_travel_vlogs
 from app.services.feed_ranking_service import build_feed_for_user
 
 logger = logging.getLogger(__name__)
+
+# ── TikTok Login Kit v2 ────────────────────────────────────────────────────────
+_TIKTOK_AUTH_URL = "https://www.tiktok.com/v2/auth/authorize/"
+_TIKTOK_TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
+_TIKTOK_USER_URL = "https://open.tiktokapis.com/v2/user/info/"
+_TIKTOK_SCOPES = "user.info.basic,video.list"
+
+# ── Instagram Basic Display API ────────────────────────────────────────────────
+_IG_AUTH_URL = "https://api.instagram.com/oauth/authorize"
+_IG_TOKEN_URL = "https://api.instagram.com/oauth/access_token"
+_IG_GRAPH_URL = "https://graph.instagram.com"
+_IG_SCOPES = "user_profile,user_media"
+
+_POPUP_SUCCESS = (
+    "<script>window.opener?.postMessage({type:'%s_connect',success:true},'*');"
+    "window.close();</script>"
+)
+_POPUP_FAILURE = (
+    "<script>window.opener?.postMessage({type:'%s_connect',success:false},'*');"
+    "window.close();</script>"
+)
 
 # Each entry: (search_query, destinations[], travel_styles[])
 # Destinations and styles are stored on the vlog row so filters work immediately,
@@ -122,12 +145,27 @@ async def _seed_for_user_interests(
 
 
 async def _seed_and_build_feed(db, user_id: str) -> None:
-    """Background helper: seed public vlogs then build the user's feed."""
+    """Background helper: seed public vlogs (YouTube + TikTok + Instagram) then build the user's feed."""
+    from app.services.tiktok_service import seed_tiktok_travel_content
+    from app.services.instagram_service import seed_instagram_travel_content
+
     try:
         if settings.YOUTUBE_API_KEY:
             await _seed_public_travel_vlogs(db)
         else:
-            logger.warning("YOUTUBE_API_KEY not set — skipping public vlog seeding")
+            logger.warning("YOUTUBE_API_KEY not set — skipping YouTube vlog seeding")
+
+        # Seed TikTok and Instagram public hashtag content (no API key needed)
+        try:
+            seed_tiktok_travel_content(db, max_per_hashtag=6)
+        except Exception as e:
+            logger.warning(f"TikTok seeding failed: {e}")
+
+        try:
+            seed_instagram_travel_content(db, max_per_hashtag=6)
+        except Exception as e:
+            logger.warning(f"Instagram seeding failed: {e}")
+
         build_feed_for_user(user_id)
         logger.info(f"Feed seeded and built for user {user_id}")
     except Exception as e:
@@ -242,6 +280,170 @@ async def youtube_callback(request: Request):
         "<script>window.opener?.postMessage({type:'yt_connect',success:true},'*');window.close();</script>"
     )
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TikTok OAuth (Login Kit v2)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/connect/tiktok")
+async def connect_tiktok(user: UserClaims = Depends(get_current_user)):
+    """Returns the TikTok Login Kit v2 authorisation URL."""
+    if not settings.TIKTOK_CLIENT_KEY:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=501, detail="TikTok integration not configured")
+
+    params = urlencode({
+        "client_key": settings.TIKTOK_CLIENT_KEY,
+        "response_type": "code",
+        "scope": _TIKTOK_SCOPES,
+        "redirect_uri": settings.TIKTOK_REDIRECT_URI,
+        "state": user.user_id,
+    })
+    return {"url": f"{_TIKTOK_AUTH_URL}?{params}"}
+
+
+@router.get("/connect/tiktok/callback")
+async def tiktok_callback(request: Request):
+    """Handle TikTok OAuth callback, store tokens, trigger content ingest."""
+    import asyncio
+
+    code = request.query_params.get("code")
+    state = request.query_params.get("state")   # user_id
+    error = request.query_params.get("error")
+
+    if error or not code or not state:
+        return HTMLResponse(_POPUP_FAILURE % "tiktok")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            token_resp = await client.post(
+                _TIKTOK_TOKEN_URL,
+                json={
+                    "client_key": settings.TIKTOK_CLIENT_KEY,
+                    "client_secret": settings.TIKTOK_CLIENT_SECRET,
+                    "code": code,
+                    "grant_type": "authorization_code",
+                    "redirect_uri": settings.TIKTOK_REDIRECT_URI,
+                },
+                headers={"Content-Type": "application/json"},
+            )
+            token_data = token_resp.json().get("data", {})
+
+        access_token = token_data.get("access_token", "")
+        open_id = token_data.get("open_id", "")
+
+        # Fetch TikTok display name
+        display_name = ""
+        if access_token and open_id:
+            async with httpx.AsyncClient() as client:
+                user_resp = await client.get(
+                    _TIKTOK_USER_URL,
+                    params={"fields": "open_id,display_name,avatar_url"},
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+                user_data = user_resp.json().get("data", {}).get("user", {})
+                display_name = user_data.get("display_name", "")
+
+        db = get_supabase()
+        db.table("social_connections").upsert({
+            "user_id": state,
+            "platform": "tiktok",
+            "platform_user_id": open_id,
+            "platform_username": display_name,
+            "access_token": access_token,
+        }, on_conflict="user_id,platform").execute()
+
+        # Rebuild this user's feed in background
+        asyncio.create_task(_seed_and_build_feed(db, state))
+
+    except Exception as e:
+        logger.exception(f"TikTok callback error: {e}")
+        return HTMLResponse(_POPUP_FAILURE % "tiktok")
+
+    return HTMLResponse(_POPUP_SUCCESS % "tiktok")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Instagram OAuth (Basic Display API)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/connect/instagram")
+async def connect_instagram(user: UserClaims = Depends(get_current_user)):
+    """Returns the Instagram Basic Display API authorisation URL."""
+    if not settings.INSTAGRAM_CLIENT_ID:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=501, detail="Instagram integration not configured")
+
+    params = urlencode({
+        "client_id": settings.INSTAGRAM_CLIENT_ID,
+        "redirect_uri": settings.INSTAGRAM_REDIRECT_URI,
+        "scope": _IG_SCOPES,
+        "response_type": "code",
+        "state": user.user_id,
+    })
+    return {"url": f"{_IG_AUTH_URL}?{params}"}
+
+
+@router.get("/connect/instagram/callback")
+async def instagram_callback(request: Request):
+    """Handle Instagram OAuth callback, store tokens, ingest user's Reels."""
+    import asyncio
+    from app.services.instagram_service import get_instagram_user_info, ingest_instagram_user_media
+
+    code = request.query_params.get("code")
+    state = request.query_params.get("state")   # user_id
+    error = request.query_params.get("error")
+
+    if error or not code or not state:
+        return HTMLResponse(_POPUP_FAILURE % "instagram")
+
+    try:
+        # Exchange code for short-lived token
+        async with httpx.AsyncClient() as client:
+            token_resp = await client.post(
+                _IG_TOKEN_URL,
+                data={
+                    "client_id": settings.INSTAGRAM_CLIENT_ID,
+                    "client_secret": settings.INSTAGRAM_CLIENT_SECRET,
+                    "grant_type": "authorization_code",
+                    "redirect_uri": settings.INSTAGRAM_REDIRECT_URI,
+                    "code": code,
+                },
+            )
+            token_resp.raise_for_status()
+            token_data = token_resp.json()
+
+        access_token = token_data.get("access_token", "")
+        ig_user_id = str(token_data.get("user_id", ""))
+
+        # Get username
+        user_info = await get_instagram_user_info(access_token)
+        username = user_info.get("username", "")
+
+        db = get_supabase()
+        db.table("social_connections").upsert({
+            "user_id": state,
+            "platform": "instagram",
+            "platform_user_id": ig_user_id,
+            "platform_username": username,
+            "access_token": access_token,
+        }, on_conflict="user_id,platform").execute()
+
+        # Ingest user's Reels + rebuild feed in background
+        async def _ingest_and_build():
+            await ingest_instagram_user_media(db, state, access_token, ig_user_id)
+            build_feed_for_user(state)
+
+        asyncio.create_task(_ingest_and_build())
+
+    except Exception as e:
+        logger.exception(f"Instagram callback error: {e}")
+        return HTMLResponse(_POPUP_FAILURE % "instagram")
+
+    return HTMLResponse(_POPUP_SUCCESS % "instagram")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @router.delete("/connect/{platform}")
 async def disconnect_social(platform: str, user: UserClaims = Depends(get_current_user)):

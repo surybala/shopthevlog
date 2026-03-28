@@ -56,7 +56,32 @@
       "Bash(powershell -Command \"Set-Location ''C:\\\\Users\\\\surya\\\\IdeaProjects\\\\shopthevlog\\\\frontend''; node_modules\\\\.bin\\\\vitest run HotelDetailSheet 2>&1 | ForEach-Object { Write-Host $_}\")",
       "Bash(powershell -Command \"Set-Location ''C:\\\\Users\\\\surya\\\\IdeaProjects\\\\shopthevlog\\\\frontend''; node_modules\\\\.bin\\\\vitest run HotelDetailSheet 2>&1 | Set-Content ''test-output.txt''; Get-Content ''test-output.txt''\")",
       "Bash(npx vitest:*)",
-      "Bash(export PATH=\"$PATH:/c/Program Files/nodejs:/c/Users/surya/AppData/Roaming/npm\")"
+      "Bash(export PATH=\"$PATH:/c/Program Files/nodejs:/c/Users/surya/AppData/Roaming/npm\")",
+      "Read(//mnt/c/Users/surya/**)",
+      "Bash(find /mnt -name shopthevlog -maxdepth 6)",
+      "Bash(python -m pytest tests/test_booking_com_service.py tests/test_cars.py tests/test_experiences.py tests/test_hotel_content_service.py -v --tb=short)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/test_booking_com_service.py tests/test_cars.py tests/test_experiences.py tests/test_hotel_content_service.py -v --tb=short)",
+      "Bash(npx tsc:*)",
+      "Bash(head -50 /c/Users/surya/IdeaProjects/shopthevlog/backend/tests/test_*.py)",
+      "Bash(.venv/Scripts/python -m pytest tests/test_hotel_booking_api.py tests/test_bookings_api.py -v --tb=short)",
+      "Bash(python -m pytest tests/test_hotel_booking_api.py tests/test_bookings_api.py -v)",
+      "Bash(py -m pytest tests/test_hotel_booking_api.py tests/test_bookings_api.py -v)",
+      "Bash(.venv/Scripts/pytest tests/test_hotel_booking_api.py tests/test_bookings_api.py -v)",
+      "Bash(PYTHONPATH=. .venv/Scripts/pytest tests/test_hotel_booking_api.py tests/test_bookings_api.py -v)",
+      "Bash(PYTHONPATH=. .venv/Scripts/pytest tests/ -v --tb=short -q)",
+      "Bash(npm run:*)",
+      "Bash(.venv/Scripts/npx.exe tsc:*)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(PYTHONPATH=. .venv/Scripts/pytest tests/test_preferences_api.py tests/test_feed_search_api.py tests/test_social_seeding.py tests/test_feed_ranking.py -v --tb=short)",
+      "Bash(PYTHONPATH=. .venv/Scripts/pytest tests/test_feed_search_api.py::TestFeedDurationFilter::test_no_duration_filter_returns_all -v --tb=long)",
+      "Bash(PYTHONPATH=. .venv/Scripts/pytest tests/test_feed_search_api.py::TestFeedDurationFilter::test_no_duration_filter_returns_all -v --tb=long -s)",
+      "Bash(python -m pytest tests/test_social_seeding.py -v)",
+      "Bash(py -m pytest tests/test_social_seeding.py -v)",
+      "Bash(.venv/Scripts/python -m pytest tests/test_social_seeding.py -v)",
+      "Bash(.venv/Scripts/python -m pytest tests/ -v)",
+      "Bash(.venv/Scripts/python -m pytest tests/ -x -q)",
+      "Bash(.venv/Scripts/python -m pytest tests/test_feed_ranking.py::TestGetPaginatedFeed::test_duration_short_excludes_600s_and_above -v)",
+      "Bash(.venv/Scripts/python -m pytest tests/ -q)"
     ]
   }
 }

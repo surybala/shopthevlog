@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Query, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional
@@ -8,10 +9,29 @@ from app.core.security import get_current_user, UserClaims
 
 logger = logging.getLogger(__name__)
 from app.db.client import get_supabase
-from app.services.feed_ranking_service import get_paginated_feed, build_feed_for_user, _mark_shown, _VLOG_COLS
+from app.services.feed_ranking_service import (
+    get_paginated_feed,
+    build_feed_for_user,
+    _mark_shown,
+    _VLOG_COLS,
+    _flatten_vlog_itineraries,
+    get_trending_vlogs,
+    get_new_this_week,
+    get_vlogs_by_platform,
+)
 from app.schemas.vlog import FeedPage, VlogInteractionRequest
 
 router = APIRouter(prefix="/feed", tags=["feed"])
+
+# ── Interest → emoji mapping for section headers ───────────────────────────────
+_STYLE_EMOJI: dict[str, str] = {
+    "adventure": "🧗", "luxury": "✨", "budget travel": "💰", "budget": "💰",
+    "solo travel": "🎒", "solo": "🎒", "family": "👨‍👩‍👧",
+    "backpacking": "🏕️", "cultural": "🏛️", "beach & islands": "🏖️", "beach": "🏖️",
+    "mountain": "🏔️", "city break": "🌆", "road trip": "🚗",
+    "food & culinary": "🍜", "photography": "📸", "wildlife": "🦁",
+    "history": "🏺", "wellness": "🧘",
+}
 
 
 @router.get("", response_model=FeedPage)
@@ -22,6 +42,7 @@ async def get_feed(
     destination: Optional[str] = Query(None),
     style: Optional[str] = Query(None),
     duration: Optional[str] = Query(None, description="short | medium | long"),
+    platform: Optional[str] = Query(None, description="youtube | tiktok | instagram"),
     user: UserClaims = Depends(get_current_user),
 ):
     # Run the synchronous DB work in a thread so we don't block the event loop
@@ -35,11 +56,12 @@ async def get_feed(
             destination=destination,
             style=style,
             duration=duration,
+            platform=platform,
         ),
     )
 
-    # Cache miss on first page — rebuild in background, return empty immediately.
-    if not result["vlogs"] and not cursor:
+    # Cache miss on first page (unfiltered) — rebuild in background, return empty immediately.
+    if not result["vlogs"] and not cursor and not (destination or style or duration or platform):
         logger.info("Feed cache empty for %s, queuing background rebuild", user.user_id)
         background_tasks.add_task(build_feed_for_user, user.user_id)
 
@@ -52,6 +74,156 @@ async def get_feed(
     return result
 
 
+@router.get("/trending", response_model=FeedPage)
+async def get_trending(
+    limit: int = Query(20, ge=1, le=50),
+    platform: Optional[str] = Query(None, description="youtube | tiktok | instagram"),
+    user: UserClaims = Depends(get_current_user),
+):
+    """
+    Return the most-viewed ready vlogs across all users.
+    Optionally filtered by platform.  Used for the Trending Now section.
+    """
+    loop = asyncio.get_event_loop()
+    vlogs = await loop.run_in_executor(
+        None, lambda: get_trending_vlogs(limit=limit, platform=platform)
+    )
+    return {"vlogs": vlogs, "next_cursor": None, "total": len(vlogs)}
+
+
+@router.get("/sections")
+async def get_feed_sections(
+    user: UserClaims = Depends(get_current_user),
+):
+    """
+    Return curated feed sections for the multi-section Discover page.
+
+    Sections included (only sections with ≥ 1 vlog are returned):
+      1. For You          — personalised ranked feed
+      2. Trending Now     — highest view-count vlogs
+      3. New This Week    — vlogs added to DB in the last 7 days
+      4. <Interest>       — one section per user travel style (up to 4)
+      5. TikTok Picks     — if TikTok content exists
+      6. Instagram Reels  — if Instagram content exists
+      7. Because You Watched — vlogs similar to recent interactions
+
+    Each section: { id, title, emoji, vlogs[] }
+    """
+    db = get_supabase()
+    loop = asyncio.get_event_loop()
+
+    # Load user preferences for per-interest sections + because-you-watched
+    prefs_resp = await loop.run_in_executor(
+        None,
+        lambda: db.table("taste_preferences")
+        .select("travel_styles,destinations")
+        .eq("user_id", user.user_id)
+        .execute(),
+    )
+    prefs = prefs_resp.data[0] if prefs_resp.data else {}
+    user_styles: list[str] = prefs.get("travel_styles") or []
+
+    # Run heavy DB calls concurrently
+    (for_you_result, trending, new_week, tiktok_vlogs, ig_vlogs) = await asyncio.gather(
+        loop.run_in_executor(None, lambda: get_paginated_feed(user.user_id, limit=12)),
+        loop.run_in_executor(None, lambda: get_trending_vlogs(limit=12)),
+        loop.run_in_executor(None, lambda: get_new_this_week(limit=12)),
+        loop.run_in_executor(None, lambda: get_vlogs_by_platform("tiktok", limit=12)),
+        loop.run_in_executor(None, lambda: get_vlogs_by_platform("instagram", limit=12)),
+    )
+
+    sections: list[dict] = []
+
+    # 1. For You
+    for_you = for_you_result.get("vlogs", [])
+    if for_you:
+        sections.append({"id": "for_you", "title": "For You", "emoji": "✨", "vlogs": for_you})
+
+    # 2. Trending Now
+    if trending:
+        sections.append({"id": "trending", "title": "Trending Now", "emoji": "🔥", "vlogs": trending})
+
+    # 3. New This Week
+    if new_week:
+        sections.append({"id": "new_this_week", "title": "New This Week", "emoji": "🆕", "vlogs": new_week})
+
+    # 4. Per-interest sections (up to 4 of user's travel styles)
+    interest_tasks = [
+        loop.run_in_executor(
+            None,
+            lambda s=style: get_paginated_feed(user.user_id, limit=12, style=s),
+        )
+        for style in user_styles[:4]
+    ]
+    interest_results = await asyncio.gather(*interest_tasks)
+    for style, result in zip(user_styles[:4], interest_results):
+        vlogs = result.get("vlogs", [])
+        if vlogs:
+            emoji = _STYLE_EMOJI.get(style.lower(), "🎯")
+            sections.append({
+                "id": f"style_{style.lower().replace(' ', '_').replace('&', 'and')}",
+                "title": style.title(),
+                "emoji": emoji,
+                "vlogs": vlogs,
+            })
+
+    # 5. TikTok Picks
+    if tiktok_vlogs:
+        sections.append({"id": "tiktok_picks", "title": "TikTok Picks", "emoji": "🎵", "vlogs": tiktok_vlogs})
+
+    # 6. Instagram Reels
+    if ig_vlogs:
+        sections.append({"id": "instagram_reels", "title": "Instagram Reels", "emoji": "📸", "vlogs": ig_vlogs})
+
+    # 7. Because You Watched — derive from recent interactions
+    try:
+        interactions_resp = await loop.run_in_executor(
+            None,
+            lambda: db.table("vlog_interactions")
+            .select("vlog_id,action")
+            .eq("user_id", user.user_id)
+            .in_("action", ["save", "like"])
+            .order("created_at", desc=True)
+            .limit(5)
+            .execute(),
+        )
+        liked_ids = [r["vlog_id"] for r in (interactions_resp.data or [])]
+        if liked_ids:
+            # Fetch those vlogs' styles and find similar content
+            liked_vlogs_resp = await loop.run_in_executor(
+                None,
+                lambda: db.table("vlogs")
+                .select("travel_styles,destinations")
+                .in_("id", liked_ids)
+                .execute(),
+            )
+            byw_styles: set[str] = set()
+            for lv in (liked_vlogs_resp.data or []):
+                byw_styles.update(lv.get("travel_styles") or [])
+
+            if byw_styles:
+                byw_style = next(iter(byw_styles))
+                byw_result = await loop.run_in_executor(
+                    None,
+                    lambda: get_paginated_feed(user.user_id, limit=10, style=byw_style),
+                )
+                byw_vlogs = [
+                    v for v in byw_result.get("vlogs", [])
+                    if v["id"] not in set(liked_ids)
+                ][:10]
+                if byw_vlogs:
+                    sections.append({
+                        "id": "because_you_watched",
+                        "title": "Because You Watched",
+                        "emoji": "▶️",
+                        "vlogs": byw_vlogs,
+                    })
+    except Exception as exc:
+        logger.warning("Because You Watched section failed: %s", exc)
+
+    return {"sections": sections}
+
+
 @router.post("/refresh")
 async def refresh_feed(background_tasks: BackgroundTasks, user: UserClaims = Depends(get_current_user)):
     background_tasks.add_task(build_feed_for_user, user.user_id)
@@ -61,19 +233,29 @@ async def refresh_feed(background_tasks: BackgroundTasks, user: UserClaims = Dep
 @router.post("/seed")
 async def seed_feed(background_tasks: BackgroundTasks, user: UserClaims = Depends(get_current_user)):
     """
-    Seed the discovery pool with popular public travel vlogs, then rebuild
-    this user's feed.  Useful for first-time setup or when the feed is empty.
+    Seed the discovery pool with popular public travel vlogs from YouTube,
+    TikTok, and Instagram, then rebuild this user's feed.
     """
     from app.api.v1.social import _seed_public_travel_vlogs
+    from app.services.tiktok_service import seed_tiktok_travel_content
+    from app.services.instagram_service import seed_instagram_travel_content
 
     db = get_supabase()
 
     async def _run():
         await _seed_public_travel_vlogs(db)
+        try:
+            seed_tiktok_travel_content(db, max_per_hashtag=6)
+        except Exception as e:
+            logger.warning("TikTok seed failed: %s", e)
+        try:
+            seed_instagram_travel_content(db, max_per_hashtag=6)
+        except Exception as e:
+            logger.warning("Instagram seed failed: %s", e)
         build_feed_for_user(user.user_id)
 
     background_tasks.add_task(_run)
-    return {"ok": True, "message": "Seeding travel vlogs and rebuilding your feed in the background"}
+    return {"ok": True, "message": "Seeding travel vlogs from all platforms and rebuilding your feed"}
 
 
 @router.post("/interact")
@@ -95,14 +277,7 @@ class FeedSearchRequest(BaseModel):
 
 def _flatten_itineraries(v: dict) -> dict:
     """Inline-flatten the nested itineraries join into a scalar itinerary_id."""
-    itineraries = v.pop("itineraries", None)
-    if isinstance(itineraries, dict):
-        v["itinerary_id"] = itineraries.get("id")
-    elif isinstance(itineraries, list) and itineraries:
-        v["itinerary_id"] = itineraries[0]["id"]
-    else:
-        v["itinerary_id"] = None
-    return v
+    return _flatten_vlog_itineraries(v)
 
 
 @router.post("/search", response_model=FeedPage)
