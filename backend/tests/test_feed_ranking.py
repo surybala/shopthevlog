@@ -157,11 +157,22 @@ class TestGetPaginatedFeed:
     def _make_feed_row(self, vlog_data: dict, score: float = 0.5) -> dict:
         return {"score": score, "reason_tags": [], "shown": False, "vlogs": vlog_data}
 
-    def _make_vlog(self, vlog_id="v1", destinations=None, styles=None, itinerary_id=None):
+    def _make_vlog(
+        self,
+        vlog_id="v1",
+        destinations=None,
+        styles=None,
+        itinerary_id=None,
+        title="Test Vlog",
+        channel_name="Test Channel",
+        duration_seconds=600,
+    ):
         itinerary = {"id": itinerary_id} if itinerary_id else None
         return {
             "id": vlog_id,
-            "title": "Test Vlog",
+            "title": title,
+            "channel_name": channel_name,
+            "duration_seconds": duration_seconds,
             "processing_status": "ready",
             "destinations": destinations or [],
             "travel_styles": styles or [],
@@ -337,6 +348,201 @@ class TestGetPaginatedFeed:
             result = get_paginated_feed("user-123", cursor="not-a-number")
 
         assert result["vlogs"] == []
+
+    # ── Destination filter via title / channel (new behaviour) ────────────────
+
+    def test_destination_filter_matches_via_title(self, mock_supabase):
+        """Vlogs with destination in title but empty destinations[] must be included."""
+        vlog_match = self._make_vlog("v1", title="Amazing Japan Travel Vlog", destinations=[])
+        vlog_miss  = self._make_vlog("v2", title="Backpacking Southeast Asia", destinations=[])
+        rows = [
+            self._make_feed_row(vlog_match, score=0.9),
+            self._make_feed_row(vlog_miss, score=0.8),
+        ]
+        self._mock_db_with_rows(mock_supabase, rows)
+
+        with patch("app.services.feed_ranking_service.get_supabase", return_value=mock_supabase):
+            result = get_paginated_feed("user-123", destination="japan")
+
+        ids = [v["id"] for v in result["vlogs"]]
+        assert "v1" in ids, "Title match should be included"
+        assert "v2" not in ids, "Non-matching title should be excluded"
+
+    def test_destination_filter_matches_via_channel_name(self, mock_supabase):
+        """Vlogs whose channel_name contains the destination term should be included."""
+        vlog_match = self._make_vlog("v1", channel_name="Italy Adventures", destinations=[])
+        vlog_miss  = self._make_vlog("v2", channel_name="Generic Travel", destinations=[])
+        rows = [
+            self._make_feed_row(vlog_match, score=0.9),
+            self._make_feed_row(vlog_miss, score=0.8),
+        ]
+        self._mock_db_with_rows(mock_supabase, rows)
+
+        with patch("app.services.feed_ranking_service.get_supabase", return_value=mock_supabase):
+            result = get_paginated_feed("user-123", destination="italy")
+
+        ids = [v["id"] for v in result["vlogs"]]
+        assert "v1" in ids
+        assert "v2" not in ids
+
+    def test_destination_filter_case_insensitive_title_match(self, mock_supabase):
+        vlog = self._make_vlog("v1", title="PARIS City Tour Vlog", destinations=[])
+        rows = [self._make_feed_row(vlog)]
+        self._mock_db_with_rows(mock_supabase, rows)
+
+        with patch("app.services.feed_ranking_service.get_supabase", return_value=mock_supabase):
+            result = get_paginated_feed("user-123", destination="Paris")
+
+        assert len(result["vlogs"]) == 1
+
+    def test_destination_filter_partial_array_match(self, mock_supabase):
+        """'bali' should match destination tag 'Bali' via substring matching."""
+        vlog = self._make_vlog("v1", destinations=["Bali"], title="Island Trip")
+        rows = [self._make_feed_row(vlog)]
+        self._mock_db_with_rows(mock_supabase, rows)
+
+        with patch("app.services.feed_ranking_service.get_supabase", return_value=mock_supabase):
+            result = get_paginated_feed("user-123", destination="bali")
+
+        assert len(result["vlogs"]) == 1
+
+    # ── Style filter via title (new behaviour) ────────────────────────────────
+
+    def test_style_filter_matches_via_title(self, mock_supabase):
+        """Vlogs with style keyword in title but empty travel_styles[] must be included."""
+        vlog_match = self._make_vlog("v1", title="Extreme Adventure Vlog", styles=[])
+        vlog_miss  = self._make_vlog("v2", title="City Break Shopping Trip", styles=[])
+        rows = [
+            self._make_feed_row(vlog_match, score=0.9),
+            self._make_feed_row(vlog_miss, score=0.8),
+        ]
+        self._mock_db_with_rows(mock_supabase, rows)
+
+        with patch("app.services.feed_ranking_service.get_supabase", return_value=mock_supabase):
+            result = get_paginated_feed("user-123", style="adventure")
+
+        ids = [v["id"] for v in result["vlogs"]]
+        assert "v1" in ids
+        assert "v2" not in ids
+
+    def test_style_filter_case_insensitive_title(self, mock_supabase):
+        vlog = self._make_vlog("v1", title="LUXURY Hotel Review 2024", styles=[])
+        rows = [self._make_feed_row(vlog)]
+        self._mock_db_with_rows(mock_supabase, rows)
+
+        with patch("app.services.feed_ranking_service.get_supabase", return_value=mock_supabase):
+            result = get_paginated_feed("user-123", style="luxury")
+
+        assert len(result["vlogs"]) == 1
+
+    # ── Duration filter ───────────────────────────────────────────────────────
+
+    def test_duration_short_excludes_600s_and_above(self, mock_supabase):
+        vlog_short  = self._make_vlog("short",  duration_seconds=300)
+        vlog_edge   = self._make_vlog("edge",   duration_seconds=600)   # boundary — exclude
+        vlog_long   = self._make_vlog("long",   duration_seconds=1200)
+        rows = [
+            self._make_feed_row(vlog_short, score=0.9),
+            self._make_feed_row(vlog_edge, score=0.85),
+            self._make_feed_row(vlog_long, score=0.8),
+        ]
+        self._mock_db_with_rows(mock_supabase, rows)
+
+        with patch("app.services.feed_ranking_service.get_supabase", return_value=mock_supabase):
+            result = get_paginated_feed("user-123", duration="short")
+
+        ids = [v["id"] for v in result["vlogs"]]
+        assert "short" in ids
+        assert "edge" not in ids
+        assert "long" not in ids
+
+    def test_duration_medium_boundary_conditions(self, mock_supabase):
+        vlog_just_below = self._make_vlog("just-below", duration_seconds=599)   # exclude
+        vlog_lower_edge = self._make_vlog("lower-edge", duration_seconds=600)   # include
+        vlog_mid        = self._make_vlog("mid",        duration_seconds=1000)  # include
+        vlog_upper_edge = self._make_vlog("upper-edge", duration_seconds=1799)  # include
+        vlog_at_upper   = self._make_vlog("at-upper",   duration_seconds=1800)  # exclude
+        rows = [
+            self._make_feed_row(vlog_just_below, score=0.95),
+            self._make_feed_row(vlog_lower_edge, score=0.9),
+            self._make_feed_row(vlog_mid, score=0.85),
+            self._make_feed_row(vlog_upper_edge, score=0.8),
+            self._make_feed_row(vlog_at_upper, score=0.75),
+        ]
+        self._mock_db_with_rows(mock_supabase, rows)
+
+        with patch("app.services.feed_ranking_service.get_supabase", return_value=mock_supabase):
+            result = get_paginated_feed("user-123", duration="medium")
+
+        ids = [v["id"] for v in result["vlogs"]]
+        assert "just-below" not in ids
+        assert "lower-edge" in ids
+        assert "mid" in ids
+        assert "upper-edge" in ids
+        assert "at-upper" not in ids
+
+    def test_duration_long_requires_at_least_1800s(self, mock_supabase):
+        vlog_medium = self._make_vlog("medium", duration_seconds=900)   # exclude
+        vlog_long   = self._make_vlog("long",   duration_seconds=1800)  # include (exactly)
+        vlog_epic   = self._make_vlog("epic",   duration_seconds=5400)  # include
+        rows = [
+            self._make_feed_row(vlog_medium, score=0.9),
+            self._make_feed_row(vlog_long, score=0.8),
+            self._make_feed_row(vlog_epic, score=0.7),
+        ]
+        self._mock_db_with_rows(mock_supabase, rows)
+
+        with patch("app.services.feed_ranking_service.get_supabase", return_value=mock_supabase):
+            result = get_paginated_feed("user-123", duration="long")
+
+        ids = [v["id"] for v in result["vlogs"]]
+        assert "medium" not in ids
+        assert "long" in ids
+        assert "epic" in ids
+
+    def test_duration_none_value_treated_as_zero(self, mock_supabase):
+        """Vlogs with duration_seconds=None should be treated as 0 (included in short)."""
+        vlog = self._make_vlog("v1", duration_seconds=None)
+        rows = [self._make_feed_row(vlog)]
+        self._mock_db_with_rows(mock_supabase, rows)
+
+        with patch("app.services.feed_ranking_service.get_supabase", return_value=mock_supabase):
+            result = get_paginated_feed("user-123", duration="short")
+
+        assert len(result["vlogs"]) == 1
+
+    def test_no_duration_filter_returns_all_lengths(self, mock_supabase):
+        rows = [
+            self._make_feed_row(self._make_vlog("v1", duration_seconds=60)),
+            self._make_feed_row(self._make_vlog("v2", duration_seconds=3600)),
+            self._make_feed_row(self._make_vlog("v3", duration_seconds=None)),
+        ]
+        self._mock_db_with_rows(mock_supabase, rows)
+
+        with patch("app.services.feed_ranking_service.get_supabase", return_value=mock_supabase):
+            result = get_paginated_feed("user-123")
+
+        assert len(result["vlogs"]) == 3
+
+    def test_destination_and_duration_combined(self, mock_supabase):
+        """Both destination and duration filters applied together."""
+        vlog_match  = self._make_vlog("v1", title="Japan Short Trip",    duration_seconds=300)
+        vlog_wrong_dur = self._make_vlog("v2", title="Japan Long Tour",  duration_seconds=3600)
+        vlog_wrong_dest = self._make_vlog("v3", title="Brazil Adventure",duration_seconds=300)
+        rows = [
+            self._make_feed_row(vlog_match, score=0.9),
+            self._make_feed_row(vlog_wrong_dur, score=0.85),
+            self._make_feed_row(vlog_wrong_dest, score=0.8),
+        ]
+        self._mock_db_with_rows(mock_supabase, rows)
+
+        with patch("app.services.feed_ranking_service.get_supabase", return_value=mock_supabase):
+            result = get_paginated_feed("user-123", destination="japan", duration="short")
+
+        ids = [v["id"] for v in result["vlogs"]]
+        assert "v1" in ids
+        assert "v2" not in ids
+        assert "v3" not in ids
 
 
 # ─────────────────────────────────────────────────────────────────────────────

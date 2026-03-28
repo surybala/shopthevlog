@@ -7,6 +7,8 @@ from google_auth_oauthlib.flow import Flow
 from app.core.security import get_current_user, UserClaims
 from app.core.config import settings
 from app.db.client import get_supabase
+from app.services.youtube_service import search_travel_vlogs
+from app.services.feed_ranking_service import build_feed_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +77,6 @@ async def _seed_public_travel_vlogs(db) -> int:
     so filters work before AI classification completes.
     Returns the number of newly inserted vlogs.
     """
-    from app.services.youtube_service import search_travel_vlogs
-
     inserted = 0
     for query, destinations, travel_styles in SEED_QUERIES:
         try:
@@ -101,9 +101,6 @@ async def _seed_for_user_interests(
     preferred destinations, then rebuild their personalised feed.
     Called as a background task when the user saves their preferences.
     """
-    from app.services.youtube_service import search_travel_vlogs
-    from app.services.feed_ranking_service import build_feed_for_user
-
     db = get_supabase()
     queries: list[tuple[str, list, list]] = []
 
@@ -126,7 +123,6 @@ async def _seed_for_user_interests(
 
 async def _seed_and_build_feed(db, user_id: str) -> None:
     """Background helper: seed public vlogs then build the user's feed."""
-    from app.services.feed_ranking_service import build_feed_for_user
     try:
         if settings.YOUTUBE_API_KEY:
             await _seed_public_travel_vlogs(db)
