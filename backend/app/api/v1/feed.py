@@ -123,14 +123,25 @@ async def get_feed_sections(
     prefs = prefs_resp.data[0] if prefs_resp.data else {}
     user_styles: list[str] = prefs.get("travel_styles") or []
 
-    # Run heavy DB calls concurrently
-    (for_you_result, trending, new_week, tiktok_vlogs, ig_vlogs) = await asyncio.gather(
+    # Run heavy DB calls concurrently.
+    # return_exceptions=True ensures a failure in one section (e.g. TikTok/Instagram
+    # platform columns not yet populated) never crashes the whole endpoint.
+    results = await asyncio.gather(
         loop.run_in_executor(None, lambda: get_paginated_feed(user.user_id, limit=12)),
         loop.run_in_executor(None, lambda: get_trending_vlogs(limit=12)),
         loop.run_in_executor(None, lambda: get_new_this_week(limit=12)),
         loop.run_in_executor(None, lambda: get_vlogs_by_platform("tiktok", limit=12)),
         loop.run_in_executor(None, lambda: get_vlogs_by_platform("instagram", limit=12)),
+        return_exceptions=True,
     )
+    for_you_result = results[0] if not isinstance(results[0], BaseException) else {"vlogs": []}
+    trending      = results[1] if not isinstance(results[1], BaseException) else []
+    new_week      = results[2] if not isinstance(results[2], BaseException) else []
+    tiktok_vlogs  = results[3] if not isinstance(results[3], BaseException) else []
+    ig_vlogs      = results[4] if not isinstance(results[4], BaseException) else []
+    for i, name in enumerate(["for_you", "trending", "new_week", "tiktok", "instagram"]):
+        if isinstance(results[i], BaseException):
+            logger.warning("feed/sections: %s section failed: %s", name, results[i])
 
     sections: list[dict] = []
 
@@ -155,8 +166,11 @@ async def get_feed_sections(
         )
         for style in user_styles[:4]
     ]
-    interest_results = await asyncio.gather(*interest_tasks)
+    interest_results = await asyncio.gather(*interest_tasks, return_exceptions=True)
     for style, result in zip(user_styles[:4], interest_results):
+        if isinstance(result, BaseException):
+            logger.warning("feed/sections: interest section '%s' failed: %s", style, result)
+            continue
         vlogs = result.get("vlogs", [])
         if vlogs:
             emoji = _STYLE_EMOJI.get(style.lower(), "🎯")
