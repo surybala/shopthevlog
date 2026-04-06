@@ -11,10 +11,10 @@ export default function HomePage() {
             <Link href="/discover" className="text-white/60 hover:text-white text-sm transition-colors">
               Discover
             </Link>
-            <Link href="/(auth)/login" className="text-white/60 hover:text-white text-sm transition-colors">
+            <Link href="/login" className="text-white/60 hover:text-white text-sm transition-colors">
               Sign in
             </Link>
-            <Link href="/(auth)/signup" className="btn-primary text-sm">
+            <Link href="/signup" className="btn-primary text-sm">
               Start for free
             </Link>
           </div>
@@ -41,7 +41,7 @@ export default function HomePage() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link href="/(auth)/signup" className="btn-primary text-base px-8 py-3">
+          <Link href="/signup" className="btn-primary text-base px-8 py-3">
             Create your storefront →
           </Link>
           <Link href="/discover" className="btn-ghost text-base px-8 py-3">
@@ -119,7 +119,7 @@ export default function HomePage() {
         <p className="text-white/50 mb-10 max-w-lg mx-auto">
           Free to start. No credit card required. Your first Trip Kit is ready in minutes.
         </p>
-        <Link href="/(auth)/signup" className="btn-primary text-base px-10 py-4">
+        <Link href="/signup" className="btn-primary text-base px-10 py-4">
           Create your free storefront
         </Link>
       </section>
