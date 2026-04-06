@@ -20,6 +20,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "dotenv": "^16.4.7",
     "@types/node": "^20.19.39",
     "@types/react": "^18",
     "@types/react-dom": "^18",

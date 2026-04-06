@@ -81,7 +81,22 @@
       "Bash(.venv/Scripts/python -m pytest tests/ -v)",
       "Bash(.venv/Scripts/python -m pytest tests/ -x -q)",
       "Bash(.venv/Scripts/python -m pytest tests/test_feed_ranking.py::TestGetPaginatedFeed::test_duration_short_excludes_600s_and_above -v)",
-      "Bash(.venv/Scripts/python -m pytest tests/ -q)"
+      "Bash(.venv/Scripts/python -m pytest tests/ -q)",
+      "Bash(.venvScriptspython -m pytest tests/test_instagram_service.py tests/test_social_tiktok_instagram.py tests/test_feed_new_endpoints.py -v --tb=short)",
+      "Bash(.venv/Scripts/python -m pytest tests/test_instagram_service.py tests/test_social_tiktok_instagram.py tests/test_feed_new_endpoints.py -v --tb=short)",
+      "Bash(.venv/Scripts/python -m pytest --tb=short -q)",
+      "Bash(.venv/Scripts/python -m pytest tests/test_feed_ranking_interactions.py::TestBuildFeedInteractionBoost::test_save_weight_exceeds_view_weight tests/test_feed_ranking_interactions.py::TestGetTrendingVlogs::test_respects_limit tests/test_feed_ranking_interactions.py::TestGetNewThisWeek::test_respects_limit tests/test_feed_ranking_interactions.py::TestGetVlogsByPlatform::test_respects_limit tests/test_feed_ranking_interactions.py::TestGetPaginatedFeedPlatform::test_platform_filter_excludes_wrong_platform -v --tb=long)",
+      "Bash(.venv/Scripts/python -m pytest tests/test_feed_ranking_interactions.py -v --tb=short -q)",
+      "Bash(node -e \"const { execSync } = require\\(''child_process''\\); try { execSync\\(''npx next --version'', {stdio:''pipe''}\\); console.log\\(''ok''\\) } catch\\(e\\) { console.log\\(e.message.slice\\(0,200\\)\\) }\")",
+      "Bash(node -e \"const pkg = require\\(''./node_modules/next/package.json''\\); console.log\\(pkg.version\\)\")",
+      "Bash(mkdir -p \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/_store/[handle]/kits/[slug]\")",
+      "Bash(mkdir -p \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/_store/[handle]/shop\")",
+      "Bash(mkdir -p \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/_store/[handle]/subscribe\")",
+      "Bash(cp \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/@[handle]/layout.tsx\" \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/_store/[handle]/layout.tsx\")",
+      "Bash(cp \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/@[handle]/page.tsx\" \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/_store/[handle]/page.tsx\")",
+      "Bash(cp \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/@[handle]/kits/page.tsx\" \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/_store/[handle]/kits/page.tsx\")",
+      "Bash(cp \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/@[handle]/kits/[slug]/page.tsx\" \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/_store/[handle]/kits/[slug]/page.tsx\")",
+      "Bash(cp \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/@[handle]/shop/page.tsx\" \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/_store/[handle]/shop/page.tsx\")"
     ]
   }
 }
