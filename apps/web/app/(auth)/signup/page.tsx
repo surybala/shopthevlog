@@ -35,7 +35,9 @@ export default function SignupPage() {
 
     if (signupError) { setError(signupError.message); setLoading(false); return }
     if (data.user) {
-      router.push(accountType === 'creator' ? '/dashboard' : '/discover')
+      // Email signup requires confirmation — show a message rather than redirecting
+      // The /auth/callback will handle post-confirmation routing
+      router.push(accountType === 'creator' ? '/onboarding' : '/discover')
     }
   }
 
@@ -138,7 +140,7 @@ export default function SignupPage() {
 
           <p className="text-center text-white/40 text-xs">
             Already have an account?{' '}
-            <Link href="/(auth)/login" className="text-white hover:underline">Sign in</Link>
+            <Link href="/login" className="text-white hover:underline">Sign in</Link>
           </p>
 
           <p className="text-center text-white/20 text-[10px]">
