@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface Tier {
@@ -45,10 +45,38 @@ const planDetails = {
 
 export default function SettingsForm({ userId, email, creator }: Props) {
   const router = useRouter()
+  const tabs = ['profile', 'channels', 'tiers', 'billing'] as const
   const [tab, setTab] = useState<'profile' | 'channels' | 'tiers' | 'billing'>('profile')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [scanStatus, setScanStatus] = useState(creator?.catalogScanStatus ?? 'PENDING')
+  const [vlogCount, setVlogCount] = useState(0)
+
+  // Sync tab from URL query param (e.g., after OAuth redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const t = params.get('tab') as typeof tab | null
+    if (t && tabs.includes(t)) setTab(t)
+    const connected = params.get('connected')
+    if (connected) setSuccess(`${connected.charAt(0).toUpperCase() + connected.slice(1)} connected successfully!`)
+    const err = params.get('error')
+    if (err) setError(`Connection failed: ${err.replace(/_/g, ' ')}`)
+  }, [])
+
+  useEffect(() => {
+    if (scanStatus !== 'SCANNING') return
+    const interval = setInterval(async () => {
+      const res = await fetch('/api/creator/scan/status')
+      if (res.ok) {
+        const data = await res.json()
+        setScanStatus(data.status)
+        setVlogCount(data.vlogCount)
+        if (data.status !== 'SCANNING') clearInterval(interval)
+      }
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [scanStatus])
 
   const [profile, setProfile] = useState({
     handle: creator?.handle ?? '',
@@ -108,7 +136,6 @@ export default function SettingsForm({ userId, email, creator }: Props) {
 
   const inputCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/30'
   const labelCls = 'block text-xs font-medium text-white/50 uppercase tracking-wider mb-1.5'
-  const tabs = ['profile', 'channels', 'tiers', 'billing'] as const
 
   return (
     <div className="max-w-2xl">
@@ -208,19 +235,32 @@ export default function SettingsForm({ userId, email, creator }: Props) {
               )}
             </div>
             {creator?.youtubeChannelId && (
-              <div className="mt-4 pt-4 border-t border-white/10">
-                <p className="text-xs text-white/40 mb-3">AI Catalog Scan: <span className="text-white">{creator.catalogScanStatus}</span></p>
-                {creator.catalogScanStatus === 'PENDING' || creator.catalogScanStatus === 'COMPLETE' ? (
+              <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-white/40">Catalog scan:</p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    scanStatus === 'COMPLETE' ? 'bg-green-500/20 text-green-400' :
+                    scanStatus === 'SCANNING' ? 'bg-yellow-500/20 text-yellow-400 animate-pulse' :
+                    scanStatus === 'FAILED' ? 'bg-red-500/20 text-red-400' :
+                    'bg-white/10 text-white/40'
+                  }`}>
+                    {scanStatus === 'SCANNING' ? 'Scanning…' : scanStatus}
+                  </span>
+                  {scanStatus === 'COMPLETE' && vlogCount > 0 && (
+                    <span className="text-xs text-white/30">{vlogCount} videos imported</span>
+                  )}
+                </div>
+                {(scanStatus === 'PENDING' || scanStatus === 'COMPLETE' || scanStatus === 'FAILED') && (
                   <button
                     onClick={async () => {
-                      await fetch('/api/creator/scan', { method: 'POST' })
-                      router.refresh()
+                      const res = await fetch('/api/creator/scan', { method: 'POST' })
+                      if (res.ok) setScanStatus('SCANNING')
                     }}
                     className="btn-ghost text-sm"
                   >
-                    {creator.catalogScanStatus === 'COMPLETE' ? 'Re-run scan' : 'Start scan'}
+                    {scanStatus === 'COMPLETE' ? 'Re-scan' : 'Start scan'}
                   </button>
-                ) : null}
+                )}
               </div>
             )}
           </div>
