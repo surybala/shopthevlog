@@ -194,7 +194,7 @@ def generate_trip_kit(vlog_id: str, transcript: str, title: str, creator_id: str
                     id, "creatorId", title, slug, description,
                     countries, cities, "primaryCity",
                     "durationDays", "estimatedBudgetLow", "estimatedBudgetHigh",
-                    "isPublished", "isFeatured", "isAiGenerated",
+                    "isPublished", "isFeatured", "generatedByAI",
                     "viewCount", "saveCount", "clickCount", "conversionCount",
                     "totalLinkCount", "estimatedEarnings",
                     "createdAt", "updatedAt"
