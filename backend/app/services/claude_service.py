@@ -1,6 +1,8 @@
 """
-Claude API integration for Trip Kit generation from vlog transcripts.
+Gemini Flash 2.5 integration for Trip Kit generation from vlog transcripts.
 Writes to TripKit / ItineraryDay / DayActivity / TripKitsOnVlogs tables.
+
+Module kept as claude_service.py so no import paths need updating.
 """
 import hashlib
 import json
@@ -8,13 +10,29 @@ import logging
 import re
 from typing import Optional
 
-import anthropic
+from google import genai
+from google.genai import types
 
 from app.core.config import settings
 from app.db.pg_client import PgClient
 
 logger = logging.getLogger(__name__)
-claude = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+
+# Lazy-initialised client — only created when first needed so a missing key
+# doesn't crash startup.
+_gemini_client: Optional[genai.Client] = None
+
+
+def _client() -> genai.Client:
+    global _gemini_client
+    if _gemini_client is None:
+        if not settings.GEMINI_API_KEY:
+            raise RuntimeError("GEMINI_API_KEY is not set")
+        _gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    return _gemini_client
+
+
+GEMINI_MODEL = "gemini-2.5-flash-preview-04-17"
 
 # ─── Prompts ──────────────────────────────────────────────────────────────────
 
@@ -69,6 +87,8 @@ ITINERARY_COMPACT_PROMPT = """Travel itinerary expert. ONE valid JSON object onl
 DESTINATION_EXTRACTION_PROMPT = """Extract all travel destination names from this text. Return ONLY a JSON array of strings. Example: ["Tokyo", "Japan", "Kyoto"]. No explanation."""
 
 
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
 def _slugify(title: str, creator_id: str) -> str:
     base = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')[:50]
     suffix = hashlib.md5(f"{creator_id}{title}".encode()).hexdigest()[:6]
@@ -88,31 +108,40 @@ def _strip_code_fences(text: str) -> str:
     return "\n".join(lines[1:end]).strip()
 
 
-def _call_claude(system: str, user_content: str, max_tokens: int) -> anthropic.types.Message:
-    return claude.messages.create(
-        model="claude-haiku-4-5",
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": user_content}],
+def _call_gemini(system: str, user_content: str, max_tokens: int) -> str:
+    """Call Gemini and return the raw text response."""
+    response = _client().models.generate_content(
+        model=GEMINI_MODEL,
+        contents=user_content,
+        config=types.GenerateContentConfig(
+            system_instruction=system,
+            max_output_tokens=max_tokens,
+            temperature=0.4,
+        ),
     )
+    return response.text or ""
 
 
-def _parse_response(message: anthropic.types.Message, vlog_id: str, attempt: str) -> Optional[dict]:
-    if message.stop_reason == "max_tokens":
-        logger.warning(f"Claude hit max_tokens on {attempt} for vlog {vlog_id}")
+def _parse_response(raw_text: str, vlog_id: str, attempt: str) -> Optional[dict]:
+    if not raw_text:
+        logger.warning(f"Gemini returned empty response [{attempt}] for vlog {vlog_id}")
         return None
-    raw = message.content[0].text.strip()
-    cleaned = _strip_code_fences(raw)
+    cleaned = _strip_code_fences(raw_text.strip())
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError as e:
-        logger.error(f"Claude invalid JSON [{attempt}] for vlog {vlog_id}: {e}. Raw: {raw[:400]}")
+        logger.error(
+            f"Gemini invalid JSON [{attempt}] for vlog {vlog_id}: {e}. "
+            f"Raw: {raw_text[:400]}"
+        )
         return None
 
 
+# ─── Public API ───────────────────────────────────────────────────────────────
+
 def generate_trip_kit(vlog_id: str, transcript: str, title: str, creator_id: str) -> bool:
     """
-    Generate and persist a TripKit for a vlog.
+    Generate and persist a TripKit for a vlog using Gemini Flash 2.5.
     Returns True on success.
     """
     # Guard: skip if TripKit already exists for this vlog
@@ -127,24 +156,25 @@ def generate_trip_kit(vlog_id: str, transcript: str, title: str, creator_id: str
         _mark_vlog_complete(vlog_id)
         return True
 
-    # Attempt 1: full prompt
     user_content = f"Vlog title: {title}\n\nTranscript:\n{transcript[:30000]}"
     itinerary_data: Optional[dict] = None
-    try:
-        msg = _call_claude(ITINERARY_SYSTEM_PROMPT, user_content, max_tokens=16000)
-        itinerary_data = _parse_response(msg, vlog_id, "primary")
-    except Exception as e:
-        logger.error(f"Claude API error (primary) for vlog {vlog_id}: {e}")
 
-    # Attempt 2: compact fallback
+    # Attempt 1: full prompt
+    try:
+        raw = _call_gemini(ITINERARY_SYSTEM_PROMPT, user_content, max_tokens=16000)
+        itinerary_data = _parse_response(raw, vlog_id, "primary")
+    except Exception as e:
+        logger.error(f"Gemini API error (primary) for vlog {vlog_id}: {e}")
+
+    # Attempt 2: compact fallback with shorter transcript
     if itinerary_data is None:
         logger.info(f"Retrying with compact prompt for vlog {vlog_id}")
         try:
             compact_content = f"Vlog title: {title}\n\nTranscript:\n{transcript[:8000]}"
-            msg2 = _call_claude(ITINERARY_COMPACT_PROMPT, compact_content, max_tokens=4096)
-            itinerary_data = _parse_response(msg2, vlog_id, "compact")
+            raw2 = _call_gemini(ITINERARY_COMPACT_PROMPT, compact_content, max_tokens=4096)
+            itinerary_data = _parse_response(raw2, vlog_id, "compact")
         except Exception as e:
-            logger.error(f"Claude API error (compact) for vlog {vlog_id}: {e}")
+            logger.error(f"Gemini API error (compact) for vlog {vlog_id}: {e}")
 
     if itinerary_data is None:
         _mark_vlog_failed(vlog_id)
@@ -219,7 +249,6 @@ def generate_trip_kit(vlog_id: str, transcript: str, title: str, creator_id: str
 
                 for activity in day.get("activities", []):
                     act_type = activity.get("type", "OTHER")
-                    # Ensure type is a valid ActivityType enum value
                     valid_types = {
                         "ACCOMMODATION", "FOOD", "TOUR", "ADVENTURE",
                         "CULTURAL", "WELLNESS", "NIGHTLIFE", "TRANSPORT",
@@ -280,12 +309,12 @@ def _mark_vlog_failed(vlog_id: str):
 def extract_destinations(transcript: str, title: str) -> list[str]:
     try:
         text = f"Title: {title}\n\n{transcript[:4000]}"
-        message = claude.messages.create(
-            model="claude-haiku-4-5",
+        raw = _call_gemini(
+            DESTINATION_EXTRACTION_PROMPT,
+            f"Text: {text}",
             max_tokens=256,
-            messages=[{"role": "user", "content": f"{DESTINATION_EXTRACTION_PROMPT}\n\nText: {text}"}],
         )
-        return json.loads(message.content[0].text)
+        return json.loads(raw.strip())
     except Exception as e:
         logger.warning(f"extract_destinations failed: {e}")
         return []

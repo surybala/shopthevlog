@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     TIKTOK_REDIRECT_URI: str = "http://localhost:8000/api/v1/social/connect/tiktok/callback"
 
     # AI
-    ANTHROPIC_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     # Local Whisper — set WHISPER_LOCAL_ENABLED=true to enable (requires openai-whisper + ffmpeg + GPU/CPU)
     WHISPER_LOCAL_ENABLED: bool = False
