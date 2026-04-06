@@ -38,8 +38,8 @@ export default function DashboardNav({ handle }: { handle: string | null }) {
         )
       })}
 
-      {handle && (
-        <div className="pt-3 mt-3 border-t border-white/10">
+      <div className="pt-3 mt-3 border-t border-white/10 space-y-0.5">
+        {handle && (
           <Link
             href={`/@${handle}`}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/50 hover:text-white hover:bg-white/5 transition-colors"
@@ -47,8 +47,17 @@ export default function DashboardNav({ handle }: { handle: string | null }) {
             <span className="text-base leading-none">↗</span>
             View Storefront
           </Link>
-        </div>
-      )}
+        )}
+        <form action="/auth/signout" method="POST">
+          <button
+            type="submit"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/50 hover:text-white hover:bg-white/5 transition-colors text-left"
+          >
+            <span className="text-base leading-none">⎋</span>
+            Sign out
+          </button>
+        </form>
+      </div>
     </nav>
   )
 }
