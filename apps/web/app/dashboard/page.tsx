@@ -82,10 +82,26 @@ export default async function DashboardOverviewPage() {
           <p className="text-white/40 mt-1 text-sm">Your storefront is {creator.isPublished ? 'live' : 'not yet published'}</p>
         </div>
         <div className="flex items-center gap-3">
-          <Link href={`/@${creator.handle}`} className="btn-ghost text-sm">View Storefront ↗</Link>
+          <Link href={`/@${creator.handle}`} className="btn-ghost text-sm">{creator.isPublished ? 'View Storefront ↗' : 'Preview Storefront ↗'}</Link>
           <Link href="/dashboard/kits" className="btn-primary text-sm">+ New Kit</Link>
         </div>
       </div>
+
+      {/* Publish prompt */}
+      {!creator.isPublished && (
+        <div className="glass-card p-4 mb-6 flex items-center justify-between border border-yellow-500/20 bg-yellow-500/5">
+          <div className="flex items-center gap-3">
+            <span className="text-yellow-400 text-lg">○</span>
+            <div>
+              <p className="text-sm font-medium text-white">Your storefront is unpublished</p>
+              <p className="text-xs text-white/40 mt-0.5">Publish it so your audience can find and follow you.</p>
+            </div>
+          </div>
+          <Link href="/dashboard/settings" className="text-xs text-yellow-400 hover:text-yellow-300 border border-yellow-500/30 px-3 py-1.5 rounded-lg hover:border-yellow-500/60 transition-colors">
+            Publish storefront →
+          </Link>
+        </div>
+      )}
 
       {/* Scan status banner */}
       {creator.catalogScanStatus !== 'COMPLETE' && (

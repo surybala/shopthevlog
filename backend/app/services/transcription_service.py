@@ -1,19 +1,17 @@
 """
 Transcription pipeline:
 1. Check for existing transcript in DB.
-2. Try YouTube captions (yt-dlp) — fast and free.
-3. Try OpenAI Whisper API — cloud fallback.
-4. Try local Whisper — only if WHISPER_LOCAL_ENABLED=true.
+2. Try YouTube captions (yt-dlp) — fast and free, no download needed.
+3. Try Gemini Flash 2.5 audio transcription — download audio, send to Gemini.
+   - Files ≤ 18 MB are sent inline (no upload quota).
+   - Larger files are uploaded via the Gemini File API, then deleted afterwards.
 
-Reads/writes to the new "Vlog" table via psycopg2.
+Reads/writes to the "Vlog" table via psycopg2.
 """
-import concurrent.futures
 import logging
 import os
 import tempfile
 from typing import Optional
-
-LOCAL_WHISPER_TIMEOUT_SECONDS = 300  # 5 min timeout for local Whisper
 
 from app.core.config import settings
 from app.db.pg_client import PgClient
@@ -21,13 +19,16 @@ from app.services.youtube_service import get_video_captions
 
 logger = logging.getLogger(__name__)
 
-MAX_WHISPER_BYTES = 24 * 1024 * 1024  # 24 MB (OpenAI Whisper API limit is 25 MB)
+# Gemini's practical inline limit; above this we use the File API.
+_INLINE_LIMIT_BYTES = 18 * 1024 * 1024   # 18 MB
+
+# Trim audio to this duration before sending to Gemini for very long videos.
+_MAX_AUDIO_SECONDS = 3600  # 1 hour
 
 
 def transcribe_vlog(vlog_id: str) -> Optional[str]:
     """
-    Main entry point. Returns transcript string or None on failure.
-    Reads/writes "Vlog" table in the Prisma PostgreSQL schema.
+    Main entry point. Returns the transcript string or None on failure.
     """
     with PgClient() as db:
         db.execute(
@@ -39,15 +40,14 @@ def transcribe_vlog(vlog_id: str) -> Optional[str]:
         vlog = db.fetchone()
 
     if not vlog:
-        logger.error(f"Vlog {vlog_id} not found")
+        logger.error("Vlog %s not found", vlog_id)
         return None
 
-    # Already transcribed?
+    # Re-use existing transcript if already transcribed.
     if vlog.get("transcriptRaw"):
-        logger.info(f"Vlog {vlog_id} already has transcript, skipping")
+        logger.info("Vlog %s already has transcript — skipping", vlog_id)
         return vlog["transcriptRaw"]
 
-    # Mark as transcribing
     with PgClient() as db:
         db.execute(
             'UPDATE "Vlog" SET "processingStatus" = \'TRANSCRIBING\' WHERE id = %s',
@@ -56,20 +56,15 @@ def transcribe_vlog(vlog_id: str) -> Optional[str]:
 
     transcript: Optional[str] = None
 
-    # Try YouTube captions first (fast, free, no download needed)
+    # ── Step 1: YouTube captions (free, instant, no audio download) ─────────
     if vlog.get("platform") == "YOUTUBE" and vlog.get("externalId"):
-        logger.info(f"Trying YouTube captions for {vlog['externalId']}")
+        logger.info("Trying YouTube captions for video %s", vlog["externalId"])
         transcript = get_video_captions(vlog["externalId"])
 
-    # Try OpenAI Whisper API
+    # ── Step 2: Gemini audio transcription ───────────────────────────────────
     if not transcript:
-        logger.info(f"Trying OpenAI Whisper API for vlog {vlog_id}")
-        transcript = _transcribe_with_openai_whisper(vlog)
-
-    # Try local Whisper (slow — only if explicitly enabled)
-    if not transcript and settings.WHISPER_LOCAL_ENABLED:
-        logger.info(f"Trying local Whisper for vlog {vlog_id}")
-        transcript = _transcribe_with_local_whisper(vlog)
+        logger.info("Trying Gemini transcription for vlog %s", vlog_id)
+        transcript = _transcribe_with_gemini(vlog)
 
     if not transcript:
         with PgClient() as db:
@@ -79,7 +74,7 @@ def transcribe_vlog(vlog_id: str) -> Optional[str]:
             )
         return None
 
-    # Persist transcript and advance to EXTRACTING
+    # Persist transcript and advance status.
     with PgClient() as db:
         db.execute(
             '''UPDATE "Vlog"
@@ -91,67 +86,108 @@ def transcribe_vlog(vlog_id: str) -> Optional[str]:
     return transcript
 
 
-def _transcribe_with_openai_whisper(vlog: dict) -> Optional[str]:
-    if not settings.OPENAI_API_KEY:
-        logger.info("No OPENAI_API_KEY, skipping OpenAI Whisper")
-        return None
+def _transcribe_with_gemini(vlog: dict) -> Optional[str]:
+    """
+    Download the vlog audio and transcribe it with Gemini Flash 2.5.
+
+    Small files (≤ 18 MB) are sent inline in the request body.
+    Large files are uploaded to the Gemini File API and deleted after use.
+    """
     video_url = vlog.get("externalUrl")
     if not video_url:
         return None
+
     try:
-        from openai import OpenAI
-        openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        from google.genai import types
+        from app.services.gemini_service import _client, GEMINI_MODEL
+
         with tempfile.TemporaryDirectory() as tmpdir:
             audio_path = _download_audio(video_url, tmpdir)
             if not audio_path:
                 return None
-            with open(audio_path, "rb") as audio_file:
-                response = openai_client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file,
-                    response_format="text",
+
+            client = _client()
+            file_size = os.path.getsize(audio_path)
+            prompt = (
+                "Transcribe this audio accurately. "
+                "Return only the spoken words — no timestamps, speaker labels, "
+                "or section headers."
+            )
+
+            if file_size <= _INLINE_LIMIT_BYTES:
+                # ── Inline (no File API quota used) ──────────────────────────
+                logger.debug(
+                    "Sending audio inline (%.1f MB)", file_size / 1024 / 1024
                 )
-        text = str(response).strip()
-        if not text:
-            return None
-        logger.info(f"OpenAI Whisper succeeded ({len(text)} chars)")
-        return text
-    except Exception as e:
-        logger.error(f"OpenAI Whisper failed: {e}")
-        return None
-
-
-def _transcribe_with_local_whisper(vlog: dict) -> Optional[str]:
-    try:
-        import whisper
-    except ImportError:
-        logger.info("openai-whisper not installed, skipping local Whisper")
-        return None
-    video_url = vlog.get("externalUrl")
-    if not video_url:
-        return None
-    try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            audio_path = _download_audio(video_url, tmpdir)
-            if not audio_path:
-                return None
-            model = whisper.load_model(settings.WHISPER_LOCAL_MODEL)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(model.transcribe, audio_path, fp16=False)
+                with open(audio_path, "rb") as f:
+                    audio_bytes = f.read()
+                contents = [
+                    types.Part.from_bytes(data=audio_bytes, mime_type="audio/mpeg"),
+                    types.Part.from_text(text=prompt),
+                ]
+                response = client.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        max_output_tokens=8192,
+                        temperature=0.0,
+                    ),
+                )
+            else:
+                # ── File API (larger audio) ───────────────────────────────────
+                logger.debug(
+                    "Uploading audio via File API (%.1f MB)", file_size / 1024 / 1024
+                )
+                uploaded = client.files.upload(
+                    path=audio_path,
+                    config=types.UploadFileConfig(mime_type="audio/mpeg"),
+                )
                 try:
-                    result = future.result(timeout=LOCAL_WHISPER_TIMEOUT_SECONDS)
-                except concurrent.futures.TimeoutError:
-                    logger.warning(f"Local Whisper timed out after {LOCAL_WHISPER_TIMEOUT_SECONDS}s")
-                    return None
-            text = result.get("text", "").strip()
-            return text or None
+                    contents = [
+                        types.Part.from_uri(
+                            file_uri=uploaded.uri, mime_type="audio/mpeg"
+                        ),
+                        types.Part.from_text(text=prompt),
+                    ]
+                    response = client.models.generate_content(
+                        model=GEMINI_MODEL,
+                        contents=contents,
+                        config=types.GenerateContentConfig(
+                            max_output_tokens=8192,
+                            temperature=0.0,
+                        ),
+                    )
+                finally:
+                    # Always clean up the uploaded file to avoid quota buildup.
+                    try:
+                        client.files.delete(name=uploaded.name)
+                    except Exception as cleanup_err:
+                        logger.warning(
+                            "Could not delete Gemini file %s: %s",
+                            uploaded.name, cleanup_err,
+                        )
+
+            text = (response.text or "").strip()
+            if not text:
+                logger.warning("Gemini returned empty transcript for vlog")
+                return None
+
+            logger.info("Gemini transcription succeeded (%d chars)", len(text))
+            return text
+
     except Exception as e:
-        logger.error(f"Local Whisper failed: {e}")
+        logger.error("Gemini transcription failed: %s", e)
         return None
 
 
 def _download_audio(url: str, tmpdir: str) -> Optional[str]:
-    """Download audio via yt-dlp and compress to mono mp3 under 24 MB."""
+    """
+    Download the best audio stream via yt-dlp, then re-encode to:
+      mono MP3 · 16 kHz · 32 kbps
+
+    This keeps the file small for Gemini while preserving speech quality.
+    Very long recordings are trimmed to 1 hour.
+    """
     try:
         import yt_dlp
         import ffmpeg
@@ -160,7 +196,7 @@ def _download_audio(url: str, tmpdir: str) -> Optional[str]:
         compressed_path = os.path.join(tmpdir, "audio.mp3")
 
         ydl_opts = {
-            "format": "bestaudio[ext=m4a]/bestaudio",
+            "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[ext=opus]/bestaudio/best[height<=480]/best",
             "outtmpl": raw_path,
             "quiet": True,
             "no_warnings": True,
@@ -174,8 +210,10 @@ def _download_audio(url: str, tmpdir: str) -> Optional[str]:
                 downloaded = os.path.join(tmpdir, fname)
                 break
         if not downloaded:
+            logger.error("yt-dlp produced no audio file")
             return None
 
+        # Re-encode: mono, 16 kHz, 32 kbps — typical vlog speech is intelligible
         (
             ffmpeg.input(downloaded)
             .audio
@@ -184,12 +222,16 @@ def _download_audio(url: str, tmpdir: str) -> Optional[str]:
             .run(quiet=True)
         )
 
+        # Trim very long recordings so we don't send multi-hour files
         size = os.path.getsize(compressed_path)
-        if size > MAX_WHISPER_BYTES:
-            logger.warning(f"Audio too large ({size} bytes), trimming to 60 min")
+        if size > _INLINE_LIMIT_BYTES * 10:
+            logger.warning(
+                "Audio is large (%.1f MB) — trimming to %d minutes",
+                size / 1024 / 1024, _MAX_AUDIO_SECONDS // 60,
+            )
             trimmed_path = os.path.join(tmpdir, "audio_trimmed.mp3")
             (
-                ffmpeg.input(compressed_path, t=3600)
+                ffmpeg.input(compressed_path, t=_MAX_AUDIO_SECONDS)
                 .output(trimmed_path)
                 .overwrite_output()
                 .run(quiet=True)
@@ -197,6 +239,7 @@ def _download_audio(url: str, tmpdir: str) -> Optional[str]:
             return trimmed_path
 
         return compressed_path
+
     except Exception as e:
-        logger.error(f"Audio download/compress failed: {e}")
+        logger.error("Audio download/compress failed: %s", e)
         return None

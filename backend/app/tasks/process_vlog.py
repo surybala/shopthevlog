@@ -6,7 +6,7 @@ import logging
 
 from app.db.pg_client import PgClient
 from app.services.transcription_service import transcribe_vlog
-from app.services.claude_service import generate_trip_kit, _mark_vlog_failed
+from app.services.gemini_service import generate_trip_kit, _mark_vlog_failed
 
 logger = logging.getLogger(__name__)
 

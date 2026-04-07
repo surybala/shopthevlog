@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     APP_SECRET_KEY: str = "changeme"
     CORS_ORIGINS: str = "http://localhost:3000"
 
+    # Database
+    DATABASE_URL: str
+
     # Supabase
     SUPABASE_URL: str
     SUPABASE_SERVICE_ROLE_KEY: str
@@ -33,13 +36,15 @@ class Settings(BaseSettings):
 
     # AI
     GEMINI_API_KEY: str = ""
-    OPENAI_API_KEY: str = ""
-    # Local Whisper — set WHISPER_LOCAL_ENABLED=true to enable (requires openai-whisper + ffmpeg + GPU/CPU)
-    WHISPER_LOCAL_ENABLED: bool = False
-    WHISPER_LOCAL_MODEL: str = "base"  # tiny, base, small, medium, large
 
     # Google Places (for location resolution in AI pipeline)
     GOOGLE_PLACES_API_KEY: str = ""
+
+    # Booking.com Demand API
+    BOOKING_COM_API_TOKEN: str = ""
+    BOOKING_COM_AFFILIATE_ID: str = ""
+    BOOKING_COM_SANDBOX: bool = True
+    BOOKING_COM_RATE_LIMIT_RPM: int = 45
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379"

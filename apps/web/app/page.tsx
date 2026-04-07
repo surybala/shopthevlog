@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 
 export default function HomePage() {
   return (
@@ -6,7 +7,10 @@ export default function HomePage() {
       {/* Nav */}
       <nav className="fixed top-0 inset-x-0 z-50 border-b border-white/10 bg-black/80 backdrop-blur">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <span className="text-xl font-bold tracking-tight">VlogShopper</span>
+          <Link href="/" className="flex items-center gap-2">
+            <Image src="/logo.png" alt="VlogShopper" width={32} height={32} className="rounded-lg" />
+            <span className="text-xl font-bold tracking-tight">VlogShopper</span>
+          </Link>
           <div className="flex items-center gap-4">
             <Link href="/discover" className="text-white/60 hover:text-white text-sm transition-colors">
               Discover

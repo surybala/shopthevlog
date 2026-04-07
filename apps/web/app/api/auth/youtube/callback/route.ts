@@ -1,15 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 
 export async function GET(req: NextRequest) {
   const { searchParams, origin } = req.nextUrl
   const code = searchParams.get('code')
-  const userId = searchParams.get('state')
+  const stateUserId = searchParams.get('state')
   const error = searchParams.get('error')
 
-  if (error || !code || !userId) {
+  if (error || !code || !stateUserId) {
     return NextResponse.redirect(`${origin}/dashboard/settings?tab=channels&error=youtube_denied`)
   }
+
+  // ── CSRF / state validation ──────────────────────────────────────────────
+  // Verify the state param matches the currently authenticated session.
+  // This prevents an attacker from replaying an OAuth code against a different account.
+  const supabase = createSupabaseServer()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user || user.id !== stateUserId) {
+    return NextResponse.redirect(`${origin}/dashboard/settings?tab=channels&error=youtube_denied`)
+  }
+  // ────────────────────────────────────────────────────────────────────────
 
   try {
     // Exchange code for tokens
@@ -37,15 +48,15 @@ export async function GET(req: NextRequest) {
     if (!channel) throw new Error('No YouTube channel found')
 
     const channelId = channel.id as string
-    const channelHandle = (channel.snippet?.customUrl as string | undefined)?.replace('@', '') ?? channel.snippet?.title
+    const channelHandle =
+      (channel.snippet?.customUrl as string | undefined)?.replace('@', '') ??
+      channel.snippet?.title
 
-    // Get creator
-    const creator = await prisma.creator.findUnique({ where: { userId } })
+    const creator = await prisma.creator.findUnique({ where: { userId: user.id } })
     if (!creator) throw new Error('Creator not found')
 
     const tokenExpiry = new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000)
 
-    // Upsert token
     await prisma.creatorChannelToken.upsert({
       where: { creatorId_platform: { creatorId: creator.id, platform: 'YOUTUBE' } },
       create: {
@@ -65,7 +76,6 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    // Update creator
     await prisma.creator.update({
       where: { id: creator.id },
       data: {

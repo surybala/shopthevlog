@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import prisma from '@/lib/prisma/client'
+import { createSupabaseServer } from '@/lib/supabase/server'
+import FollowButton from '@/components/FollowButton'
 
 export async function generateMetadata({ params }: { params: { handle: string } }) {
   const creator = await prisma.creator.findUnique({ where: { handle: params.handle }, select: { displayName: true } })
@@ -8,17 +10,32 @@ export async function generateMetadata({ params }: { params: { handle: string } 
 }
 
 export default async function SubscribePage({ params }: { params: { handle: string } }) {
-  const creator = await prisma.creator.findUnique({
-    where: { handle: params.handle },
-    include: {
-      tiers: {
-        where: { isActive: true },
-        orderBy: { monthlyPrice: 'asc' },
-      },
-    },
-  })
+  const [creator, supabaseData] = await Promise.all([
+    prisma.creator.findUnique({
+      where: { handle: params.handle },
+      include: { tiers: { where: { isActive: true }, orderBy: { monthlyPrice: 'asc' } } },
+    }),
+    createSupabaseServer().auth.getUser(),
+  ])
 
   if (!creator || !creator.isPublished) notFound()
+
+  const user = supabaseData.data.user
+
+  let initialFollowing = false
+  if (user) {
+    const subscriber = await prisma.subscriber.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    })
+    if (subscriber) {
+      const follow = await prisma.follow.findUnique({
+        where: { subscriberId_creatorId: { subscriberId: subscriber.id, creatorId: creator.id } },
+        select: { id: true },
+      })
+      initialFollowing = !!follow
+    }
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-16">
@@ -49,7 +66,14 @@ export default async function SubscribePage({ params }: { params: { handle: stri
             <li className="text-sm text-white/60">✓ New kit drop notifications</li>
             <li className="text-sm text-white/60">✓ Browse gear recommendations</li>
           </ul>
-          <Link href="/login?next=follow" className="mt-5 w-full inline-flex justify-center btn-ghost text-sm">Follow for free</Link>
+          <div className="mt-5 flex justify-center">
+            <FollowButton
+              creatorHandle={creator.handle}
+              initialFollowing={initialFollowing}
+              isLoggedIn={!!user}
+              className="w-full justify-center"
+            />
+          </div>
         </div>
 
         {/* Paid tiers */}

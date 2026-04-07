@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
+import { rateLimit } from '@/lib/rateLimit'
 
 async function refreshYouTubeToken(token: { refreshToken: string; creatorId: string }) {
   const res = await fetch('https://oauth2.googleapis.com/token', {
@@ -28,6 +29,11 @@ export async function POST(req: NextRequest) {
   const supabase = createSupabaseServer()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Scans are expensive — limit to 5 per minute per user
+  if (rateLimit(user.id, 'scan:trigger', { limit: 5, windowMs: 60_000 })) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
 
   const creator = await prisma.creator.findUnique({ where: { userId: user.id } })
   if (!creator) return NextResponse.json({ error: 'Creator profile not found' }, { status: 404 })

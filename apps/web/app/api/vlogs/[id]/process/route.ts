@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
+import { rateLimit } from '@/lib/rateLimit'
 
 export async function POST(
   _req: NextRequest,
@@ -11,6 +12,10 @@ export async function POST(
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Verify the vlog belongs to this creator
+  if (rateLimit(user.id, 'vlogs:process', { limit: 10, windowMs: 60_000 })) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
+
   const creator = await prisma.creator.findUnique({ where: { userId: user.id } })
   if (!creator) return NextResponse.json({ error: 'Creator profile not found' }, { status: 404 })
 

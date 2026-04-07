@@ -14,7 +14,7 @@ export function middleware(req: NextRequest) {
     const handle = match[1]
     const rest = match[2] ?? ''
     const url = req.nextUrl.clone()
-    url.pathname = `/_store/${handle}${rest}`
+    url.pathname = `/store/${handle}${rest}`
     return NextResponse.rewrite(url)
   }
 

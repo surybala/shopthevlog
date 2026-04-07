@@ -30,9 +30,6 @@ export default async function DiscoverPage({
     },
     orderBy: [{ viewCount: 'desc' }, { updatedAt: 'desc' }],
     take: 48,
-    include: {
-      creator: { select: { handle: true, displayName: true, avatarUrl: true } },
-    },
     select: {
       id: true, title: true, slug: true, coverImageUrl: true, primaryCity: true, countries: true,
       durationDays: true, accessTier: true, viewCount: true, saveCount: true,

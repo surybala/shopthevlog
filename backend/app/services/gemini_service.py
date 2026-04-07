@@ -1,8 +1,6 @@
 """
-Gemini Flash 2.5 integration for Trip Kit generation from vlog transcripts.
+Gemini Flash Lite integration for Trip Kit generation from vlog transcripts.
 Writes to TripKit / ItineraryDay / DayActivity / TripKitsOnVlogs tables.
-
-Module kept as claude_service.py so no import paths need updating.
 """
 import hashlib
 import json
@@ -32,7 +30,7 @@ def _client() -> genai.Client:
     return _gemini_client
 
 
-GEMINI_MODEL = "gemini-2.5-flash-preview-04-17"
+GEMINI_MODEL = "gemini-2.5-flash-lite-preview-06-17"
 
 # ─── Prompts ──────────────────────────────────────────────────────────────────
 
@@ -141,7 +139,7 @@ def _parse_response(raw_text: str, vlog_id: str, attempt: str) -> Optional[dict]
 
 def generate_trip_kit(vlog_id: str, transcript: str, title: str, creator_id: str) -> bool:
     """
-    Generate and persist a TripKit for a vlog using Gemini Flash 2.5.
+    Generate and persist a TripKit for a vlog using Gemini Flash Lite.
     Returns True on success.
     """
     # Guard: skip if TripKit already exists for this vlog

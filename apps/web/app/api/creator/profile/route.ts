@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
+import {
+  requireHandle,
+  requireString,
+  optionalString,
+  optionalUrl,
+  validationErrorResponse,
+} from '@/lib/validate'
 
 export async function POST(req: NextRequest) {
   const supabase = createSupabaseServer()
@@ -10,23 +17,26 @@ export async function POST(req: NextRequest) {
   const existing = await prisma.creator.findUnique({ where: { userId: user.id } })
   if (existing) return NextResponse.json({ error: 'Creator profile already exists' }, { status: 409 })
 
-  const body = await req.json()
-  const { handle, displayName, bio, location, websiteUrl } = body
-
-  if (!handle || !displayName) return NextResponse.json({ error: 'handle and displayName are required' }, { status: 422 })
+  let handle: string, displayName: string
+  let bio: string | null, location: string | null, websiteUrl: string | null
+  try {
+    const body = await req.json()
+    handle      = requireHandle(body.handle)
+    displayName = requireString(body.displayName, 'displayName', { max: 80 })
+    bio         = optionalString(body.bio, 'bio', { max: 500 })
+    location    = optionalString(body.location, 'location', { max: 100 })
+    websiteUrl  = optionalUrl(body.websiteUrl, 'websiteUrl')
+  } catch (e) {
+    const ve = validationErrorResponse(e)
+    if (ve) return NextResponse.json(ve, { status: 422 })
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
 
   const handleTaken = await prisma.creator.findUnique({ where: { handle } })
   if (handleTaken) return NextResponse.json({ error: 'Handle is already taken' }, { status: 409 })
 
   const creator = await prisma.creator.create({
-    data: {
-      userId: user.id,
-      handle,
-      displayName,
-      bio: bio || null,
-      location: location || null,
-      websiteUrl: websiteUrl || null,
-    },
+    data: { userId: user.id, handle, displayName, bio, location, websiteUrl },
   })
 
   return NextResponse.json(creator, { status: 201 })
@@ -40,26 +50,34 @@ export async function PATCH(req: NextRequest) {
   const creator = await prisma.creator.findUnique({ where: { userId: user.id } })
   if (!creator) return NextResponse.json({ error: 'Creator profile not found' }, { status: 404 })
 
-  const body = await req.json()
+  let patch: Record<string, unknown>
+  try {
+    const body = await req.json()
+    patch = {}
+    if (body.handle      !== undefined) patch.handle      = requireHandle(body.handle)
+    if (body.displayName !== undefined) patch.displayName = requireString(body.displayName, 'displayName', { max: 80 })
+    if (body.bio         !== undefined) patch.bio         = optionalString(body.bio, 'bio', { max: 500 })
+    if (body.location    !== undefined) patch.location    = optionalString(body.location, 'location', { max: 100 })
+    if (body.websiteUrl  !== undefined) patch.websiteUrl  = optionalUrl(body.websiteUrl, 'websiteUrl')
+    // Booleans — no length concern but validate type
+    if (body.isPublished !== undefined) {
+      if (typeof body.isPublished !== 'boolean') throw new Error('isPublished must be a boolean')
+      patch.isPublished = body.isPublished
+    }
+    // Image URLs
+    if (body.avatarUrl     !== undefined) patch.avatarUrl     = optionalUrl(body.avatarUrl, 'avatarUrl')
+    if (body.coverImageUrl !== undefined) patch.coverImageUrl = optionalUrl(body.coverImageUrl, 'coverImageUrl')
+  } catch (e) {
+    const ve = validationErrorResponse(e)
+    if (ve) return NextResponse.json(ve, { status: 422 })
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Invalid request body' }, { status: 400 })
+  }
 
-  if (body.handle && body.handle !== creator.handle) {
-    const taken = await prisma.creator.findUnique({ where: { handle: body.handle } })
+  if (patch.handle && patch.handle !== creator.handle) {
+    const taken = await prisma.creator.findUnique({ where: { handle: patch.handle as string } })
     if (taken) return NextResponse.json({ error: 'Handle is already taken' }, { status: 409 })
   }
 
-  const updated = await prisma.creator.update({
-    where: { id: creator.id },
-    data: {
-      ...(body.handle !== undefined && { handle: body.handle }),
-      ...(body.displayName !== undefined && { displayName: body.displayName }),
-      ...(body.bio !== undefined && { bio: body.bio || null }),
-      ...(body.location !== undefined && { location: body.location || null }),
-      ...(body.websiteUrl !== undefined && { websiteUrl: body.websiteUrl || null }),
-      ...(body.isPublished !== undefined && { isPublished: body.isPublished }),
-      ...(body.avatarUrl !== undefined && { avatarUrl: body.avatarUrl }),
-      ...(body.coverImageUrl !== undefined && { coverImageUrl: body.coverImageUrl }),
-    },
-  })
-
+  const updated = await prisma.creator.update({ where: { id: creator.id }, data: patch })
   return NextResponse.json(updated)
 }

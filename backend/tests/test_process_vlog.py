@@ -1,286 +1,200 @@
 """
-Tests for app.tasks.process_vlog — the transcribe → generate → rebuild pipeline.
+Tests for app.tasks.process_vlog — the transcribe → generate TripKit pipeline.
+
+All external calls (PostgreSQL, Gemini, Whisper) are fully mocked via the
+FakePgClient from conftest.py and unittest.mock patches.
 """
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
-
-# ─── module under test ───────────────────────────────────────────────────────
-from app.tasks.process_vlog import process_vlog_task
-
-# build_feed_for_user is imported INSIDE process_vlog_task's function body
-# (not as a module-level import), so it must be patched at the source module.
-_FEED_PATCH = "app.services.feed_ranking_service.build_feed_for_user"
+from tests.conftest import FakePgClient
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
-def _make_db(status: str | None, title: str = "Test Vlog") -> MagicMock:
-    db = MagicMock()
-    # Counts scoped at the db level so they survive across .table() calls.
-    _vlogs_calls = [0]
+def _make_vlog_pg(status: str, title: str = "Test Vlog") -> FakePgClient:
+    """PgClient whose first fetchone returns a vlog row with the given status."""
+    return FakePgClient(rows=[{
+        "id": "vlog-001",
+        "processingStatus": status,
+        "creatorId": "creator-001",
+        "title": title,
+    }])
 
-    def table_side_effect(name):
-        t = MagicMock()
-        for m in ("select", "eq", "update", "single", "limit", "filter"):
-            getattr(t, m).return_value = t
 
-        if name == "vlogs":
-            def execute_vlogs():
-                idx = _vlogs_calls[0]
-                _vlogs_calls[0] += 1
-                if idx == 0:
-                    # status check (.single().execute())
-                    return MagicMock(data={"processing_status": status})
-                if idx == 1:
-                    # title fetch (.single().execute())
-                    return MagicMock(data={"title": title})
-                return MagicMock(data=[])   # update / other calls
-
-            t.execute.side_effect = execute_vlogs
-
-        elif name == "profiles":
-            t.execute.return_value = MagicMock(data=[{"id": "u1"}, {"id": "u2"}])
-
-        else:
-            t.execute.return_value = MagicMock(data=[])
-
-        return t
-
-    db.table.side_effect = table_side_effect
-    return db
+def _make_empty_pg() -> FakePgClient:
+    """PgClient that returns no rows (used for UPDATE calls)."""
+    return FakePgClient(rows=[])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Duplicate / in-flight guards
+# Guard conditions — already in a terminal / in-progress state
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestProcessVlogGuards:
+
     @pytest.mark.asyncio
     async def test_already_transcribing_is_skipped(self):
-        db = _make_db(status="transcribing")
+        pg = _make_vlog_pg("TRANSCRIBING")
         with (
-            patch("app.tasks.process_vlog.get_supabase", return_value=db),
+            patch("app.tasks.process_vlog.PgClient", return_value=pg),
             patch("app.tasks.process_vlog.transcribe_vlog") as mock_transcribe,
         ):
+            from app.tasks.process_vlog import process_vlog_task
             await process_vlog_task("vlog-001")
             mock_transcribe.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_already_ready_is_skipped(self):
-        db = _make_db(status="ready")
+    async def test_already_extracting_is_skipped(self):
+        pg = _make_vlog_pg("EXTRACTING")
         with (
-            patch("app.tasks.process_vlog.get_supabase", return_value=db),
+            patch("app.tasks.process_vlog.PgClient", return_value=pg),
             patch("app.tasks.process_vlog.transcribe_vlog") as mock_transcribe,
         ):
+            from app.tasks.process_vlog import process_vlog_task
             await process_vlog_task("vlog-001")
             mock_transcribe.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_planning_status_proceeds(self):
-        """'planning' is queued-but-not-started — must NOT be skipped."""
-        db = _make_db(status="planning")
+    async def test_already_complete_is_skipped(self):
+        pg = _make_vlog_pg("COMPLETE")
         with (
-            patch("app.tasks.process_vlog.get_supabase", return_value=db),
-            patch("app.tasks.process_vlog.transcribe_vlog", return_value="transcript text") as mock_transcribe,
-            patch("app.tasks.process_vlog.generate_itinerary", return_value=True),
-            patch(_FEED_PATCH),
+            patch("app.tasks.process_vlog.PgClient", return_value=pg),
+            patch("app.tasks.process_vlog.transcribe_vlog") as mock_transcribe,
         ):
+            from app.tasks.process_vlog import process_vlog_task
+            await process_vlog_task("vlog-001")
+            mock_transcribe.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_pending_status_proceeds(self):
+        pg = _make_vlog_pg("PENDING")
+        with (
+            patch("app.tasks.process_vlog.PgClient", return_value=pg),
+            patch("app.tasks.process_vlog.transcribe_vlog", return_value="transcript") as mock_transcribe,
+            patch("app.tasks.process_vlog.generate_trip_kit", return_value=True),
+        ):
+            from app.tasks.process_vlog import process_vlog_task
             await process_vlog_task("vlog-001")
             mock_transcribe.assert_called_once_with("vlog-001")
 
     @pytest.mark.asyncio
-    async def test_pending_status_proceeds(self):
-        db = _make_db(status="pending")
+    async def test_failed_status_proceeds(self):
+        """FAILED vlogs should be retried."""
+        pg = _make_vlog_pg("FAILED")
         with (
-            patch("app.tasks.process_vlog.get_supabase", return_value=db),
+            patch("app.tasks.process_vlog.PgClient", return_value=pg),
             patch("app.tasks.process_vlog.transcribe_vlog", return_value="transcript") as mock_transcribe,
-            patch("app.tasks.process_vlog.generate_itinerary", return_value=True),
-            patch(_FEED_PATCH),
+            patch("app.tasks.process_vlog.generate_trip_kit", return_value=True),
         ):
+            from app.tasks.process_vlog import process_vlog_task
             await process_vlog_task("vlog-001")
-            mock_transcribe.assert_called_once()
+            mock_transcribe.assert_called_once_with("vlog-001")
 
     @pytest.mark.asyncio
-    async def test_none_status_proceeds(self):
-        """If the vlog row is missing or status is null, task should still run."""
-        db = _make_db(status=None)
+    async def test_vlog_not_found_returns_early(self):
+        """If the vlog row doesn't exist, return without touching anything."""
+        pg = FakePgClient(rows=[])   # fetchone → None
         with (
-            patch("app.tasks.process_vlog.get_supabase", return_value=db),
-            patch("app.tasks.process_vlog.transcribe_vlog", return_value="transcript") as mock_transcribe,
-            patch("app.tasks.process_vlog.generate_itinerary", return_value=True),
-            patch(_FEED_PATCH),
+            patch("app.tasks.process_vlog.PgClient", return_value=pg),
+            patch("app.tasks.process_vlog.transcribe_vlog") as mock_transcribe,
         ):
-            await process_vlog_task("vlog-001")
-            mock_transcribe.assert_called_once()
+            from app.tasks.process_vlog import process_vlog_task
+            await process_vlog_task("vlog-does-not-exist")
+            mock_transcribe.assert_not_called()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 1: transcription failure
+# Transcription step
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestProcessVlogTranscription:
+class TestTranscriptionStep:
+
     @pytest.mark.asyncio
     async def test_transcription_failure_aborts_pipeline(self):
-        db = _make_db(status="planning")
+        pg = _make_vlog_pg("PENDING")
         with (
-            patch("app.tasks.process_vlog.get_supabase", return_value=db),
+            patch("app.tasks.process_vlog.PgClient", return_value=pg),
             patch("app.tasks.process_vlog.transcribe_vlog", return_value=None),
-            patch("app.tasks.process_vlog.generate_itinerary") as mock_gen,
+            patch("app.tasks.process_vlog.generate_trip_kit") as mock_gen,
         ):
+            from app.tasks.process_vlog import process_vlog_task
             await process_vlog_task("vlog-001")
             mock_gen.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_transcription_failure_does_not_set_failed_status(self):
-        """transcribe_vlog sets the status itself; process_vlog_task just returns."""
-        db = _make_db(status="planning")
-        failed_updates: list[str] = []
-        original = db.table.side_effect
-
-        def capturing(name):
-            t = original(name)
-            if name == "vlogs":
-                _t = t
-
-                def track(data):
-                    if data.get("processing_status") == "failed":
-                        failed_updates.append("failed")
-                    return _t  # return for chaining — avoids recursive side_effect
-
-                t.update.side_effect = track
-            return t
-
-        db.table.side_effect = capturing
-
+    async def test_transcription_success_calls_generate(self):
+        pg = _make_vlog_pg("PENDING")
         with (
-            patch("app.tasks.process_vlog.get_supabase", return_value=db),
-            patch("app.tasks.process_vlog.transcribe_vlog", return_value=None),
-            patch("app.tasks.process_vlog.generate_itinerary"),
+            patch("app.tasks.process_vlog.PgClient", return_value=pg),
+            patch("app.tasks.process_vlog.transcribe_vlog", return_value="full transcript"),
+            patch("app.tasks.process_vlog.generate_trip_kit", return_value=True) as mock_gen,
         ):
+            from app.tasks.process_vlog import process_vlog_task
             await process_vlog_task("vlog-001")
-
-        assert not failed_updates
+            mock_gen.assert_called_once_with(
+                "vlog-001", "full transcript", "Test Vlog", "creator-001"
+            )
 
     @pytest.mark.asyncio
-    async def test_status_stamped_transcribing_before_work_starts(self):
-        """The task must update status to 'transcribing' immediately."""
-        db = _make_db(status="planning")
-        stamped: list[bool] = []
-        original = db.table.side_effect
-
-        def capturing(name):
-            t = original(name)
-            if name == "vlogs":
-                _t = t
-
-                def track(data):
-                    if data.get("processing_status") == "transcribing":
-                        stamped.append(True)
-                    return _t
-
-                t.update.side_effect = track
-            return t
-
-        db.table.side_effect = capturing
-
+    async def test_generate_failure_logged_but_does_not_propagate(self):
+        pg = _make_vlog_pg("PENDING")
         with (
-            patch("app.tasks.process_vlog.get_supabase", return_value=db),
-            patch("app.tasks.process_vlog.transcribe_vlog", return_value=None),
-        ):
-            await process_vlog_task("vlog-001")
-
-        assert stamped, "Expected processing_status to be set to 'transcribing'"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Step 3: itinerary generation failure
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestProcessVlogItineraryGeneration:
-    @pytest.mark.asyncio
-    async def test_itinerary_failure_aborts_feed_rebuild(self):
-        db = _make_db(status="planning")
-        with (
-            patch("app.tasks.process_vlog.get_supabase", return_value=db),
+            patch("app.tasks.process_vlog.PgClient", return_value=pg),
             patch("app.tasks.process_vlog.transcribe_vlog", return_value="transcript"),
-            patch("app.tasks.process_vlog.generate_itinerary", return_value=False),
-            patch(_FEED_PATCH) as mock_feed,
+            patch("app.tasks.process_vlog.generate_trip_kit", return_value=False),
         ):
-            await process_vlog_task("vlog-001")
-            mock_feed.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_success_rebuilds_feed_for_all_users(self):
-        db = _make_db(status="planning")
-        with (
-            patch("app.tasks.process_vlog.get_supabase", return_value=db),
-            patch("app.tasks.process_vlog.transcribe_vlog", return_value="transcript"),
-            patch("app.tasks.process_vlog.generate_itinerary", return_value=True),
-            patch(_FEED_PATCH) as mock_feed,
-        ):
-            await process_vlog_task("vlog-001")
-
-        # Two users in mock profiles table → should rebuild both feeds
-        assert mock_feed.call_count == 2
-        called_user_ids = {c.args[0] for c in mock_feed.call_args_list}
-        assert called_user_ids == {"u1", "u2"}
-
-    @pytest.mark.asyncio
-    async def test_feed_rebuild_failure_does_not_crash_task(self):
-        """A failure in one user's feed rebuild must not propagate as an exception."""
-        db = _make_db(status="planning")
-        with (
-            patch("app.tasks.process_vlog.get_supabase", return_value=db),
-            patch("app.tasks.process_vlog.transcribe_vlog", return_value="transcript"),
-            patch("app.tasks.process_vlog.generate_itinerary", return_value=True),
-            patch(_FEED_PATCH, side_effect=RuntimeError("DB down")),
-        ):
+            from app.tasks.process_vlog import process_vlog_task
             # Must not raise
             await process_vlog_task("vlog-001")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Unexpected exception handling
+# Exception handling
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestProcessVlogExceptionHandling:
-    @pytest.mark.asyncio
-    async def test_unexpected_exception_sets_failed_status(self):
-        db = _make_db(status="planning")
-        failed_updates: list[dict] = []
-        original = db.table.side_effect
-
-        def capturing(name):
-            t = original(name)
-            if name == "vlogs":
-                _t = t
-
-                def track(data):
-                    if data.get("processing_status") == "failed":
-                        failed_updates.append(data)
-                    return _t
-
-                t.update.side_effect = track
-            return t
-
-        db.table.side_effect = capturing
-
-        with (
-            patch("app.tasks.process_vlog.get_supabase", return_value=db),
-            patch("app.tasks.process_vlog.transcribe_vlog", side_effect=RuntimeError("boom")),
-        ):
-            await process_vlog_task("vlog-001")
-
-        assert failed_updates, "Expected processing_status='failed' to be set on unexpected error"
-        assert failed_updates[0]["processing_error"] == "boom"
+class TestExceptionHandling:
 
     @pytest.mark.asyncio
     async def test_unexpected_exception_does_not_propagate(self):
-        db = _make_db(status="planning")
+        pg = _make_vlog_pg("PENDING")
         with (
-            patch("app.tasks.process_vlog.get_supabase", return_value=db),
-            patch("app.tasks.process_vlog.transcribe_vlog", side_effect=ValueError("bad value")),
+            patch("app.tasks.process_vlog.PgClient", return_value=pg),
+            patch("app.tasks.process_vlog.transcribe_vlog",
+                  side_effect=RuntimeError("unexpected boom")),
+            patch("app.tasks.process_vlog._mark_vlog_failed") as mock_mark_failed,
         ):
-            # Must not raise — errors are caught and logged internally
+            from app.tasks.process_vlog import process_vlog_task
+            # Must not raise
+            await process_vlog_task("vlog-001")
+
+        mock_mark_failed.assert_called_once_with("vlog-001")
+
+    @pytest.mark.asyncio
+    async def test_mark_failed_called_on_exception(self):
+        pg = _make_vlog_pg("PENDING")
+        with (
+            patch("app.tasks.process_vlog.PgClient", return_value=pg),
+            patch("app.tasks.process_vlog.transcribe_vlog",
+                  side_effect=ValueError("bad data")),
+            patch("app.tasks.process_vlog._mark_vlog_failed") as mock_mark_failed,
+        ):
+            from app.tasks.process_vlog import process_vlog_task
+            await process_vlog_task("vlog-001")
+
+        mock_mark_failed.assert_called_once_with("vlog-001")
+
+    @pytest.mark.asyncio
+    async def test_mark_failed_error_itself_does_not_propagate(self):
+        """Even if _mark_vlog_failed crashes, the task should swallow the error."""
+        pg = _make_vlog_pg("PENDING")
+        with (
+            patch("app.tasks.process_vlog.PgClient", return_value=pg),
+            patch("app.tasks.process_vlog.transcribe_vlog",
+                  side_effect=RuntimeError("boom")),
+            patch("app.tasks.process_vlog._mark_vlog_failed",
+                  side_effect=RuntimeError("db also down")),
+        ):
+            from app.tasks.process_vlog import process_vlog_task
+            # Must still not raise
             await process_vlog_task("vlog-001")

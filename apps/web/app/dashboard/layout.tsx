@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 import DashboardNav from './DashboardNav'
@@ -17,7 +18,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
       {/* Sidebar */}
       <aside className="w-60 shrink-0 border-r border-white/10 flex flex-col">
         <div className="h-16 flex items-center px-6 border-b border-white/10">
-          <Link href="/" className="text-lg font-bold text-white">VlogShopper</Link>
+          <Link href="/" className="flex items-center gap-2">
+              <Image src="/logo.png" alt="VlogShopper" width={28} height={28} className="rounded-md" />
+              <span className="text-lg font-bold text-white">VlogShopper</span>
+            </Link>
         </div>
 
         <DashboardNav handle={creator?.handle ?? null} />

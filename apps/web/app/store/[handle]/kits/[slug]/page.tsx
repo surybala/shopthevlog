@@ -162,7 +162,6 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 mt-2 text-xs text-white/70 hover:text-white border border-white/10 px-3 py-1.5 rounded-lg hover:border-white/30 transition-colors"
-                          onClick={() => {}} // click tracking via redirect
                         >
                           {activity.affiliateLink.priceFrom && <span>{activity.affiliateLink.priceFrom}</span>}
                           Book on {activity.affiliateLink.provider.replace(/_/g, ' ')} ↗
