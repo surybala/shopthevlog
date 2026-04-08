@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createSupabaseServer } from '@/lib/supabase/server'
@@ -7,10 +8,14 @@ export default async function HomePage() {
   const supabase = createSupabaseServer()
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Check if logged-in user is a creator (to decide where to send them)
-  const creator = user
-    ? await prisma.creator.findUnique({ where: { userId: user.id }, select: { handle: true } })
-    : null
+  // Redirect creators straight to their dashboard
+  if (user) {
+    const creator = await prisma.creator.findUnique({
+      where: { userId: user.id },
+      select: { handle: true },
+    })
+    if (creator) redirect('/dashboard')
+  }
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -26,14 +31,10 @@ export default async function HomePage() {
               Discover
             </Link>
             {user ? (
-              <>
-                <Link href="/account" className="text-white/60 hover:text-white text-sm transition-colors">
-                  My Account
-                </Link>
-                <Link href={creator ? '/dashboard' : '/account'} className="btn-primary text-sm">
-                  {creator ? 'Creator Dashboard' : 'My Account'}
-                </Link>
-              </>
+              // Creators are redirected before reaching here — this is subscribers only
+              <Link href="/account" className="btn-primary text-sm">
+                My Account
+              </Link>
             ) : (
               <>
                 <Link href="/login" className="text-white/60 hover:text-white text-sm transition-colors">
