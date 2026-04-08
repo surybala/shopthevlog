@@ -200,13 +200,19 @@ def _download_audio(url: str, tmpdir: str) -> Optional[str]:
         compressed_path = os.path.join(tmpdir, "audio.mp3")
 
         # Try each player client in order until one works.
-        # ios is the most reliable for bypassing YouTube 403s in server envs.
-        player_clients = ["ios", "android", "web_creator", "web"]
+        # - ios / android: bypass 403 bot-detection; need simple "bestaudio/best"
+        #   because they don't advertise the same container formats as the web client.
+        # - tv_embedded: works for many videos that require sign-in on other clients.
+        # - web_creator / web: last-resort fallbacks.
+        player_clients = ["ios", "android", "tv_embedded", "web_creator", "web"]
         last_error: Optional[Exception] = None
 
         for client in player_clients:
             ydl_opts = {
-                "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[ext=opus]/bestaudio/best",
+                # Keep the selector simple so it works across all player clients.
+                # Container-specific selectors (ext=m4a, etc.) cause "format not
+                # available" errors on mobile clients that only expose generic streams.
+                "format": "bestaudio/best",
                 "outtmpl": raw_path,
                 "quiet": True,
                 "no_warnings": True,
