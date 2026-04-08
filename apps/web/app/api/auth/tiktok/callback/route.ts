@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
+import crypto from 'crypto'
+
+/** Recompute the challenge from verifier so we can log it and cross-check. */
+async function recomputeChallenge(verifier: string): Promise<string> {
+  const data   = Buffer.from(verifier, 'ascii')
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return Buffer.from(digest)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '')
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams, origin } = req.nextUrl
@@ -21,13 +33,15 @@ export async function GET(req: NextRequest) {
   // PKCE: read verifier from incoming request cookies
   const codeVerifier = req.cookies.get('tiktok_pkce_verifier')?.value
   if (!codeVerifier) {
-    console.error('[TikTok PKCE] verifier cookie missing — all cookies:', req.cookies.getAll().map(c => c.name))
+    console.error('[TikTok PKCE] verifier cookie missing — cookies:', req.cookies.getAll().map(c => c.name))
     return fail('tiktok_pkce_missing')
   }
 
-  // Debug: confirm the verifier we're sending to the token endpoint
-  console.log('[TikTok PKCE] verifier[:8] in callback =', codeVerifier.slice(0, 8))
-  console.log('[TikTok PKCE] verifier length =', codeVerifier.length)
+  // Recompute challenge to confirm it matches what was sent during initiation
+  const recomputed = await recomputeChallenge(codeVerifier)
+  console.log('[TikTok PKCE] verifier in callback   =', codeVerifier)
+  console.log('[TikTok PKCE] recomputed challenge   =', recomputed)
+  console.log('[TikTok PKCE] verifier length        =', codeVerifier.length)
 
   try {
     const tokenBody = new URLSearchParams({
@@ -39,14 +53,7 @@ export async function GET(req: NextRequest) {
       code_verifier: codeVerifier,
     })
 
-    // Debug: log the exact body being sent (omit secret from log)
-    console.log('[TikTok] token body (no secret):', {
-      client_key:    process.env.TIKTOK_CLIENT_KEY,
-      code:          code.slice(0, 8) + '…',
-      grant_type:    'authorization_code',
-      redirect_uri:  process.env.TIKTOK_REDIRECT_URI,
-      code_verifier: codeVerifier.slice(0, 8) + '… (len=' + codeVerifier.length + ')',
-    })
+    console.log('[TikTok] token request body (raw):', tokenBody.toString().replace(process.env.TIKTOK_CLIENT_SECRET!, '***'))
 
     const tokenRes = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
       method: 'POST',
@@ -57,17 +64,14 @@ export async function GET(req: NextRequest) {
       body: tokenBody,
     })
 
-    if (!tokenRes.ok) {
-      const body = await tokenRes.text()
-      console.error('[TikTok] token exchange HTTP error:', tokenRes.status, body)
-      return fail('tiktok_token_failed')
-    }
+    const responseText = await tokenRes.text()
+    console.log('[TikTok] token response status:', tokenRes.status)
+    console.log('[TikTok] token response body:', responseText)
 
-    const tokens = await tokenRes.json()
-    if (!tokens.access_token) {
-      console.error('[TikTok] no access_token in response:', tokens)
-      return fail('tiktok_token_failed')
-    }
+    if (!tokenRes.ok) return fail('tiktok_token_failed')
+
+    const tokens = JSON.parse(responseText)
+    if (!tokens.access_token) return fail('tiktok_token_failed')
 
     // Fetch TikTok user profile
     const userRes = await fetch(

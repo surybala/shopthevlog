@@ -4,23 +4,29 @@ import crypto from 'crypto'
 
 /**
  * PKCE code_verifier — RFC 7636 §4.1
- * Must use only unreserved URI chars: [A-Z a-z 0-9 - . _ ~], length 43–128.
- * We use base64url (subset of unreserved chars) from 32 random bytes = 43 chars.
+ * Alphanumeric only (subset of unreserved chars) to avoid any platform-specific
+ * handling of - and _ in TikTok's PKCE validation.
  */
 function generateCodeVerifier(): string {
-  return crypto.randomBytes(32).toString('base64url') // 32 bytes → 43 base64url chars
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  const bytes = crypto.randomBytes(64)
+  // Map each random byte to a char — 64 chars, well within 43–128 limit
+  return Array.from(bytes, b => chars[b % chars.length]).join('')
 }
 
 /**
  * PKCE code_challenge — RFC 7636 §4.2
- * BASE64URL(SHA256(ASCII(code_verifier))) — no padding.
- * We manually convert base64 → base64url to avoid Node.js version quirks
- * with Hash.digest('base64url').
+ * BASE64URL(SHA256(ASCII(code_verifier))) with no padding.
+ * Uses Web Crypto (crypto.subtle) for maximum standards compliance.
  */
-function generateCodeChallenge(verifier: string): string {
-  const hash = crypto.createHash('sha256').update(verifier).digest('base64')
-  // Convert standard base64 → base64url (RFC 4648 §5)
-  return hash.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+async function generateCodeChallenge(verifier: string): Promise<string> {
+  const data   = Buffer.from(verifier, 'ascii')
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return Buffer.from(digest)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '')
 }
 
 export async function GET() {
@@ -33,11 +39,11 @@ export async function GET() {
   }
 
   const codeVerifier  = generateCodeVerifier()
-  const codeChallenge = generateCodeChallenge(codeVerifier)
+  const codeChallenge = await generateCodeChallenge(codeVerifier)
 
-  // Debug: log first 8 chars of each so we can verify they match in callback
-  console.log('[TikTok PKCE] verifier[:8]  =', codeVerifier.slice(0, 8))
-  console.log('[TikTok PKCE] challenge[:8] =', codeChallenge.slice(0, 8))
+  // Full values in logs — remove once working
+  console.log('[TikTok PKCE] verifier  =', codeVerifier)
+  console.log('[TikTok PKCE] challenge =', codeChallenge)
 
   const params = new URLSearchParams({
     client_key:            process.env.TIKTOK_CLIENT_KEY,
@@ -49,11 +55,10 @@ export async function GET() {
     code_challenge_method: 'S256',
   })
 
-  // Cookie must be set on the response object — next/headers cookies().set()
-  // does NOT attach Set-Cookie headers to redirect responses.
-  const response = NextResponse.redirect(
-    `https://www.tiktok.com/v2/auth/authorize/?${params}`
-  )
+  const authUrl = `https://www.tiktok.com/v2/auth/authorize/?${params}`
+  console.log('[TikTok] auth URL =', authUrl)
+
+  const response = NextResponse.redirect(authUrl)
   response.cookies.set('tiktok_pkce_verifier', codeVerifier, {
     httpOnly: true,
     secure:   process.env.NODE_ENV === 'production',
