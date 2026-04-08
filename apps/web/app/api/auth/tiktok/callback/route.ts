@@ -13,19 +13,17 @@ export async function GET(req: NextRequest) {
 
   if (error || !code || !stateUserId) return fail('tiktok_denied')
 
-  // CSRF / state validation
   const supabase = createSupabaseServer()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user || user.id !== stateUserId) return fail('tiktok_denied')
 
-  // PKCE: read verifier from the incoming request cookies
   const codeVerifier = req.cookies.get('tiktok_pkce_verifier')?.value
   if (!codeVerifier) {
-    console.error('[TikTok PKCE] verifier cookie missing — cookies:', req.cookies.getAll().map(c => c.name))
+    console.error('[TikTok PKCE] verifier cookie missing')
     return fail('tiktok_pkce_missing')
   }
 
-  console.log('[TikTok PKCE] verifier in callback (len=' + codeVerifier.length + '):', codeVerifier.slice(0, 8) + '…')
+  console.log('[TikTok PKCE] verifier in callback =', codeVerifier)
 
   try {
     const tokenBody = new URLSearchParams({
@@ -55,7 +53,6 @@ export async function GET(req: NextRequest) {
     const tokens = JSON.parse(responseText)
     if (!tokens.access_token) return fail('tiktok_token_failed')
 
-    // Fetch TikTok user profile
     const userRes = await fetch(
       'https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url,username',
       { headers: { Authorization: `Bearer ${tokens.access_token}` } }
