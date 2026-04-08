@@ -28,9 +28,10 @@ export async function GET(req: NextRequest) {
   console.log('[TikTok PKCE] verifier in callback (len=' + codeVerifier.length + '):', codeVerifier.slice(0, 8) + '…')
 
   try {
+    // TikTok PKCE: try without client_secret (PKCE is a public-client flow;
+    // sending client_secret + code_verifier together may confuse their validator).
     const tokenBody = new URLSearchParams({
       client_key:    process.env.TIKTOK_CLIENT_KEY!,
-      client_secret: process.env.TIKTOK_CLIENT_SECRET!,
       code,
       grant_type:    'authorization_code',
       redirect_uri:  process.env.TIKTOK_REDIRECT_URI!,
