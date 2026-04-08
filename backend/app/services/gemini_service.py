@@ -34,9 +34,16 @@ GEMINI_MODEL = "gemini-2.5-flash"
 
 # ─── Prompts ──────────────────────────────────────────────────────────────────
 
-ITINERARY_SYSTEM_PROMPT = """You are a professional travel itinerary expert. Given a travel vlog title and transcript, create a detailed day-by-day itinerary.
+ITINERARY_SYSTEM_PROMPT = """You are a professional travel itinerary expert. Given a vlog title and transcript, first decide whether the content is travel-related.
 
-CRITICAL: Your entire response must be a single valid JSON object. No markdown, no backticks. Start with { end with }.
+STEP 1 — TRAVEL CHECK:
+A vlog is travel-related if it features a person visiting one or more real-world locations (cities, countries, landmarks, restaurants, hotels, attractions, etc.) as a meaningful part of the content.
+
+If the transcript contains NO meaningful travel or location content (e.g. it is about sports, cooking at home, gaming, product reviews, juggling, fitness, music, etc.) respond with EXACTLY this JSON and nothing else:
+{"not_travel": true}
+
+STEP 2 — ITINERARY (only if travel-related):
+Your entire response must be a single valid JSON object. No markdown, no backticks. Start with { end with }.
 
 JSON schema:
 {
@@ -71,13 +78,16 @@ JSON schema:
 }
 
 Rules:
-- Extract all locations and activities mentioned in the transcript.
+- Only use locations and activities actually mentioned in the transcript. Do NOT invent destinations.
 - At least 3 days, max 10 days. Exactly 4 activities per day.
 - Keep descriptions under 30 words.
 - YOUR ENTIRE RESPONSE IS THE JSON OBJECT."""
 
 ITINERARY_COMPACT_PROMPT = """Travel itinerary expert. ONE valid JSON object only, no markdown.
 
+If the content is NOT travel-related (no real locations visited), respond with exactly: {"not_travel": true}
+
+Otherwise use this schema — only real locations from the transcript, never invented:
 {"title":"string","summary":"string","total_days":integer,"destinations":["string"],"countries":["string"],"primary_city":"string","estimated_budget_usd":null,"days":[{"day_number":integer,"city":"string","country":"string","title":"string","summary":"string","activities":[{"sort_order":integer,"type":"ATTRACTION","title":"string","description":"string","time":null,"latitude":null,"longitude":null,"image_url":null}]}]}
 
 5 days max, 3 activities per day, one-sentence descriptions. JSON ONLY."""
@@ -176,6 +186,12 @@ def generate_trip_kit(vlog_id: str, transcript: str, title: str, creator_id: str
 
     if itinerary_data is None:
         _mark_vlog_failed(vlog_id)
+        return False
+
+    # Non-travel content — model explicitly said so, don't hallucinate a kit.
+    if itinerary_data.get("not_travel"):
+        logger.info(f"Vlog {vlog_id} is not travel-related — skipping kit generation")
+        _mark_vlog_not_travel(vlog_id)
         return False
 
     try:
@@ -300,6 +316,17 @@ def _mark_vlog_failed(vlog_id: str):
     with PgClient() as db:
         db.execute(
             'UPDATE "Vlog" SET "processingStatus" = \'FAILED\' WHERE id = %s',
+            (vlog_id,)
+        )
+
+
+def _mark_vlog_not_travel(vlog_id: str):
+    """Mark a vlog as COMPLETE but with no kit — it simply isn't travel content."""
+    with PgClient() as db:
+        db.execute(
+            '''UPDATE "Vlog"
+               SET "processingStatus" = 'COMPLETE', "processedAt" = NOW()
+               WHERE id = %s''',
             (vlog_id,)
         )
 
