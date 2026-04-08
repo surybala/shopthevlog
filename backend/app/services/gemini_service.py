@@ -30,7 +30,7 @@ def _client() -> genai.Client:
     return _gemini_client
 
 
-GEMINI_MODEL = "gemini-2.5-flash-lite-preview-06-17"
+GEMINI_MODEL = "gemini-2.5-flash"
 
 # ─── Prompts ──────────────────────────────────────────────────────────────────
 
