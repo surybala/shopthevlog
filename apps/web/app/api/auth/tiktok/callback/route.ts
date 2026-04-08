@@ -1,18 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
-import crypto from 'crypto'
-
-/** Recompute the challenge from verifier so we can log it and cross-check. */
-async function recomputeChallenge(verifier: string): Promise<string> {
-  const data   = Buffer.from(verifier, 'ascii')
-  const digest = await crypto.subtle.digest('SHA-256', data)
-  return Buffer.from(digest)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '')
-}
 
 export async function GET(req: NextRequest) {
   const { searchParams, origin } = req.nextUrl
@@ -30,18 +18,14 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user || user.id !== stateUserId) return fail('tiktok_denied')
 
-  // PKCE: read verifier from incoming request cookies
+  // PKCE: read verifier from the incoming request cookies
   const codeVerifier = req.cookies.get('tiktok_pkce_verifier')?.value
   if (!codeVerifier) {
     console.error('[TikTok PKCE] verifier cookie missing — cookies:', req.cookies.getAll().map(c => c.name))
     return fail('tiktok_pkce_missing')
   }
 
-  // Recompute challenge to confirm it matches what was sent during initiation
-  const recomputed = await recomputeChallenge(codeVerifier)
-  console.log('[TikTok PKCE] verifier in callback   =', codeVerifier)
-  console.log('[TikTok PKCE] recomputed challenge   =', recomputed)
-  console.log('[TikTok PKCE] verifier length        =', codeVerifier.length)
+  console.log('[TikTok PKCE] verifier in callback (len=' + codeVerifier.length + '):', codeVerifier.slice(0, 8) + '…')
 
   try {
     const tokenBody = new URLSearchParams({
@@ -52,8 +36,6 @@ export async function GET(req: NextRequest) {
       redirect_uri:  process.env.TIKTOK_REDIRECT_URI!,
       code_verifier: codeVerifier,
     })
-
-    console.log('[TikTok] token request body (raw):', tokenBody.toString().replace(process.env.TIKTOK_CLIENT_SECRET!, '***'))
 
     const tokenRes = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
       method: 'POST',
