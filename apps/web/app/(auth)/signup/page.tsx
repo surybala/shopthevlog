@@ -16,10 +16,23 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const supabase = createSupabaseClient()
 
+  async function checkWhitelist(emailToCheck: string): Promise<boolean> {
+    const res = await fetch(`/api/auth/whitelist-check?email=${encodeURIComponent(emailToCheck)}`)
+    const json = await res.json()
+    return json.allowed === true
+  }
+
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
+
+    const allowed = await checkWhitelist(email)
+    if (!allowed) {
+      setError("You're not on the early-access list yet. Join the waitlist and we'll reach out when a spot opens.")
+      setLoading(false)
+      return
+    }
 
     const { data, error: signupError } = await supabase.auth.signUp({
       email,
@@ -42,6 +55,8 @@ export default function SignupPage() {
   }
 
   async function handleGoogleSignup() {
+    // Note: for Google OAuth we can't check the email before the OAuth dance,
+    // so the whitelist check happens in /auth/callback after the flow completes.
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {

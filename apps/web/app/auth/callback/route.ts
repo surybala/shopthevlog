@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
+import { isWhitelisted } from '@/lib/whitelist'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl
@@ -14,6 +15,11 @@ export async function GET(request: NextRequest) {
     if (!error) {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
+        // Whitelist check — bounce non-approved users before they reach the app
+        if (user.email && !isWhitelisted(user.email)) {
+          return NextResponse.redirect(`${origin}/waitlist`)
+        }
+
         const creator = await prisma.creator.findUnique({ where: { userId: user.id } })
         const redirectTo = creator ? next : '/onboarding'
         return NextResponse.redirect(`${origin}${redirectTo}`)
