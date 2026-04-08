@@ -13,45 +13,42 @@ export async function GET(req: NextRequest) {
 
   if (error || !code || !stateUserId) return fail('tiktok_denied')
 
+  // CSRF: verify state matches the authenticated session
   const supabase = createSupabaseServer()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user || user.id !== stateUserId) return fail('tiktok_denied')
 
+  // PKCE: retrieve verifier stored during initiation
   const codeVerifier = req.cookies.get('tiktok_pkce_verifier')?.value
-  if (!codeVerifier) {
-    console.error('[TikTok PKCE] verifier cookie missing')
-    return fail('tiktok_pkce_missing')
-  }
-
-  console.log('[TikTok PKCE] verifier in callback =', codeVerifier)
+  if (!codeVerifier) return fail('tiktok_pkce_missing')
 
   try {
-    const tokenBody = new URLSearchParams({
-      client_key:    process.env.TIKTOK_CLIENT_KEY!,
-      client_secret: process.env.TIKTOK_CLIENT_SECRET!,
-      code,
-      grant_type:    'authorization_code',
-      redirect_uri:  process.env.TIKTOK_REDIRECT_URI!,
-      code_verifier: codeVerifier,
-    })
-
     const tokenRes = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
       method: 'POST',
       headers: {
         'Content-Type':  'application/x-www-form-urlencoded',
         'Cache-Control': 'no-cache',
       },
-      body: tokenBody,
+      body: new URLSearchParams({
+        client_key:    process.env.TIKTOK_CLIENT_KEY!,
+        client_secret: process.env.TIKTOK_CLIENT_SECRET!,
+        code,
+        grant_type:    'authorization_code',
+        redirect_uri:  process.env.TIKTOK_REDIRECT_URI!,
+        code_verifier: codeVerifier,
+      }),
     })
 
-    const responseText = await tokenRes.text()
-    console.log('[TikTok] token response status:', tokenRes.status)
-    console.log('[TikTok] token response body:', responseText)
+    if (!tokenRes.ok) {
+      console.error('[TikTok] token exchange failed:', tokenRes.status, await tokenRes.text())
+      return fail('tiktok_token_failed')
+    }
 
-    if (!tokenRes.ok) return fail('tiktok_token_failed')
-
-    const tokens = JSON.parse(responseText)
-    if (!tokens.access_token) return fail('tiktok_token_failed')
+    const tokens = await tokenRes.json()
+    if (!tokens.access_token) {
+      console.error('[TikTok] no access_token:', tokens)
+      return fail('tiktok_token_failed')
+    }
 
     const userRes = await fetch(
       'https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url,username',
