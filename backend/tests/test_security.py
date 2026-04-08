@@ -1,30 +1,34 @@
 """
 Tests for app.core.security — JWT verification and the get_current_user FastAPI dependency.
+
+All tokens are verified via JWKS (ES256/RS256).  HS256 / legacy JWT secret
+have been removed.  Tests mock _jwks() to avoid real network calls.
 """
 import time
 import pytest
 from unittest.mock import MagicMock, patch
 
-from jose import jwt
+from jose import jwt, ExpiredSignatureError, JWTError
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
 # ─── module under test ───────────────────────────────────────────────────────
 from app.core.security import (
     _verify_token,
-    _get_jwt_secret,
+    _reset_jwks_cache,
     get_current_user,
     UserClaims,
 )
 
-# ─── Test helpers ─────────────────────────────────────────────────────────────
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 
-_SECRET = "test-jwt-secret-long-enough-for-hmac-256-bits!!"
-_ALG    = "HS256"
+_HS256_SECRET = "test-jwt-secret-long-enough-for-hmac-256-bits!!"
 
 
-def _make_token(payload: dict, secret: str = _SECRET, algorithm: str = _ALG) -> str:
-    return jwt.encode(payload, secret, algorithm=algorithm)
+def _make_hs256_token(payload: dict) -> str:
+    """Make an HS256 token; useful only for testing the *failure* path since
+    the backend no longer accepts HS256."""
+    return jwt.encode(payload, _HS256_SECRET, algorithm="HS256")
 
 
 def _valid_payload(sub="user-abc", email="user@example.com", exp_offset=3600) -> dict:
@@ -36,95 +40,84 @@ def _valid_payload(sub="user-abc", email="user@example.com", exp_offset=3600) ->
     }
 
 
-def _mock_empty_jwks():
-    """Patch _jwks to return no keys → forces HS256 fallback."""
-    return patch("app.core.security._jwks", return_value={"keys": []})
+def _mock_jwks_decode_ok(payload: dict):
+    """Patch jwt.decode to return a fixed payload (simulates successful JWKS verification)."""
+    return patch("app.core.security.jwt.decode", return_value=payload)
 
 
-def _mock_jwt_secret(secret=_SECRET):
-    return patch("app.core.security._jwt_secret", return_value=secret)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# _verify_token — HS256 fallback path (JWKS empty)
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestVerifyTokenHS256:
-    def test_valid_token_returns_payload(self):
-        token = _make_token(_valid_payload())
-        with _mock_empty_jwks(), _mock_jwt_secret():
-            payload = _verify_token(token)
-        assert payload["sub"] == "user-abc"
-        assert payload["email"] == "user@example.com"
-
-    def test_expired_token_raises_expired_signature(self):
-        from jose import ExpiredSignatureError
-        token = _make_token(_valid_payload(exp_offset=-1))
-        with _mock_empty_jwks(), _mock_jwt_secret():
-            with pytest.raises(ExpiredSignatureError):
-                _verify_token(token)
-
-    def test_wrong_secret_raises_jwt_error(self):
-        from jose import JWTError
-        token = _make_token(_valid_payload(), secret="wrong-secret")
-        with _mock_empty_jwks(), _mock_jwt_secret(secret=_SECRET):
-            with pytest.raises(JWTError):
-                _verify_token(token)
-
-    def test_malformed_token_raises_jwt_error(self):
-        from jose import JWTError
-        with _mock_empty_jwks(), _mock_jwt_secret():
-            with pytest.raises(JWTError):
-                _verify_token("not.a.jwt")
-
-    def test_completely_garbage_input_raises(self):
-        from jose import JWTError
-        with _mock_empty_jwks(), _mock_jwt_secret():
-            with pytest.raises(Exception):
-                _verify_token("garbage!!!!")
-
-    def test_token_missing_sub_still_decodes(self):
-        """_verify_token itself does NOT validate sub — get_current_user does."""
-        payload = {"email": "x@y.com", "exp": int(time.time()) + 3600}
-        token = _make_token(payload)
-        with _mock_empty_jwks(), _mock_jwt_secret():
-            result = _verify_token(token)
-        assert result.get("sub") is None
+def _mock_jwks_populated():
+    """Return a non-empty JWKS dict so the JWKS path is taken."""
+    return patch("app.core.security._jwks", return_value={"keys": [{"kty": "EC", "kid": "test"}]})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # _verify_token — JWKS path
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestVerifyTokenJWKS:
-    def test_jwks_failure_falls_back_to_hs256(self):
-        """If JWKS keys are present but fail to decode, should fall through to HS256."""
-        fake_jwks = {"keys": [{"kty": "EC", "crv": "P-256", "kid": "fake"}]}
-        token = _make_token(_valid_payload())
-        with (
-            patch("app.core.security._jwks", return_value=fake_jwks),
-            _mock_jwt_secret(),
-        ):
-            payload = _verify_token(token)
-        assert payload["sub"] == "user-abc"
+class TestVerifyToken:
+    def test_valid_token_returns_payload(self):
+        expected = _valid_payload()
+        with _mock_jwks_populated(), _mock_jwks_decode_ok(expected):
+            result = _verify_token("fake.jwt.token")
+        assert result["sub"] == "user-abc"
+        assert result["email"] == "user@example.com"
 
-    def test_expired_token_does_not_fall_back_to_hs256(self):
-        """ExpiredSignatureError from JWKS path must NOT fall through — raise directly."""
-        from jose import ExpiredSignatureError
-        # Create a valid JWKS structure that will fail with ExpiredSignatureError
-        # We'll mock the jwt.decode to raise ExpiredSignatureError on first attempt
-        expired_token = _make_token(_valid_payload(exp_offset=-1))
-
+    def test_expired_token_raises_immediately(self):
+        """ExpiredSignatureError must be raised on first attempt — no retry."""
         with (
-            patch("app.core.security._jwks", return_value={"keys": [{"kty": "fake"}]}),
+            _mock_jwks_populated(),
             patch("app.core.security.jwt.decode") as mock_decode,
-            _mock_jwt_secret(),
         ):
             mock_decode.side_effect = ExpiredSignatureError("expired")
             with pytest.raises(ExpiredSignatureError):
-                _verify_token(expired_token)
-            # jwt.decode should only have been called once (no HS256 retry)
+                _verify_token("fake.jwt.token")
+            # Must NOT retry for expired tokens
             assert mock_decode.call_count == 1
+
+    def test_jwt_error_retries_once_after_cache_bust(self):
+        """On JWTError the cache is cleared and the request is retried once."""
+        good_payload = _valid_payload()
+        call_count = {"n": 0}
+
+        def _side_effect(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise JWTError("key mismatch")
+            return good_payload
+
+        with (
+            _mock_jwks_populated(),
+            patch("app.core.security.jwt.decode", side_effect=_side_effect),
+            patch("app.core.security._reset_jwks_cache") as mock_reset,
+        ):
+            result = _verify_token("fake.jwt.token")
+
+        assert result["sub"] == "user-abc"
+        mock_reset.assert_called_once()
+
+    def test_jwt_error_on_retry_raises(self):
+        """If both attempts fail with JWTError, the exception propagates."""
+        with (
+            _mock_jwks_populated(),
+            patch("app.core.security.jwt.decode", side_effect=JWTError("always fails")),
+        ):
+            with pytest.raises(JWTError):
+                _verify_token("fake.jwt.token")
+
+    def test_missing_sub_still_decodes(self):
+        """_verify_token does not validate sub — that's get_current_user's job."""
+        payload = {"email": "x@y.com", "exp": int(time.time()) + 3600}
+        with _mock_jwks_populated(), _mock_jwks_decode_ok(payload):
+            result = _verify_token("fake.jwt.token")
+        assert result.get("sub") is None
+
+    def test_hs256_token_rejected(self):
+        """Tokens signed with HS256 are no longer accepted."""
+        token = _make_hs256_token(_valid_payload())
+        # Let real JWT decode run against real JWKS (empty → fails)
+        with patch("app.core.security._jwks", return_value={"keys": []}):
+            with pytest.raises(Exception):
+                _verify_token(token)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -136,9 +129,9 @@ class TestGetCurrentUser:
         return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
     def test_valid_token_returns_user_claims(self):
-        token = _make_token(_valid_payload(sub="user-xyz", email="xyz@test.com"))
-        with _mock_empty_jwks(), _mock_jwt_secret():
-            user = get_current_user(self._creds(token))
+        payload = _valid_payload(sub="user-xyz", email="xyz@test.com")
+        with _mock_jwks_populated(), _mock_jwks_decode_ok(payload):
+            user = get_current_user(self._creds("fake.jwt.token"))
         assert isinstance(user, UserClaims)
         assert user.user_id == "user-xyz"
         assert user.email == "xyz@test.com"
@@ -150,63 +143,35 @@ class TestGetCurrentUser:
         assert "Not authenticated" in exc.value.detail
 
     def test_expired_token_raises_401(self):
-        token = _make_token(_valid_payload(exp_offset=-1))
-        with _mock_empty_jwks(), _mock_jwt_secret():
+        with (
+            _mock_jwks_populated(),
+            patch("app.core.security.jwt.decode", side_effect=ExpiredSignatureError("expired")),
+        ):
             with pytest.raises(HTTPException) as exc:
-                get_current_user(self._creds(token))
+                get_current_user(self._creds("fake.jwt.token"))
         assert exc.value.status_code == 401
         assert "expired" in exc.value.detail.lower()
 
     def test_invalid_token_raises_401(self):
-        with _mock_empty_jwks(), _mock_jwt_secret():
+        with (
+            _mock_jwks_populated(),
+            patch("app.core.security.jwt.decode", side_effect=JWTError("bad token")),
+        ):
             with pytest.raises(HTTPException) as exc:
                 get_current_user(self._creds("bad.token.value"))
         assert exc.value.status_code == 401
 
     def test_missing_sub_claim_raises_401(self):
         payload = {"email": "x@y.com", "exp": int(time.time()) + 3600}
-        token = _make_token(payload)
-        with _mock_empty_jwks(), _mock_jwt_secret():
+        with _mock_jwks_populated(), _mock_jwks_decode_ok(payload):
             with pytest.raises(HTTPException) as exc:
-                get_current_user(self._creds(token))
+                get_current_user(self._creds("fake.jwt.token"))
         assert exc.value.status_code == 401
         assert "sub" in exc.value.detail.lower()
 
     def test_email_can_be_empty_string(self):
         """Email is optional — empty string is valid."""
         payload = _valid_payload(email="")
-        token = _make_token(payload)
-        with _mock_empty_jwks(), _mock_jwt_secret():
-            user = get_current_user(self._creds(token))
+        with _mock_jwks_populated(), _mock_jwks_decode_ok(payload):
+            user = get_current_user(self._creds("fake.jwt.token"))
         assert user.email == ""
-
-    def test_tampered_token_raises_401(self):
-        token = _make_token(_valid_payload())
-        tampered = token[:-5] + "XXXXX"
-        with _mock_empty_jwks(), _mock_jwt_secret():
-            with pytest.raises(HTTPException) as exc:
-                get_current_user(self._creds(tampered))
-        assert exc.value.status_code == 401
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# _get_jwt_secret — base64 decode logic
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestGetJwtSecret:
-    def test_raw_string_returned_when_not_base64(self):
-        secret = "plaintext-secret!@#$"
-        with patch("app.core.security.settings") as mock_settings:
-            mock_settings.SUPABASE_JWT_SECRET = secret
-            result = _get_jwt_secret()
-        # Either raw string or decoded bytes, both valid
-        assert result is not None
-
-    def test_base64url_decoded_to_bytes(self):
-        import base64
-        raw = b"some-32-byte-jwt-secret-here!!"
-        encoded = base64.urlsafe_b64encode(raw).decode().rstrip("=")
-        with patch("app.core.security.settings") as mock_settings:
-            mock_settings.SUPABASE_JWT_SECRET = encoded
-            result = _get_jwt_secret()
-        assert result == raw

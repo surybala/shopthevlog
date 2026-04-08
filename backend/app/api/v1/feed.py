@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Query, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional
@@ -289,11 +288,6 @@ class FeedSearchRequest(BaseModel):
     limit: int = 20
 
 
-def _flatten_itineraries(v: dict) -> dict:
-    """Inline-flatten the nested itineraries join into a scalar itinerary_id."""
-    return _flatten_vlog_itineraries(v)
-
-
 @router.post("/search", response_model=FeedPage)
 async def search_feed_by_destination(
     body: FeedSearchRequest,
@@ -395,7 +389,7 @@ async def search_feed_by_destination(
     for v in combined:
         if v["id"] not in final_seen:
             final_seen.add(v["id"])
-            deduped.append(_flatten_itineraries(v))
+            deduped.append(_flatten_vlog_itineraries(v))
 
     page = deduped[: body.limit]
     return {"vlogs": page, "next_cursor": None, "total": len(page)}

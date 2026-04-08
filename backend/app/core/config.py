@@ -15,8 +15,8 @@ class Settings(BaseSettings):
 
     # Supabase
     SUPABASE_URL: str
-    SUPABASE_SERVICE_ROLE_KEY: str
-    SUPABASE_JWT_SECRET: str
+    SUPABASE_SECRET_KEY: str          # formerly SUPABASE_SERVICE_ROLE_KEY
+    # SUPABASE_JWT_SECRET removed — project uses new JWT Signing Keys (JWKS/ES256)
 
     # YouTube
     YOUTUBE_CLIENT_ID: str = ""
@@ -39,12 +39,6 @@ class Settings(BaseSettings):
 
     # Google Places (for location resolution in AI pipeline)
     GOOGLE_PLACES_API_KEY: str = ""
-
-    # Booking.com Demand API
-    BOOKING_COM_API_TOKEN: str = ""
-    BOOKING_COM_AFFILIATE_ID: str = ""
-    BOOKING_COM_SANDBOX: bool = True
-    BOOKING_COM_RATE_LIMIT_RPM: int = 45
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379"

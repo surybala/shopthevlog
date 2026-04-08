@@ -7,9 +7,9 @@ pydantic-settings resolves them correctly at Settings() instantiation time.
 import os
 
 # ── Must be set before any `from app.xxx import ...` ────────────────────────
-os.environ.setdefault("SUPABASE_URL",            "https://test.supabase.co")
-os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
-os.environ.setdefault("SUPABASE_JWT_SECRET",     "test-jwt-secret-long-enough-for-hmac-256-bits!!")
+os.environ.setdefault("SUPABASE_URL",         "https://test.supabase.co")
+os.environ.setdefault("SUPABASE_SECRET_KEY",  "test-secret-key")
+# SUPABASE_JWT_SECRET removed — tests mock _jwks() directly instead
 os.environ.setdefault("DATABASE_URL",            "postgresql://test:test@localhost:5432/test")
 os.environ.setdefault("GEMINI_API_KEY",          "test-gemini-key")
 # Use in-process memory backend so slowapi rate limiting works without Redis.

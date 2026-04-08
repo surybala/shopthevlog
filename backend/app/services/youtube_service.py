@@ -97,10 +97,6 @@ def fetch_channel_videos(channel_id: str, access_token: str, refresh_token: str)
                 stats = video.get("statistics", {})
                 content = video.get("contentDetails", {})
 
-                # Filter to travel-relevant videos (category 19 = Travel & Events)
-                if snippet.get("categoryId") not in ("19", "22", ""):  # 22 = People & Blogs (vlogs)
-                    pass  # Include all for now; filter by Claude destination extraction later
-
                 thumbnails = snippet.get("thumbnails", {})
                 thumb = (thumbnails.get("maxres") or thumbnails.get("high") or thumbnails.get("default") or {}).get("url")
 

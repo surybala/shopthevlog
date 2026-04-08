@@ -32,11 +32,6 @@ class VlogResponse(BaseModel):
     created_at: datetime
 
 
-class VlogStatusResponse(BaseModel):
-    status: ProcessingStatus
-    itinerary_id: Optional[str] = None
-
-
 class FeedPage(BaseModel):
     vlogs: List[VlogResponse]
     next_cursor: Optional[str] = None

@@ -9,10 +9,9 @@ services:
         value: production
       - key: SUPABASE_URL
         sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
+      - key: SUPABASE_SECRET_KEY
         sync: false
-      - key: SUPABASE_JWT_SECRET
-        sync: false
+      # SUPABASE_JWT_SECRET removed — JWT Signing Keys via JWKS are used instead
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: OPENAI_API_KEY
