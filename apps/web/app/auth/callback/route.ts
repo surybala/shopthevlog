@@ -3,6 +3,7 @@ import { createSupabaseServer } from '@/lib/supabase/server'
 import { createSupabaseAdmin } from '@/lib/supabase/admin'
 import prisma from '@/lib/prisma/client'
 import { isWhitelisted } from '@/lib/whitelist'
+import { isAdmin } from '@/lib/admin'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl
@@ -29,7 +30,17 @@ export async function GET(request: NextRequest) {
             : null
 
           if (!approved) {
-            return NextResponse.redirect(`${origin}/waitlist`)
+            // Pass the user's name and email so the waitlist form is pre-filled.
+            // Sign them out first so they don't hold a session they can't use.
+            await supabase.auth.signOut()
+            const waitlistUrl = new URL(`${origin}/waitlist`)
+            if (user.email) waitlistUrl.searchParams.set('email', user.email)
+            const displayName =
+              user.user_metadata?.full_name ??
+              user.user_metadata?.name ??
+              user.user_metadata?.display_name
+            if (displayName) waitlistUrl.searchParams.set('name', displayName)
+            return NextResponse.redirect(waitlistUrl)
           }
 
           // Stamp app_metadata.approved = true so future middleware checks are
@@ -44,6 +55,12 @@ export async function GET(request: NextRequest) {
           }
         }
 
+        // Admins don't need a creator profile — send them straight to dashboard.
+        // Regular users who haven't completed onboarding go to /onboarding.
+        const userIsAdmin = user.email ? isAdmin(user.email) : false
+        if (userIsAdmin) {
+          return NextResponse.redirect(`${origin}${next}`)
+        }
         const creator = await prisma.creator.findUnique({ where: { userId: user.id } })
         const redirectTo = creator ? next : '/onboarding'
         return NextResponse.redirect(`${origin}${redirectTo}`)

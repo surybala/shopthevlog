@@ -5,6 +5,18 @@ import prisma from '@/lib/prisma/client'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import FollowButton from '@/components/FollowButton'
 
+// Helper — derive display name from Supabase user metadata
+function navDisplayName(user: Awaited<ReturnType<ReturnType<typeof createSupabaseServer>['auth']['getUser']>>['data']['user']) {
+  if (!user) return null
+  return (
+    user.user_metadata?.display_name ??
+    user.user_metadata?.full_name ??
+    user.user_metadata?.name ??
+    user.email?.split('@')[0] ??
+    'Account'
+  )
+}
+
 export default async function StorefrontLayout({
   children,
   params,
@@ -35,13 +47,15 @@ export default async function StorefrontLayout({
     isPreview = true
   }
 
-  // Check current follow state for the nav button
+  // Check current follow state + whether the viewer is a creator themselves
   let initialFollowing = false
+  let viewerIsCreator = false
   if (user) {
-    const subscriber = await prisma.subscriber.findUnique({
-      where: { userId: user.id },
-      select: { id: true },
-    })
+    const [subscriber, viewerCreator] = await Promise.all([
+      prisma.subscriber.findUnique({ where: { userId: user.id }, select: { id: true } }),
+      prisma.creator.findUnique({ where: { userId: user.id }, select: { id: true } }),
+    ])
+    viewerIsCreator = !!viewerCreator
     if (subscriber) {
       const follow = await prisma.follow.findUnique({
         where: { subscriberId_creatorId: { subscriberId: subscriber.id, creatorId: creator.id } },
@@ -50,6 +64,9 @@ export default async function StorefrontLayout({
       initialFollowing = !!follow
     }
   }
+
+  const displayName = navDisplayName(user)
+  const accountHref = viewerIsCreator ? '/dashboard' : '/account'
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -88,6 +105,27 @@ export default async function StorefrontLayout({
                 isLoggedIn={!!user}
                 size="sm"
               />
+            )}
+            {/* Auth nav */}
+            {user && displayName ? (
+              <Link
+                href={accountHref}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-white/10 hover:border-white/30 hover:bg-white/5 transition-colors group"
+              >
+                <span className="w-5 h-5 rounded-full bg-white/20 text-white text-[10px] font-semibold flex items-center justify-center leading-none group-hover:bg-white/30 transition-colors">
+                  {displayName[0]?.toUpperCase()}
+                </span>
+                <span className="text-xs text-white/60 group-hover:text-white transition-colors max-w-[100px] truncate hidden sm:inline">
+                  {displayName}
+                </span>
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="text-xs text-white/40 hover:text-white transition-colors"
+              >
+                Sign in
+              </Link>
             )}
           </div>
         </div>

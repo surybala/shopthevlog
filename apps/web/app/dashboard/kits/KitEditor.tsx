@@ -54,12 +54,13 @@ interface Kit {
 
 interface Props {
   creatorId: string
+  creatorHandle: string
   kit: Kit | null
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function KitEditor({ creatorId, kit }: Props) {
+export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -307,12 +308,14 @@ export default function KitEditor({ creatorId, kit }: Props) {
           </button>
         )}
 
-        {kit && (
+        {kit?.isPublished && (
           <a
-            href={`/@${kit.id}`}
+            href={`/@${creatorHandle}/kits/${kit.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-sm text-white/30 hover:text-white transition-colors ml-auto"
           >
-            {kit.isPublished ? '↗ View on storefront' : ''}
+            ↗ View on storefront
           </a>
         )}
       </div>

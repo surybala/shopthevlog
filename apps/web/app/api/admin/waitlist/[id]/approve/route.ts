@@ -35,10 +35,12 @@ export async function POST(
     data: { status: 'APPROVED', approvedAt: new Date() },
   })
 
-  // 2. Send approval email (fire-and-forget, log on failure)
-  sendApprovalEmail(request.email, request.name).catch(err =>
-    console.error('sendApprovalEmail failed:', err)
-  )
+  // 2. Send approval email (fire-and-forget, log on failure).
+  // Wrap in Promise.resolve().then() so synchronous throws (missing env vars)
+  // are also caught rather than propagating.
+  Promise.resolve()
+    .then(() => sendApprovalEmail(request.email, request.name))
+    .catch(err => console.error('sendApprovalEmail failed:', err))
 
   // 3. If user already exists in Supabase, stamp app_metadata.approved = true
   //    so they can access protected routes without re-authenticating.

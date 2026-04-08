@@ -19,10 +19,12 @@ export async function POST(req: NextRequest) {
       create: { email: emailLower, name: name.trim(), reason: reason?.trim() || null },
     })
 
-    // Fire emails in parallel; don't fail the request if email bounces
+    // Fire emails in parallel; don't fail the request if email bounces.
+    // Wrap in Promise.resolve().then() so synchronous throws (e.g. missing env
+    // vars) are also captured by allSettled rather than propagating upward.
     await Promise.allSettled([
-      sendWaitlistConfirmation(emailLower, name.trim()),
-      sendAdminWaitlistNotification(name.trim(), emailLower, reason?.trim() || null, request.id),
+      Promise.resolve().then(() => sendWaitlistConfirmation(emailLower, name.trim())),
+      Promise.resolve().then(() => sendAdminWaitlistNotification(name.trim(), emailLower, reason?.trim() || null, request.id)),
     ])
 
     return NextResponse.json({ ok: true })

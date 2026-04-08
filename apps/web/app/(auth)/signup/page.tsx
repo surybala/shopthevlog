@@ -14,6 +14,8 @@ export default function SignupPage() {
   const [handle, setHandle] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  // Set to true after signUp() when Supabase requires email confirmation
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false)
   const supabase = createSupabaseClient()
 
   async function checkWhitelist(emailToCheck: string): Promise<boolean> {
@@ -27,10 +29,12 @@ export default function SignupPage() {
     setLoading(true)
     setError('')
 
+    // Pre-flight whitelist check — if not approved, send them straight to the
+    // waitlist form with their details already filled in.
     const allowed = await checkWhitelist(email)
     if (!allowed) {
-      setError("You're not on the early-access list yet. Join the waitlist and we'll reach out when a spot opens.")
-      setLoading(false)
+      const params = new URLSearchParams({ name, email })
+      router.push(`/waitlist?${params}`)
       return
     }
 
@@ -47,10 +51,15 @@ export default function SignupPage() {
     })
 
     if (signupError) { setError(signupError.message); setLoading(false); return }
-    if (data.user) {
-      // Email signup requires confirmation — show a message rather than redirecting
-      // The /auth/callback will handle post-confirmation routing
+
+    if (data.session) {
+      // Session available immediately (email confirmation disabled in Supabase).
+      // The /auth/callback will handle post-confirmation routing.
       router.push(accountType === 'creator' ? '/onboarding' : '/discover')
+    } else {
+      // Supabase sent a confirmation email — tell the user to check their inbox.
+      setLoading(false)
+      setAwaitingConfirmation(true)
     }
   }
 
@@ -60,12 +69,42 @@ export default function SignupPage() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+        redirectTo: `${window.location.origin}/auth/callback?next=/onboarding&account_type=${accountType}`,
         queryParams: { account_type: accountType },
       },
     })
   }
 
+  // ── Email-confirmation holding screen ──────────────────────────────────────
+  if (awaitingConfirmation) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center px-4">
+        <div className="w-full max-w-sm text-center space-y-6">
+          <Link href="/" className="text-2xl font-bold text-white inline-block">VlogShopper</Link>
+          <div className="glass-card p-8 space-y-4">
+            <div className="text-4xl">📬</div>
+            <h2 className="text-lg font-semibold text-white">Check your email</h2>
+            <p className="text-white/50 text-sm leading-relaxed">
+              We sent a confirmation link to{' '}
+              <strong className="text-white/80">{email}</strong>.
+              Click it to activate your account, then come back and sign in.
+            </p>
+            <Link
+              href="/login"
+              className="btn-primary text-sm inline-block mt-2"
+            >
+              Go to sign in →
+            </Link>
+          </div>
+          <p className="text-white/20 text-xs">
+            Didn't receive it? Check your spam folder.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Signup form ────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-4">
       <div className="w-full max-w-sm">

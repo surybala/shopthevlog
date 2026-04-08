@@ -17,7 +17,7 @@ export default async function NewKitPage() {
         <h1 className="text-2xl font-bold text-white">New Trip Kit</h1>
         <p className="text-white/40 mt-1 text-sm">Build a shoppable travel itinerary for your audience</p>
       </div>
-      <KitEditor creatorId={creator.id} kit={null} />
+      <KitEditor creatorId={creator.id} creatorHandle={creator.handle} kit={null} />
     </div>
   )
 }

@@ -36,7 +36,11 @@ export default async function EditKitPage({ params }: { params: { id: string } }
         <h1 className="text-2xl font-bold text-white">Edit Trip Kit</h1>
         <p className="text-white/40 mt-1 text-sm">{kit.title}</p>
       </div>
-      <KitEditor creatorId={creator.id} kit={kit as Parameters<typeof KitEditor>[0]['kit']} />
+      <KitEditor
+        creatorId={creator.id}
+        creatorHandle={creator.handle}
+        kit={kit as Parameters<typeof KitEditor>[0]['kit']}
+      />
     </div>
   )
 }

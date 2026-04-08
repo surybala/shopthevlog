@@ -32,8 +32,16 @@ export default async function HomePage() {
             </Link>
             {user ? (
               // Creators are redirected before reaching here — this is subscribers only
-              <Link href="/account" className="btn-primary text-sm">
-                My Account
+              <Link
+                href="/account"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/30 hover:bg-white/5 transition-colors group"
+              >
+                <span className="w-6 h-6 rounded-full bg-white/20 text-white text-xs font-semibold flex items-center justify-center leading-none">
+                  {(user.user_metadata?.display_name ?? user.user_metadata?.full_name ?? user.email ?? '?')[0].toUpperCase()}
+                </span>
+                <span className="text-sm text-white/70 group-hover:text-white transition-colors">
+                  {user.user_metadata?.display_name ?? user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? 'Account'}
+                </span>
               </Link>
             ) : (
               <>

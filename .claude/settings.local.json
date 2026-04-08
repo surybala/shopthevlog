@@ -96,7 +96,27 @@
       "Bash(cp \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/@[handle]/page.tsx\" \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/_store/[handle]/page.tsx\")",
       "Bash(cp \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/@[handle]/kits/page.tsx\" \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/_store/[handle]/kits/page.tsx\")",
       "Bash(cp \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/@[handle]/kits/[slug]/page.tsx\" \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/_store/[handle]/kits/[slug]/page.tsx\")",
-      "Bash(cp \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/@[handle]/shop/page.tsx\" \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/_store/[handle]/shop/page.tsx\")"
+      "Bash(cp \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/@[handle]/shop/page.tsx\" \"C:/Users/surya/IdeaProjects/shopthevlog/apps/web/app/_store/[handle]/shop/page.tsx\")",
+      "Bash(.venv/Scripts/pip.exe install:*)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/test_kit_service.py tests/test_process_vlog.py tests/test_vlogs_api.py -v)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/test_security.py tests/test_preferences_api.py tests/test_social_seeding.py tests/test_feed_ranking.py tests/test_feed_search_api.py tests/test_tiktok_service.py tests/test_feed_new_endpoints.py tests/test_instagram_service.py tests/test_social_tiktok_instagram.py tests/test_feed_ranking_interactions.py --co -q)",
+      "Bash(.venv/Scripts/python.exe -c \"from google.genai import types; p = types.Part.from_bytes\\(data=b''hello'', mime_type=''audio/mpeg''\\); print\\(p\\)\")",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/test_transcription_service.py -v --tb=short)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ -q --tb=short)",
+      "Bash(find /c/Users/surya/IdeaProjects/shopthevlog/apps/web -type f \\\\\\(-name *signup* -o -name *auth* -o -name *waitlist* -o -name *middleware* -o -name *callback* \\\\\\) ! -path */node_modules/* ! -path */.next/*)",
+      "Bash(find /c/Users/surya/IdeaProjects/shopthevlog/apps/web/app -type f -name *.ts -o -name *.tsx)",
+      "Bash(python -m pytest tests/ --cov=app --cov-report=term-missing -x -q)",
+      "Bash(pip install:*)",
+      "Bash(python -m pytest tests/test_config.py tests/test_rate_limit.py tests/test_schemas.py tests/test_security.py --cov=app --cov-report=term-missing -q)",
+      "Bash(python -m pytest tests/test_config.py tests/test_rate_limit.py tests/test_schemas.py tests/test_security.py -q --no-cov)",
+      "Bash(python -m pytest tests/ --cov=app --cov-report=term-missing -q --no-header)",
+      "Bash(python -m pytest tests/ --cov=app --cov-report=term-missing -q --no-header --ignore=tests/test_feed_new_endpoints.py --ignore=tests/test_feed_search_api.py --ignore=tests/test_preferences_api.py --ignore=tests/test_social_seeding.py --ignore=tests/test_social_tiktok_instagram.py)",
+      "Bash(python -m pytest tests/test_db_client.py tests/test_webhooks_api.py tests/test_youtube_service.py --no-cov -q)",
+      "Bash(python -c \"import postgrest; print\\(''''OK''''\\)\")",
+      "Bash(python -c \"from google.oauth2.credentials import Credentials; print\\(''OK''\\)\")",
+      "Bash(python -m pytest tests/test_youtube_service.py::TestIsoDurationToSeconds::test_hours_only --no-cov -v)",
+      "Bash(python -c \"from supabase import create_client; print\\(''''supabase OK''''\\)\")",
+      "Bash(python -m pytest tests/test_main.py tests/test_youtube_service.py::TestGetVideoCaptions --no-cov -q)"
     ]
   }
 }

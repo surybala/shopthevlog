@@ -11,6 +11,7 @@ type Request = {
   status: string
   createdAt: Date | string
   approvedAt: Date | string | null
+  rejectedAt?: Date | string | null
 }
 
 export default function WaitlistTable({
@@ -21,27 +22,28 @@ export default function WaitlistTable({
   showApprove?: boolean
 }) {
   const router = useRouter()
-  const [approving, setApproving] = useState<string | null>(null)
+  const [busy, setBusy] = useState<Record<string, 'approving' | 'rejecting'>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  async function approve(id: string) {
-    setApproving(id)
+  async function doAction(id: string, action: 'approve' | 'reject') {
+    setBusy(prev => ({ ...prev, [id]: action === 'approve' ? 'approving' : 'rejecting' }))
     setErrors(prev => ({ ...prev, [id]: '' }))
 
-    const res = await fetch(`/api/admin/waitlist/${id}/approve`, { method: 'POST' })
+    const res = await fetch(`/api/admin/waitlist/${id}/${action}`, { method: 'POST' })
     if (!res.ok) {
       const json = await res.json().catch(() => ({}))
-      setErrors(prev => ({ ...prev, [id]: json.error ?? 'Failed to approve' }))
+      setErrors(prev => ({ ...prev, [id]: json.error ?? `Failed to ${action}` }))
     } else {
       router.refresh()
     }
-    setApproving(null)
+    setBusy(prev => { const next = { ...prev }; delete next[id]; return next })
   }
 
   return (
     <div className="space-y-3">
       {requests.map(r => (
         <div key={r.id} className="glass-card p-5 flex flex-col sm:flex-row sm:items-start gap-4">
+          {/* Details */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-white text-sm">{r.name}</span>
@@ -60,20 +62,31 @@ export default function WaitlistTable({
             <p className="text-white/20 text-xs mt-2">
               Requested {new Date(r.createdAt).toLocaleDateString()}
               {r.approvedAt && ` · Approved ${new Date(r.approvedAt).toLocaleDateString()}`}
+              {r.rejectedAt && ` · Rejected ${new Date(r.rejectedAt).toLocaleDateString()}`}
             </p>
             {errors[r.id] && (
               <p className="text-red-400 text-xs mt-1">{errors[r.id]}</p>
             )}
           </div>
 
+          {/* Actions — only shown for PENDING rows */}
           {showApprove && r.status === 'PENDING' && (
-            <button
-              onClick={() => approve(r.id)}
-              disabled={approving === r.id}
-              className="shrink-0 btn-primary text-xs px-4 py-2 disabled:opacity-50"
-            >
-              {approving === r.id ? 'Approving…' : 'Approve ✓'}
-            </button>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={() => doAction(r.id, 'approve')}
+                disabled={!!busy[r.id]}
+                className="btn-primary text-xs px-4 py-2 disabled:opacity-50"
+              >
+                {busy[r.id] === 'approving' ? 'Approving…' : 'Approve ✓'}
+              </button>
+              <button
+                onClick={() => doAction(r.id, 'reject')}
+                disabled={!!busy[r.id]}
+                className="text-xs px-4 py-2 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+              >
+                {busy[r.id] === 'rejecting' ? 'Rejecting…' : 'Reject ✕'}
+              </button>
+            </div>
           )}
         </div>
       ))}

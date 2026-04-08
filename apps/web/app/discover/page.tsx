@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import prisma from '@/lib/prisma/client'
+import { createSupabaseServer } from '@/lib/supabase/server'
+import PublicNav from '@/components/PublicNav'
 
 export const metadata = {
   title: 'Discover — VlogShopper',
@@ -12,6 +14,13 @@ export default async function DiscoverPage({
   searchParams: { q?: string; country?: string; style?: string }
 }) {
   const { q, country, style } = searchParams
+
+  // Auth — determine what to show in the nav
+  const supabase = createSupabaseServer()
+  const { data: { user } } = await supabase.auth.getUser()
+  const isCreator = user
+    ? !!(await prisma.creator.findUnique({ where: { userId: user.id }, select: { id: true } }))
+    : false
 
   const kits = await prisma.tripKit.findMany({
     where: {
@@ -61,16 +70,7 @@ export default async function DiscoverPage({
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Nav */}
-      <nav className="border-b border-white/10 bg-black/80 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="text-lg font-bold">VlogShopper</Link>
-          <div className="flex items-center gap-4">
-            <Link href="/login" className="text-sm text-white/50 hover:text-white">Sign in</Link>
-            <Link href="/signup" className="btn-primary text-sm py-1.5 px-4">Start free</Link>
-          </div>
-        </div>
-      </nav>
+      <PublicNav user={user} isCreator={isCreator} />
 
       <div className="max-w-7xl mx-auto px-6 py-12">
         {/* Header + search */}

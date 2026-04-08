@@ -19,10 +19,23 @@ export async function generateMetadata({ params }: { params: { handle: string; s
 
 export default async function KitDetailPage({ params }: { params: { handle: string; slug: string } }) {
   const creator = await prisma.creator.findUnique({ where: { handle: params.handle }, select: { id: true, handle: true, displayName: true, avatarUrl: true, isPublished: true } })
-  if (!creator || !creator.isPublished) notFound()
+  if (!creator) notFound()
+
+  // Check auth before enforcing publish gating — the creator can always preview
+  // their own storefront and kits (matching the preview banner in the layout).
+  const supabase = createSupabaseServer()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const viewerIsCreator = user
+    ? !!(await prisma.creator.findUnique({ where: { userId: user.id, id: creator.id }, select: { id: true } }))
+    : false
+
+  // Non-owners cannot see unpublished storefronts
+  if (!creator.isPublished && !viewerIsCreator) notFound()
 
   const kit = await prisma.tripKit.findFirst({
-    where: { slug: params.slug, creatorId: creator.id, isPublished: true },
+    // Creators can preview their own draft kits; everyone else only sees published
+    where: { slug: params.slug, creatorId: creator.id, ...(viewerIsCreator ? {} : { isPublished: true }) },
     include: {
       days: {
         orderBy: { dayNumber: 'asc' },
@@ -40,11 +53,9 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
 
   if (!kit) notFound()
 
-  // Always fetch auth state — needed for both access gating and save state
-  const supabase = createSupabaseServer()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  let hasAccess = kit.accessTier === 'FREE'
+  // user + viewerIsCreator already resolved above for publish gating;
+  // reuse them here for access gating and save state.
+  let hasAccess = kit.accessTier === 'FREE' || viewerIsCreator
   let subscriber: { id: string } | null = null
   let isSaved = false
 
@@ -85,8 +96,22 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
 
   const previewDays = hasAccess ? kit.days : kit.days.slice(0, 1)
 
+  const isDraftPreview = viewerIsCreator && (!creator.isPublished || !kit.isPublished)
+
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
+      {/* Draft preview banner */}
+      {isDraftPreview && (
+        <div className="mb-6 rounded-xl bg-yellow-500/10 border border-yellow-500/20 px-4 py-3 flex items-center justify-between gap-4">
+          <p className="text-sm text-yellow-400">
+            {!kit.isPublished ? '📝 Draft — only you can see this kit.' : '🔒 Your storefront is unpublished — only you can preview it.'}
+          </p>
+          <a href="/dashboard/kits" className="text-xs text-yellow-400 hover:text-yellow-300 underline underline-offset-2 shrink-0">
+            Manage kits →
+          </a>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-8">
         <Link href={`/@${creator.handle}/kits`} className="text-sm text-white/40 hover:text-white mb-4 inline-block">← All kits</Link>

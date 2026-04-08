@@ -257,9 +257,10 @@ model Subscriber {
   id     String @id @default(cuid())
   userId String @unique
 
-  displayName String
-  avatarUrl   String?
-  location    String?
+  displayName      String
+  avatarUrl        String?
+  location         String?
+  stripeCustomerId String? @unique
 
   subscriptions Subscription[]
   following     Follow[]
