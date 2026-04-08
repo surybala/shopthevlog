@@ -1,27 +1,37 @@
 /**
- * Email helpers using Resend.
- * Requires RESEND_API_KEY and RESEND_FROM env vars.
+ * Email helpers using Zoho Mail SMTP via nodemailer.
  *
- * RESEND_FROM  — verified sender address, e.g. "VlogShopper <hello@vlogshopper.com>"
- * ADMIN_EMAIL  — where admin notifications are sent, e.g. "you@yourdomain.com"
+ * Required env vars:
+ *   ZOHO_SMTP_USER   — your Zoho email address, e.g. cherry@vlogshopper.com
+ *   ZOHO_SMTP_PASS   — Zoho app-specific password (not your login password)
+ *                      Generate at: Zoho Mail → Settings → Security → App Passwords
+ *   ADMIN_EMAIL      — where admin notifications are sent (defaults to ZOHO_SMTP_USER)
+ *   NEXT_PUBLIC_BASE_URL — e.g. https://vlogshopper.com
  */
-import { Resend } from 'resend'
+import nodemailer from 'nodemailer'
 
-function resend() {
-  const key = process.env.RESEND_API_KEY
-  if (!key) throw new Error('RESEND_API_KEY is not set')
-  return new Resend(key)
+function transporter() {
+  const user = process.env.ZOHO_SMTP_USER
+  const pass = process.env.ZOHO_SMTP_PASS
+  if (!user || !pass) throw new Error('ZOHO_SMTP_USER and ZOHO_SMTP_PASS must be set')
+
+  return nodemailer.createTransport({
+    host: 'smtp.zoho.com',
+    port: 465,
+    secure: true, // SSL
+    auth: { user, pass },
+  })
 }
 
-const FROM   = process.env.RESEND_FROM  ?? 'VlogShopper <cherry@vlogshopper.com>'
-const ADMIN  = process.env.ADMIN_EMAIL  ?? 'cherry@vlogshopper.com'
-const BASE   = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+const FROM  = () => `VlogShopper <${process.env.ZOHO_SMTP_USER ?? 'cherry@vlogshopper.com'}>`
+const ADMIN = () => process.env.ADMIN_EMAIL ?? process.env.ZOHO_SMTP_USER ?? 'cherry@vlogshopper.com'
+const BASE  = () => process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
 
 // ── 1. Confirmation to the person who just joined the waitlist ────────────────
 
 export async function sendWaitlistConfirmation(to: string, name: string) {
-  return resend().emails.send({
-    from: FROM,
+  return transporter().sendMail({
+    from: FROM(),
     to,
     subject: "You're on the VlogShopper waitlist 🎬",
     html: `
@@ -34,7 +44,7 @@ export async function sendWaitlistConfirmation(to: string, name: string) {
         <p style="color:#555">
           In the meantime, you can browse public creator storefronts — no account needed.
         </p>
-        <a href="${BASE}/discover"
+        <a href="${BASE()}/discover"
            style="display:inline-block;margin-top:16px;padding:12px 24px;background:#fff;color:#000;border:1px solid #000;border-radius:8px;text-decoration:none;font-weight:600">
           Browse storefronts →
         </a>
@@ -53,10 +63,10 @@ export async function sendAdminWaitlistNotification(
   reason: string | null,
   requestId: string,
 ) {
-  const approveUrl = `${BASE}/dashboard/waitlist`
-  return resend().emails.send({
-    from: FROM,
-    to: ADMIN,
+  const approveUrl = `${BASE()}/dashboard/waitlist`
+  return transporter().sendMail({
+    from: FROM(),
+    to: ADMIN(),
     subject: `New waitlist request from ${requesterName}`,
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#111">
@@ -78,9 +88,9 @@ export async function sendAdminWaitlistNotification(
 // ── 3. Approval email sent to requester when admin approves ───────────────────
 
 export async function sendApprovalEmail(to: string, name: string) {
-  const signupUrl = `${BASE}/signup`
-  return resend().emails.send({
-    from: FROM,
+  const signupUrl = `${BASE()}/signup`
+  return transporter().sendMail({
+    from: FROM(),
     to,
     subject: "You're in — VlogShopper early access ✅",
     html: `
