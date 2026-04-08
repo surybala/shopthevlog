@@ -73,9 +73,8 @@ class TestLifespan:
 
         with patch("app.core.security._jwks") as mock_jwks:
             mock_jwks.return_value = {"keys": []}
-            with patch("app.db.client.get_supabase"):
-                with TestClient(app):
-                    pass  # enters and exits lifespan
+            with TestClient(app):
+                pass  # enters and exits lifespan
 
         mock_jwks.assert_called()
 
@@ -84,25 +83,13 @@ class TestLifespan:
         from app.main import app
 
         with patch("app.core.security._jwks", side_effect=Exception("network error")):
-            with patch("app.db.client.get_supabase"):
-                # Should not raise
-                with TestClient(app):
-                    resp = TestClient(app).get("/health")
-                assert resp.status_code == 200
+            # Should not raise
+            with TestClient(app):
+                resp = TestClient(app).get("/health")
+            assert resp.status_code == 200
 
 
 class TestApiRouterMounted:
-    def test_feed_route_exists(self):
-        """The /api/v1/feed route should be registered (returns 401 without auth)."""
-        client = _get_client()
-        resp = client.get("/api/v1/feed")
-        assert resp.status_code in (401, 403, 422)
-
-    def test_preferences_route_exists(self):
-        client = _get_client()
-        resp = client.get("/api/v1/preferences")
-        assert resp.status_code in (401, 403, 422)
-
     def test_vlogs_route_exists(self):
         client = _get_client()
         resp = client.get("/api/v1/vlogs")

@@ -29,13 +29,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("JWKS pre-fetch failed: %s", e)
 
-    try:
-        from app.db.client import get_supabase
-        get_supabase()
-        logger.info("Supabase client initialised on startup")
-    except Exception as e:
-        logger.warning("Supabase client init failed: %s", e)
-
     yield
 
 

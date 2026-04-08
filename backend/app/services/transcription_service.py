@@ -13,7 +13,6 @@ import os
 import tempfile
 from typing import Optional
 
-from app.core.config import settings
 from app.db.pg_client import PgClient
 from app.services.youtube_service import get_video_captions
 
