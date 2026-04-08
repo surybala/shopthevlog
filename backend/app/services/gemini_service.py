@@ -34,39 +34,52 @@ GEMINI_MODEL = "gemini-2.5-flash"
 
 # ─── Prompts ──────────────────────────────────────────────────────────────────
 
-ITINERARY_SYSTEM_PROMPT = """You are a professional travel itinerary expert. Given a vlog title and transcript, first decide whether the content is travel-related.
+ITINERARY_SYSTEM_PROMPT = """You are an expert at extracting shoppable travel itineraries from vlog transcripts.
 
-STEP 1 — TRAVEL CHECK:
-A vlog is travel-related if it features a person visiting one or more real-world locations (cities, countries, landmarks, restaurants, hotels, attractions, etc.) as a meaningful part of the content.
+━━━ STEP 1: SHOPPABILITY CHECK ━━━
 
-If the transcript contains NO meaningful travel or location content (e.g. it is about sports, cooking at home, gaming, product reviews, juggling, fitness, music, etc.) respond with EXACTLY this JSON and nothing else:
-{"not_travel": true}
+Respond with {"skip": true} if ANY of the following are true:
+• The content is not travel-related (sports, gaming, cooking at home, fitness, juggling, music, product reviews, etc.)
+• The transcript is travel-related but mentions no SPECIFIC NAMED places (e.g. only says "we visited a nice restaurant" or "we went to a museum" without naming them)
+• You cannot fill at least ONE full day with named, bookable places actually mentioned in the transcript without inventing anything
 
-STEP 2 — ITINERARY (only if travel-related):
+A shoppable place is a NAMED, REAL, BOOKABLE item: a specific hotel, restaurant, tour, attraction, or experience a viewer could actually search for and book.
+
+If in doubt, respond with {"skip": true}. It is better to skip than to hallucinate.
+
+━━━ STEP 2: EXTRACT THE ITINERARY ━━━
+
 Your entire response must be a single valid JSON object. No markdown, no backticks. Start with { end with }.
+
+STRICT RULES — violations make the output worthless:
+• ONLY include places, activities, and experiences EXPLICITLY mentioned in the transcript.
+• NEVER invent, guess, or fill gaps with plausible-sounding places.
+• If a day has fewer than 2 named bookable activities, omit that day entirely.
+• Do not pad with generic filler ("Free time", "Explore the city", "Rest", etc.)
+• Max 10 days. No minimum — include only the days you have real content for.
 
 JSON schema:
 {
-  "title": "string",
-  "summary": "string (2-3 sentences)",
+  "title": "string (accurate title reflecting the actual trip)",
+  "summary": "string (2-3 sentences, only facts from the transcript)",
   "total_days": integer,
-  "destinations": ["city name strings"],
-  "countries": ["country name strings"],
+  "destinations": ["only cities/regions explicitly visited"],
+  "countries": ["only countries explicitly visited"],
   "primary_city": "string",
   "estimated_budget_usd": integer | null,
   "days": [
     {
       "day_number": integer,
-      "city": "string",
+      "city": "string (must be mentioned in transcript)",
       "country": "string",
       "title": "string",
-      "summary": "string",
+      "summary": "string (only facts from transcript)",
       "activities": [
         {
           "sort_order": integer,
           "type": "ACCOMMODATION|FOOD|TOUR|ADVENTURE|CULTURAL|WELLNESS|NIGHTLIFE|TRANSPORT|ATTRACTION|OTHER",
-          "title": "string",
-          "description": "string (max 30 words)",
+          "title": "string (the actual named place or experience)",
+          "description": "string (max 30 words, only what the vlogger said about it)",
           "time": "HH:MM or null",
           "latitude": number | null,
           "longitude": number | null,
@@ -77,20 +90,21 @@ JSON schema:
   ]
 }
 
-Rules:
-- Only use locations and activities actually mentioned in the transcript. Do NOT invent destinations.
-- At least 3 days, max 10 days. Exactly 4 activities per day.
-- Keep descriptions under 30 words.
-- YOUR ENTIRE RESPONSE IS THE JSON OBJECT."""
+YOUR ENTIRE RESPONSE IS THE JSON OBJECT."""
 
-ITINERARY_COMPACT_PROMPT = """Travel itinerary expert. ONE valid JSON object only, no markdown.
+ITINERARY_COMPACT_PROMPT = """Shoppable travel itinerary extractor. ONE valid JSON object only, no markdown.
 
-If the content is NOT travel-related (no real locations visited), respond with exactly: {"not_travel": true}
+Respond with {"skip": true} if:
+- Not travel content, OR
+- No specific named bookable places (hotels/restaurants/attractions/tours) in the transcript, OR
+- You would need to invent anything to fill even one day
 
-Otherwise use this schema — only real locations from the transcript, never invented:
-{"title":"string","summary":"string","total_days":integer,"destinations":["string"],"countries":["string"],"primary_city":"string","estimated_budget_usd":null,"days":[{"day_number":integer,"city":"string","country":"string","title":"string","summary":"string","activities":[{"sort_order":integer,"type":"ATTRACTION","title":"string","description":"string","time":null,"latitude":null,"longitude":null,"image_url":null}]}]}
+NEVER invent places. Only extract what is explicitly named in the transcript.
 
-5 days max, 3 activities per day, one-sentence descriptions. JSON ONLY."""
+Schema (only if genuinely shoppable travel content exists):
+{"title":"string","summary":"string","total_days":integer,"destinations":["string"],"countries":["string"],"primary_city":"string","estimated_budget_usd":null,"days":[{"day_number":integer,"city":"string","country":"string","title":"string","summary":"string","activities":[{"sort_order":integer,"type":"ATTRACTION","title":"string (named place only)","description":"string (max 20 words, transcript facts only)","time":null,"latitude":null,"longitude":null,"image_url":null}]}]}
+
+No filler activities. No invented places. JSON ONLY."""
 
 DESTINATION_EXTRACTION_PROMPT = """Extract all travel destination names from this text. Return ONLY a JSON array of strings. Example: ["Tokyo", "Japan", "Kyoto"]. No explanation."""
 
@@ -188,9 +202,9 @@ def generate_trip_kit(vlog_id: str, transcript: str, title: str, creator_id: str
         _mark_vlog_failed(vlog_id)
         return False
 
-    # Non-travel content — model explicitly said so, don't hallucinate a kit.
-    if itinerary_data.get("not_travel"):
-        logger.info(f"Vlog {vlog_id} is not travel-related — skipping kit generation")
+    # Not shoppable / not travel — model explicitly said to skip.
+    if itinerary_data.get("skip") or itinerary_data.get("not_travel"):
+        logger.info(f"Vlog {vlog_id} skipped — not shoppable travel content")
         _mark_vlog_not_travel(vlog_id)
         return False
 
