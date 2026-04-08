@@ -73,7 +73,7 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
 
       // Check saved state
       const saved = await prisma.savedKit.findUnique({
-        where: { subscriberId_kitId: { subscriberId: subscriber.id, kitId: kit.id } },
+        where: { subscriberId_tripKitId: { subscriberId: subscriber.id, tripKitId: kit.id } },
         select: { id: true },
       })
       isSaved = !!saved
