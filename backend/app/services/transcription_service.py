@@ -200,33 +200,41 @@ def _download_audio(url: str, tmpdir: str) -> Optional[str]:
         compressed_path = os.path.join(tmpdir, "audio.mp3")
 
         # Try each player client in order until one works.
-        # - ios / android: bypass 403 bot-detection; need simple "bestaudio/best"
-        #   because they don't advertise the same container formats as the web client.
-        # - tv_embedded: works for many videos that require sign-in on other clients.
-        # - web_creator / web: last-resort fallbacks.
-        player_clients = ["ios", "android", "tv_embedded", "web_creator", "web"]
+        #
+        # Client notes:
+        # - ios / android : bypass 403 bot-detection on most public videos.
+        # - mweb          : mobile-web client; works for many sign-in-gated videos.
+        # - web_creator   : fallback; fails on age/sign-in restricted content.
+        # - web           : last resort; most likely to hit 403 in server envs.
+        # - None          : let yt-dlp pick its own default (catches edge cases).
+        #
+        # "tv_embedded" was removed — YouTube deprecated that client.
+        #
+        # If ios/android fail with "format not available", the yt-dlp installation
+        # is likely outdated. Run:  pip install -U yt-dlp
+        player_clients: list = ["ios", "android", "mweb", "web_creator", "web", None]
         last_error: Optional[Exception] = None
 
         for client in player_clients:
-            ydl_opts = {
-                # Keep the selector simple so it works across all player clients.
-                # Container-specific selectors (ext=m4a, etc.) cause "format not
-                # available" errors on mobile clients that only expose generic streams.
+            ydl_opts: dict = {
+                # "bestaudio/best" lets yt-dlp pick whatever the client exposes.
+                # Avoid container-specific selectors (ext=m4a etc.) — mobile clients
+                # don't always advertise those and raise "format not available".
                 "format": "bestaudio/best",
                 "outtmpl": raw_path,
                 "quiet": True,
                 "no_warnings": True,
-                "extractor_args": {
-                    "youtube": {"player_client": [client]},
-                },
                 "http_headers": {
-                    # Mimic the iOS YouTube app to avoid bot detection
+                    # Mimic the iOS YouTube app to reduce bot-detection friction.
                     "User-Agent": (
                         "com.google.ios.youtube/19.29.1 "
                         "(iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)"
                     ),
                 },
             }
+            if client is not None:
+                ydl_opts["extractor_args"] = {"youtube": {"player_client": [client]}}
+
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
