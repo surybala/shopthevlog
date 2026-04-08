@@ -28,15 +28,13 @@ export async function GET(req: NextRequest) {
   console.log('[TikTok PKCE] verifier in callback (len=' + codeVerifier.length + '):', codeVerifier.slice(0, 8) + '…')
 
   try {
-    // Debug: send client_secret but NO code_verifier to test whether TikTok
-    // sandbox validates PKCE in the token exchange at all.
     const tokenBody = new URLSearchParams({
       client_key:    process.env.TIKTOK_CLIENT_KEY!,
       client_secret: process.env.TIKTOK_CLIENT_SECRET!,
       code,
       grant_type:    'authorization_code',
       redirect_uri:  process.env.TIKTOK_REDIRECT_URI!,
-      // code_verifier intentionally omitted — debug only
+      code_verifier: codeVerifier,
     })
 
     const tokenRes = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
