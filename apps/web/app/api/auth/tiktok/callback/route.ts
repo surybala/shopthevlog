@@ -13,49 +13,59 @@ export async function GET(req: NextRequest) {
 
   if (error || !code || !stateUserId) return fail('tiktok_denied')
 
-  // ── CSRF / state validation ──────────────────────────────────────────────
+  // CSRF / state validation
   const supabase = createSupabaseServer()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user || user.id !== stateUserId) return fail('tiktok_denied')
 
-  // ── PKCE: read verifier from the incoming request cookies ────────────────
-  // Must read from req.cookies (the browser's cookie jar on this request),
-  // NOT from next/headers cookies() — the latter reflects the mutated server
-  // store and won't see the cookie we set on the redirect response.
+  // PKCE: read verifier from incoming request cookies
   const codeVerifier = req.cookies.get('tiktok_pkce_verifier')?.value
   if (!codeVerifier) {
-    console.error('TikTok OAuth: PKCE verifier cookie missing')
+    console.error('[TikTok PKCE] verifier cookie missing — all cookies:', req.cookies.getAll().map(c => c.name))
     return fail('tiktok_pkce_missing')
   }
-  // ─────────────────────────────────────────────────────────────────────────
+
+  // Debug: confirm the verifier we're sending to the token endpoint
+  console.log('[TikTok PKCE] verifier[:8] in callback =', codeVerifier.slice(0, 8))
+  console.log('[TikTok PKCE] verifier length =', codeVerifier.length)
 
   try {
-    // Exchange authorization code → tokens (PKCE: include code_verifier)
+    const tokenBody = new URLSearchParams({
+      client_key:    process.env.TIKTOK_CLIENT_KEY!,
+      client_secret: process.env.TIKTOK_CLIENT_SECRET!,
+      code,
+      grant_type:    'authorization_code',
+      redirect_uri:  process.env.TIKTOK_REDIRECT_URI!,
+      code_verifier: codeVerifier,
+    })
+
+    // Debug: log the exact body being sent (omit secret from log)
+    console.log('[TikTok] token body (no secret):', {
+      client_key:    process.env.TIKTOK_CLIENT_KEY,
+      code:          code.slice(0, 8) + '…',
+      grant_type:    'authorization_code',
+      redirect_uri:  process.env.TIKTOK_REDIRECT_URI,
+      code_verifier: codeVerifier.slice(0, 8) + '… (len=' + codeVerifier.length + ')',
+    })
+
     const tokenRes = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
       method: 'POST',
       headers: {
         'Content-Type':  'application/x-www-form-urlencoded',
         'Cache-Control': 'no-cache',
       },
-      body: new URLSearchParams({
-        client_key:    process.env.TIKTOK_CLIENT_KEY!,
-        client_secret: process.env.TIKTOK_CLIENT_SECRET!,
-        code,
-        grant_type:    'authorization_code',
-        redirect_uri:  process.env.TIKTOK_REDIRECT_URI!,
-        code_verifier: codeVerifier,
-      }),
+      body: tokenBody,
     })
 
     if (!tokenRes.ok) {
       const body = await tokenRes.text()
-      console.error('TikTok token exchange failed:', tokenRes.status, body)
+      console.error('[TikTok] token exchange HTTP error:', tokenRes.status, body)
       return fail('tiktok_token_failed')
     }
 
     const tokens = await tokenRes.json()
     if (!tokens.access_token) {
-      console.error('TikTok token exchange — no access_token:', tokens)
+      console.error('[TikTok] no access_token in response:', tokens)
       return fail('tiktok_token_failed')
     }
 
@@ -67,7 +77,6 @@ export async function GET(req: NextRequest) {
     const userData   = await userRes.json()
     const tiktokUser = userData.data?.user
 
-    // Upsert channel token + update creator
     const creator = await prisma.creator.findUnique({ where: { userId: user.id } })
     if (!creator) return fail('tiktok_no_creator')
 
@@ -101,7 +110,6 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    // Clear the PKCE verifier cookie on the success redirect
     const response = NextResponse.redirect(
       `${origin}/dashboard/settings?tab=channels&connected=tiktok`
     )
@@ -109,7 +117,7 @@ export async function GET(req: NextRequest) {
     return response
 
   } catch (e) {
-    console.error('TikTok OAuth error:', e)
+    console.error('[TikTok] OAuth error:', e)
     return fail('tiktok_failed')
   }
 }

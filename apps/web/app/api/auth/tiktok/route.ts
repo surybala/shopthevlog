@@ -2,15 +2,25 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import crypto from 'crypto'
 
-/** Generate a cryptographically random PKCE code_verifier (43–128 chars, URL-safe). */
+/**
+ * PKCE code_verifier — RFC 7636 §4.1
+ * Must use only unreserved URI chars: [A-Z a-z 0-9 - . _ ~], length 43–128.
+ * We use base64url (subset of unreserved chars) from 32 random bytes = 43 chars.
+ */
 function generateCodeVerifier(): string {
-  // 96 random bytes → 128 base64url chars (no padding, URL-safe alphabet)
-  return crypto.randomBytes(96).toString('base64url')
+  return crypto.randomBytes(32).toString('base64url') // 32 bytes → 43 base64url chars
 }
 
-/** Derive code_challenge = BASE64URL(SHA-256(verifier)) — TikTok requires S256. */
+/**
+ * PKCE code_challenge — RFC 7636 §4.2
+ * BASE64URL(SHA256(ASCII(code_verifier))) — no padding.
+ * We manually convert base64 → base64url to avoid Node.js version quirks
+ * with Hash.digest('base64url').
+ */
 function generateCodeChallenge(verifier: string): string {
-  return crypto.createHash('sha256').update(verifier, 'ascii').digest('base64url')
+  const hash = crypto.createHash('sha256').update(verifier).digest('base64')
+  // Convert standard base64 → base64url (RFC 4648 §5)
+  return hash.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
 export async function GET() {
@@ -22,10 +32,12 @@ export async function GET() {
     return NextResponse.json({ error: 'TikTok OAuth not configured' }, { status: 500 })
   }
 
-  // ── PKCE ─────────────────────────────────────────────────────────────────
   const codeVerifier  = generateCodeVerifier()
   const codeChallenge = generateCodeChallenge(codeVerifier)
-  // ─────────────────────────────────────────────────────────────────────────
+
+  // Debug: log first 8 chars of each so we can verify they match in callback
+  console.log('[TikTok PKCE] verifier[:8]  =', codeVerifier.slice(0, 8))
+  console.log('[TikTok PKCE] challenge[:8] =', codeChallenge.slice(0, 8))
 
   const params = new URLSearchParams({
     client_key:            process.env.TIKTOK_CLIENT_KEY,
@@ -37,9 +49,8 @@ export async function GET() {
     code_challenge_method: 'S256',
   })
 
-  // ── Set cookie on the response object (not via next/headers cookies()) ───
-  // next/headers cookies().set() does not attach Set-Cookie to redirect
-  // responses — must use response.cookies.set() instead.
+  // Cookie must be set on the response object — next/headers cookies().set()
+  // does NOT attach Set-Cookie headers to redirect responses.
   const response = NextResponse.redirect(
     `https://www.tiktok.com/v2/auth/authorize/?${params}`
   )
@@ -47,7 +58,7 @@ export async function GET() {
     httpOnly: true,
     secure:   process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge:   600, // 10 minutes
+    maxAge:   600,
     path:     '/',
   })
 
