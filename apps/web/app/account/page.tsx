@@ -29,10 +29,16 @@ export default async function AccountPage({
     : searchParams.tab === 'saved'       ? 'saved'
     : 'following'
 
-  const subscriber = await prisma.subscriber.findUnique({
-    where: { userId: user.id },
-    select: { id: true, displayName: true },
-  })
+  const [subscriber, creator] = await Promise.all([
+    prisma.subscriber.findUnique({
+      where: { userId: user.id },
+      select: { id: true, displayName: true },
+    }),
+    prisma.creator.findUnique({
+      where: { userId: user.id },
+      select: { handle: true, displayName: true },
+    }),
+  ])
 
   // Run all three queries in parallel — they're all cheap and always needed for counts
   const [following, subscriptions, savedKits] = await Promise.all([
@@ -90,7 +96,11 @@ export default async function AccountPage({
           <Link href="/" className="text-lg font-bold text-white">VlogShopper</Link>
           <div className="flex items-center gap-4">
             <Link href="/discover" className="text-sm text-white/50 hover:text-white">Discover</Link>
-            <Link href="/dashboard" className="text-sm text-white/50 hover:text-white">Creator dashboard</Link>
+            {creator && (
+              <Link href="/dashboard" className="text-sm px-3 py-1.5 rounded-lg border border-white/20 text-white/70 hover:text-white hover:border-white/40 transition-colors">
+                Creator Dashboard ↗
+              </Link>
+            )}
           </div>
         </div>
       </nav>

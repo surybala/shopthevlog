@@ -40,6 +40,13 @@ export default function DashboardNav({ handle }: { handle: string | null }) {
       })}
 
       <div className="pt-3 mt-3 border-t border-white/10 space-y-0.5">
+        <Link
+          href="/account"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/50 hover:text-white hover:bg-white/5 transition-colors"
+        >
+          <span className="text-base leading-none">👤</span>
+          My Account
+        </Link>
         {handle && (
           <Link
             href={`/@${handle}`}

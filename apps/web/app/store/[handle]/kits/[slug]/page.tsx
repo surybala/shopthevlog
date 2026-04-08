@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import prisma from '@/lib/prisma/client'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import SaveKitButton from '@/components/SaveKitButton'
 
 export async function generateMetadata({ params }: { params: { handle: string; slug: string } }) {
   const kit = await prisma.tripKit.findFirst({
@@ -39,17 +40,23 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
 
   if (!kit) notFound()
 
-  // Check access — if FOLLOWER or PREMIUM, check subscription
-  let hasAccess = kit.accessTier === 'FREE'
-  let subscriberId: string | null = null
+  // Always fetch auth state — needed for both access gating and save state
+  const supabase = createSupabaseServer()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!hasAccess) {
-    const supabase = createSupabaseServer()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const subscriber = await prisma.subscriber.findUnique({ where: { userId: user.id } })
-      subscriberId = subscriber?.id ?? null
-      if (subscriber) {
+  let hasAccess = kit.accessTier === 'FREE'
+  let subscriber: { id: string } | null = null
+  let isSaved = false
+
+  if (user) {
+    subscriber = await prisma.subscriber.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    })
+
+    if (subscriber) {
+      // Check access for gated kits
+      if (!hasAccess) {
         const sub = await prisma.subscription.findFirst({
           where: { subscriberId: subscriber.id, creatorId: creator.id, status: 'ACTIVE' },
           include: { tier: true },
@@ -57,11 +64,19 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
         if (sub) {
           hasAccess = kit.accessTier === 'FOLLOWER' || sub.tier.kitAccess === 'PREMIUM'
         } else {
-          // Free follow counts for FOLLOWER tier
-          const follow = await prisma.follow.findUnique({ where: { subscriberId_creatorId: { subscriberId: subscriber.id, creatorId: creator.id } } })
+          const follow = await prisma.follow.findUnique({
+            where: { subscriberId_creatorId: { subscriberId: subscriber.id, creatorId: creator.id } },
+          })
           hasAccess = kit.accessTier === 'FOLLOWER' && !!follow
         }
       }
+
+      // Check saved state
+      const saved = await prisma.savedKit.findUnique({
+        where: { subscriberId_kitId: { subscriberId: subscriber.id, kitId: kit.id } },
+        select: { id: true },
+      })
+      isSaved = !!saved
     }
   }
 
@@ -95,13 +110,19 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
               )}
             </div>
           </div>
-          {!hasAccess && (
-            <div className="shrink-0">
+          <div className="shrink-0 flex items-center gap-2">
+            <SaveKitButton
+              kitId={kit.id}
+              initialSaved={isSaved}
+              isLoggedIn={!!user}
+              creatorHandle={creator.handle}
+            />
+            {!hasAccess && (
               <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-white/50">
                 {kit.accessTier === 'FOLLOWER' ? '🔓 Follow to unlock' : '⭐ Premium'}
               </span>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Creator card */}
