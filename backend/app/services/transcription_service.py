@@ -187,6 +187,10 @@ def _download_audio(url: str, tmpdir: str) -> Optional[str]:
 
     This keeps the file small for Gemini while preserving speech quality.
     Very long recordings are trimmed to 1 hour.
+
+    YouTube 403 workaround: use the iOS player client, which YouTube treats as
+    a trusted first-party app and does not block with bot-detection 403s.
+    Falls back to the Android and web_creator clients if iOS also fails.
     """
     try:
         import yt_dlp
@@ -195,14 +199,43 @@ def _download_audio(url: str, tmpdir: str) -> Optional[str]:
         raw_path = os.path.join(tmpdir, "audio_raw.%(ext)s")
         compressed_path = os.path.join(tmpdir, "audio.mp3")
 
-        ydl_opts = {
-            "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[ext=opus]/bestaudio/best[height<=480]/best",
-            "outtmpl": raw_path,
-            "quiet": True,
-            "no_warnings": True,
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+        # Try each player client in order until one works.
+        # ios is the most reliable for bypassing YouTube 403s in server envs.
+        player_clients = ["ios", "android", "web_creator", "web"]
+        last_error: Optional[Exception] = None
+
+        for client in player_clients:
+            ydl_opts = {
+                "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[ext=opus]/bestaudio/best",
+                "outtmpl": raw_path,
+                "quiet": True,
+                "no_warnings": True,
+                "extractor_args": {
+                    "youtube": {"player_client": [client]},
+                },
+                "http_headers": {
+                    # Mimic the iOS YouTube app to avoid bot detection
+                    "User-Agent": (
+                        "com.google.ios.youtube/19.29.1 "
+                        "(iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)"
+                    ),
+                },
+            }
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+                last_error = None
+                break  # success — stop trying clients
+            except Exception as e:
+                logger.warning("yt-dlp player_client=%s failed: %s", client, e)
+                last_error = e
+                # Clean up any partial download before retrying
+                for f in os.listdir(tmpdir):
+                    if f.startswith("audio_raw"):
+                        os.remove(os.path.join(tmpdir, f))
+
+        if last_error:
+            raise last_error
 
         downloaded = None
         for fname in os.listdir(tmpdir):
