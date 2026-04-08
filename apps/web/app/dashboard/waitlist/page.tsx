@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { isAdmin } from '@/lib/admin'
 import prisma from '@/lib/prisma/client'
 import WaitlistTable from './WaitlistTable'
 
@@ -9,9 +10,7 @@ export default async function WaitlistAdminPage() {
   const supabase = createSupabaseServer()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login?next=/dashboard/waitlist')
-
-  const creator = await prisma.creator.findUnique({ where: { userId: user.id } })
-  if (!creator) redirect('/dashboard')
+  if (!user.email || !isAdmin(user.email)) redirect('/dashboard')
 
   const [pending, approved, rejected] = await Promise.all([
     prisma.waitlistRequest.findMany({ where: { status: 'PENDING' },  orderBy: { createdAt: 'desc' } }),

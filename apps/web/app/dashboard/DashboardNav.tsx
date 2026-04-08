@@ -12,15 +12,18 @@ const navItems = [
   { href: '/dashboard/analytics', label: 'Analytics', icon: '📊' },
   { href: '/dashboard/payouts', label: 'Payouts', icon: '💰' },
   { href: '/dashboard/settings', label: 'Settings', icon: '⚙️' },
+]
+
+const adminNavItems = [
   { href: '/dashboard/waitlist', label: 'Waitlist', icon: '🔒' },
 ]
 
-export default function DashboardNav({ handle }: { handle: string | null }) {
+export default function DashboardNav({ handle, isAdmin = false }: { handle: string | null; isAdmin?: boolean }) {
   const pathname = usePathname()
 
   return (
     <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-      {navItems.map(item => {
+      {[...navItems, ...(isAdmin ? adminNavItems : [])].map(item => {
         const active = item.href === '/dashboard'
           ? pathname === '/dashboard'
           : pathname.startsWith(item.href)

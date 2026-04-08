@@ -13,8 +13,8 @@ function resend() {
   return new Resend(key)
 }
 
-const FROM   = process.env.RESEND_FROM  ?? 'VlogShopper <hello@vlogshopper.com>'
-const ADMIN  = process.env.ADMIN_EMAIL  ?? 'hello@vlogshopper.com'
+const FROM   = process.env.RESEND_FROM  ?? 'VlogShopper <cherry@vlogshopper.com>'
+const ADMIN  = process.env.ADMIN_EMAIL  ?? 'cherry@vlogshopper.com'
 const BASE   = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
 
 // ── 1. Confirmation to the person who just joined the waitlist ────────────────
