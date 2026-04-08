@@ -12,6 +12,7 @@ const navItems = [
   { href: '/dashboard/analytics', label: 'Analytics', icon: '📊' },
   { href: '/dashboard/payouts', label: 'Payouts', icon: '💰' },
   { href: '/dashboard/settings', label: 'Settings', icon: '⚙️' },
+  { href: '/dashboard/waitlist', label: 'Waitlist', icon: '🔒' },
 ]
 
 export default function DashboardNav({ handle }: { handle: string | null }) {

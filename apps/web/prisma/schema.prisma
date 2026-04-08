@@ -810,3 +810,25 @@ model Order {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WAITLIST
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum WaitlistStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model WaitlistRequest {
+  id        String        @id @default(cuid())
+  email     String        @unique
+  name      String
+  reason    String?       // optional "why do you want access?" field
+  status    WaitlistStatus @default(PENDING)
+  approvedAt DateTime?
+  rejectedAt DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}

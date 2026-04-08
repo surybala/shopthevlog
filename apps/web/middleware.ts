@@ -41,9 +41,15 @@ export async function middleware(req: NextRequest) {
   // ── Whitelist enforcement ────────────────────────────────────────────────
   // If a signed-in user is on a protected route but not on the whitelist,
   // send them to /waitlist regardless of how they authenticated.
+  //
+  // Two fast checks (no DB queries — both read from the JWT):
+  //   1. env-var whitelist  (ALLOWED_EMAILS)
+  //   2. app_metadata.approved = true  (stamped by /auth/callback on approval)
   const pathname = req.nextUrl.pathname
-  if (user?.email && PROTECTED_PREFIXES.some(p => pathname.startsWith(p))) {
-    if (!isWhitelisted(user.email)) {
+  if (user && PROTECTED_PREFIXES.some(p => pathname.startsWith(p))) {
+    const envAllowed      = user.email ? isWhitelisted(user.email) : false
+    const metaApproved    = user.app_metadata?.approved === true
+    if (!envAllowed && !metaApproved) {
       const url = req.nextUrl.clone()
       url.pathname = '/waitlist'
       return NextResponse.redirect(url)
