@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
+import {
+  buildAffiliateDestination,
+  detectAffiliateDeviceType,
+  getOrCreateAffiliateSessionId,
+} from '@/lib/affiliateTracking'
 
 export async function GET(req: NextRequest, { params }: { params: { shortCode: string } }) {
   const link = await prisma.affiliateLink.findUnique({
@@ -22,6 +27,9 @@ export async function GET(req: NextRequest, { params }: { params: { shortCode: s
     }
   } catch { /* anonymous click is fine */ }
 
+  const sessionId = getOrCreateAffiliateSessionId(req.cookies.get('vs_session')?.value)
+  const tripKitId = req.nextUrl.searchParams.get('kit') ?? null
+
   // Record click event (fire-and-forget)
   void Promise.all([
     prisma.clickEvent.create({
@@ -29,61 +37,45 @@ export async function GET(req: NextRequest, { params }: { params: { shortCode: s
         linkId: link.id,
         creatorId: link.creatorId,
         subscriberId,
-        sessionId: req.cookies.get('vs_session')?.value ?? crypto.randomUUID(),
-        tripKitId: req.nextUrl.searchParams.get('kit') ?? null,
+        sessionId,
+        tripKitId,
         referrer: req.headers.get('referer') ?? null,
         userAgent: req.headers.get('user-agent') ?? null,
+        device: detectAffiliateDeviceType(req.headers.get('user-agent')),
       },
     }).catch(() => {}),
     prisma.affiliateLink.update({
       where: { id: link.id },
       data: { clickCount: { increment: 1 } },
     }).catch(() => {}),
-    prisma.tripKit.updateMany(
-      link.id
-        ? { where: { affiliateLinks: { some: { id: link.id } } }, data: { clickCount: { increment: 1 } } }
-        : { where: { id: 'never' }, data: {} }
-    ).catch(() => {}),
+    tripKitId
+      ? prisma.tripKit.updateMany({
+          where: { id: tripKitId, affiliateLinks: { some: { id: link.id } } },
+          data: { clickCount: { increment: 1 } },
+        }).catch(() => {})
+      : prisma.tripKit.updateMany({
+          where: { affiliateLinks: { some: { id: link.id } } },
+          data: { clickCount: { increment: 1 } },
+        }).catch(() => {}),
   ])
 
-  // Build provider-specific destination URL
-  const dest = buildAffiliateUrl(link)
-  return NextResponse.redirect(dest, { status: 302 })
-}
-
-function buildAffiliateUrl(link: {
-  provider: string
-  affiliateUrl: string
-  targetUrl: string
-  providerProductId: string | null
-}): string {
-  const stayAid = process.env.STAY22_AFFILIATE_ID
-  const gygId = process.env.GYG_PARTNER_ID
-  const viatorMcid = process.env.VIATOR_MCID
-  const amazonTag = process.env.AMAZON_ASSOCIATE_TAG
-  const skyscannerId = process.env.SKYSCANNER_AFFILIATE_ID
-  const bookingAid = process.env.BOOKING_COM_AFFILIATE_ID
-
-  switch (link.provider) {
-    case 'STAY22':
-      return stayAid && link.providerProductId
-        ? `https://www.stay22.com/book/${link.providerProductId}?aid=${stayAid}`
-        : link.affiliateUrl
-    case 'GETYOURGUIDE':
-      return gygId && link.providerProductId
-        ? `https://www.getyourguide.com/activity/${link.providerProductId}/?partner_id=${gygId}&utm_source=vlogshopper`
-        : link.affiliateUrl
-    case 'VIATOR':
-      return viatorMcid ? `${link.targetUrl}?mcid=${viatorMcid}` : link.affiliateUrl
-    case 'AMAZON':
-      return amazonTag ? `${link.targetUrl}?tag=${amazonTag}` : link.affiliateUrl
-    case 'SKYSCANNER':
-      return skyscannerId ? `${link.targetUrl}&associateId=${skyscannerId}` : link.affiliateUrl
-    case 'BOOKING_COM':
-      return bookingAid && link.providerProductId
-        ? `https://www.booking.com/hotel/${link.providerProductId}.html?aid=${bookingAid}`
-        : link.affiliateUrl
-    default:
-      return link.affiliateUrl || link.targetUrl
+  const dest = buildAffiliateDestination(link, {
+    stayAid: process.env.STAY22_AFFILIATE_ID,
+    gygId: process.env.GYG_PARTNER_ID,
+    viatorMcid: process.env.VIATOR_MCID,
+    amazonTag: process.env.AMAZON_ASSOCIATE_TAG,
+    skyscannerId: process.env.SKYSCANNER_AFFILIATE_ID,
+    bookingAid: process.env.BOOKING_COM_AFFILIATE_ID,
+  }, { tripKitId })
+  const response = NextResponse.redirect(dest, { status: 302 })
+  if (!req.cookies.get('vs_session')?.value) {
+    response.cookies.set('vs_session', sessionId, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30,
+    })
   }
+  return response
 }

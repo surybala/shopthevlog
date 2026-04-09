@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import prisma from '@/lib/prisma/client'
+import { parseAffiliatePartnerRef, resolveAttributedTripKitId } from '@/lib/affiliateTracking'
 
 // GetYourGuide sends a booking confirmation webhook when a tour is booked.
 // Payload shape:
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { booking_id, partner_ref, tour_id, gross_amount, commission_amount, currency = 'USD', booked_at } = payload
+  const parsedPartnerRef = parseAffiliatePartnerRef(partner_ref)
 
   if (!booking_id || !tour_id) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -60,15 +62,15 @@ export async function POST(req: NextRequest) {
   // Try partner_ref (our shortCode embedded in the link) first, then fall back to tour_id
   let link = partner_ref
     ? await prisma.affiliateLink.findFirst({
-        where: { shortCode: partner_ref, provider: 'GETYOURGUIDE', isActive: true },
-        select: { id: true, creatorId: true },
+        where: { shortCode: parsedPartnerRef.shortCode ?? partner_ref, provider: 'GETYOURGUIDE', isActive: true },
+        select: { id: true, creatorId: true, tripKits: { select: { id: true } } },
       })
     : null
 
   if (!link) {
     link = await prisma.affiliateLink.findFirst({
       where: { providerProductId: tour_id, provider: 'GETYOURGUIDE', isActive: true },
-      select: { id: true, creatorId: true },
+      select: { id: true, creatorId: true, tripKits: { select: { id: true } } },
     })
   }
 
@@ -81,6 +83,10 @@ export async function POST(req: NextRequest) {
   const commissionCents = Math.round(commission_amount * 100)
   const platformFee = 0
   const creatorEarnings = commissionCents - platformFee
+  const attribution = resolveAttributedTripKitId({
+    explicitTripKitId: parsedPartnerRef.tripKitId,
+    linkedTripKitIds: link.tripKits.map((tripKit) => tripKit.id),
+  })
 
   await prisma.$transaction([
     prisma.commission.create({
@@ -94,6 +100,8 @@ export async function POST(req: NextRequest) {
         platformFee,
         creatorEarnings,
         currency,
+        attributedTripKitId: attribution.tripKitId,
+        attributionMethod: attribution.attributionMethod,
         status: 'CONFIRMED',
         convertedAt: booked_at ? new Date(booked_at) : new Date(),
       },
@@ -105,6 +113,17 @@ export async function POST(req: NextRequest) {
         totalEarnings: { increment: creatorEarnings / 100 },
       },
     }),
+    ...(attribution.tripKitId
+      ? [
+          prisma.tripKit.update({
+            where: { id: attribution.tripKitId },
+            data: {
+              conversionCount: { increment: 1 },
+              estimatedEarnings: { increment: creatorEarnings / 100 },
+            },
+          }),
+        ]
+      : []),
   ])
 
   return NextResponse.json({ ok: true })

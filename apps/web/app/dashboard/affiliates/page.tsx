@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
+import { summarizeAffiliateLinks } from '@/lib/affiliateAnalytics'
 
 const providerColors: Record<string, string> = {
   STAY22: 'bg-orange-500/20 text-orange-300',
@@ -28,14 +29,7 @@ export default async function DashboardAffiliatesPage() {
     take: 100,
   })
 
-  const totals = links.reduce(
-    (acc, l) => ({
-      clicks: acc.clicks + l.clickCount,
-      conversions: acc.conversions + l.conversionCount,
-      earnings: acc.earnings + l.totalEarnings,
-    }),
-    { clicks: 0, conversions: 0, earnings: 0 }
-  )
+  const totals = summarizeAffiliateLinks(links)
 
   return (
     <div className="p-8">
@@ -57,7 +51,7 @@ export default async function DashboardAffiliatesPage() {
           <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Conversions</p>
           <p className="text-2xl font-bold text-white">{totals.conversions.toLocaleString()}</p>
           <p className="text-xs text-white/30 mt-1">
-            {totals.clicks > 0 ? ((totals.conversions / totals.clicks) * 100).toFixed(1) : '0'}% CVR
+            {totals.conversionRate.toFixed(1)}% CVR
           </p>
         </div>
         <div className="glass-card p-5">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import prisma from '@/lib/prisma/client'
+import { resolveAttributedTripKitId } from '@/lib/affiliateTracking'
 
 // Stay22 sends conversions when a hotel booking completes.
 // Payload shape (from Stay22 docs):
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
   // Find the affiliate link by provider product ID (Stay22 link_id)
   const link = await prisma.affiliateLink.findFirst({
     where: { providerProductId: link_id, provider: 'STAY22', isActive: true },
-    select: { id: true, creatorId: true },
+    select: { id: true, creatorId: true, tripKits: { select: { id: true } } },
   })
 
   if (!link) {
@@ -72,6 +73,9 @@ export async function POST(req: NextRequest) {
   // No platform fee for affiliate pass-through commissions
   const platformFee = 0
   const creatorEarnings = commissionCents - platformFee
+  const attribution = resolveAttributedTripKitId({
+    linkedTripKitIds: link.tripKits.map((tripKit) => tripKit.id),
+  })
 
   await prisma.$transaction([
     prisma.commission.create({
@@ -85,6 +89,8 @@ export async function POST(req: NextRequest) {
         platformFee,
         creatorEarnings,
         currency,
+        attributedTripKitId: attribution.tripKitId,
+        attributionMethod: attribution.attributionMethod,
         status: 'CONFIRMED',
         convertedAt: converted_at ? new Date(converted_at) : new Date(),
       },
@@ -96,6 +102,17 @@ export async function POST(req: NextRequest) {
         totalEarnings: { increment: creatorEarnings / 100 },
       },
     }),
+    ...(attribution.tripKitId
+      ? [
+          prisma.tripKit.update({
+            where: { id: attribution.tripKitId },
+            data: {
+              conversionCount: { increment: 1 },
+              estimatedEarnings: { increment: creatorEarnings / 100 },
+            },
+          }),
+        ]
+      : []),
   ])
 
   return NextResponse.json({ ok: true })

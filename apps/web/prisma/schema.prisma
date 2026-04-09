@@ -454,6 +454,7 @@ model TripKit {
   affiliateLinks AffiliateLink[]
   savedBy        SavedKit[]
   clickEvents    ClickEvent[]
+  commissions    Commission[] @relation("CommissionAttribution")
 
   totalLinkCount    Int   @default(0)
   estimatedEarnings Float @default(0)
@@ -747,6 +748,10 @@ model Commission {
   platformFee     Int
   creatorEarnings Int
   currency        String @default("USD")
+
+  attributedTripKitId String?
+  attributedTripKit   TripKit? @relation("CommissionAttribution", fields: [attributedTripKitId], references: [id])
+  attributionMethod   String?
 
   status      CommissionStatus @default(PENDING)
   convertedAt DateTime

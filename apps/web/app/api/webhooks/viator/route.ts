@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import prisma from '@/lib/prisma/client'
+import { resolveAttributedTripKitId } from '@/lib/affiliateTracking'
 
 // Viator sends booking confirmation webhooks via the Partner API.
 // Payload shape:
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
 
   const link = await prisma.affiliateLink.findFirst({
     where: { providerProductId: productCode, provider: 'VIATOR', isActive: true },
-    select: { id: true, creatorId: true },
+    select: { id: true, creatorId: true, tripKits: { select: { id: true } } },
   })
 
   if (!link) {
@@ -77,6 +78,9 @@ export async function POST(req: NextRequest) {
   const commissionCents = Math.round(commissionAmount * 100)
   const platformFee = 0
   const creatorEarnings = commissionCents - platformFee
+  const attribution = resolveAttributedTripKitId({
+    linkedTripKitIds: link.tripKits.map((tripKit) => tripKit.id),
+  })
 
   await prisma.$transaction([
     prisma.commission.create({
@@ -90,6 +94,8 @@ export async function POST(req: NextRequest) {
         platformFee,
         creatorEarnings,
         currency,
+        attributedTripKitId: attribution.tripKitId,
+        attributionMethod: attribution.attributionMethod,
         status: 'CONFIRMED',
         convertedAt: bookedAt ? new Date(bookedAt) : new Date(),
       },
@@ -101,6 +107,17 @@ export async function POST(req: NextRequest) {
         totalEarnings: { increment: creatorEarnings / 100 },
       },
     }),
+    ...(attribution.tripKitId
+      ? [
+          prisma.tripKit.update({
+            where: { id: attribution.tripKitId },
+            data: {
+              conversionCount: { increment: 1 },
+              estimatedEarnings: { increment: creatorEarnings / 100 },
+            },
+          }),
+        ]
+      : []),
   ])
 
   return NextResponse.json({ ok: true })

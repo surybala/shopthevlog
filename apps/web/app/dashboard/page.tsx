@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
+import { buildRecentPerformanceSummary, formatCurrencyFromCents } from '@/lib/dashboardAnalytics'
 
 export default async function DashboardOverviewPage() {
   const supabase = createSupabaseServer()
@@ -35,6 +36,22 @@ export default async function DashboardOverviewPage() {
       })
     : null
 
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  const [recentClicks, recentConversions, recentEarnings] = creator
+    ? await Promise.all([
+        prisma.clickEvent.count({
+          where: { creatorId: creator.id, createdAt: { gte: sevenDaysAgo } },
+        }),
+        prisma.commission.count({
+          where: { creatorId: creator.id, convertedAt: { gte: sevenDaysAgo } },
+        }),
+        prisma.commission.aggregate({
+          where: { creatorId: creator.id, convertedAt: { gte: sevenDaysAgo } },
+          _sum: { creatorEarnings: true },
+        }),
+      ])
+    : [0, 0, { _sum: { creatorEarnings: 0 } }]
+
   const recentKits = creator
     ? await prisma.tripKit.findMany({
         where: { creatorId: creator.id },
@@ -65,6 +82,12 @@ export default async function DashboardOverviewPage() {
     )
   }
 
+  const recentPerformance = buildRecentPerformanceSummary({
+    clicksLast7d: recentClicks,
+    conversionsLast7d: recentConversions,
+    earningsLast7dCents: recentEarnings._sum.creatorEarnings ?? 0,
+  })
+
   const scanBadgeColor: Record<string, string> = {
     COMPLETE: 'bg-green-500/20 text-green-400',
     SCANNING: 'bg-yellow-500/20 text-yellow-400',
@@ -75,7 +98,6 @@ export default async function DashboardOverviewPage() {
 
   return (
     <div className="p-8">
-      {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-white">Good morning, {creator.displayName.split(' ')[0]} 👋</h1>
@@ -87,7 +109,6 @@ export default async function DashboardOverviewPage() {
         </div>
       </div>
 
-      {/* Publish prompt */}
       {!creator.isPublished && (
         <div className="glass-card p-4 mb-6 flex items-center justify-between border border-yellow-500/20 bg-yellow-500/5">
           <div className="flex items-center gap-3">
@@ -103,7 +124,6 @@ export default async function DashboardOverviewPage() {
         </div>
       )}
 
-      {/* Scan status banner */}
       {creator.catalogScanStatus !== 'COMPLETE' && (
         <div className="glass-card p-4 mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -114,7 +134,7 @@ export default async function DashboardOverviewPage() {
               {creator.catalogScanStatus === 'PENDING'
                 ? 'Your vlog catalog scan is pending. Connect a YouTube channel to start.'
                 : creator.catalogScanStatus === 'SCANNING'
-                ? 'AI is scanning your vlog catalog and generating Trip Kits…'
+                ? 'AI is scanning your vlog catalog and generating Trip Kits...'
                 : creator.catalogScanStatus === 'QUEUED'
                 ? 'Your catalog scan is queued and will start shortly.'
                 : 'Catalog scan failed. You can re-trigger from Settings.'}
@@ -128,8 +148,7 @@ export default async function DashboardOverviewPage() {
         </div>
       )}
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-4 gap-4 mb-4">
         <div className="glass-card p-5">
           <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Total Earnings</p>
           <p className="text-2xl font-bold text-white">
@@ -162,7 +181,27 @@ export default async function DashboardOverviewPage() {
         </div>
       </div>
 
-      {/* Recent kits */}
+      <div className="glass-card p-5 mb-8">
+        <div className="flex items-center justify-between gap-6">
+          <div>
+            <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Last 7 Days</p>
+            <p className="text-lg font-semibold text-white">${formatCurrencyFromCents(recentPerformance.earningsLast7dCents)} earned</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm font-medium text-white">{recentPerformance.clicksLast7d.toLocaleString()}</p>
+            <p className="text-xs text-white/30">clicks</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm font-medium text-white">{recentPerformance.conversionsLast7d.toLocaleString()}</p>
+            <p className="text-xs text-white/30">conversions</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm font-medium text-white">{recentPerformance.conversionRate.toFixed(1)}%</p>
+            <p className="text-xs text-white/30">CVR</p>
+          </div>
+        </div>
+      </div>
+
       <div className="glass-card">
         <div className="p-5 border-b border-white/10 flex items-center justify-between">
           <h2 className="font-semibold text-white">Recent Trip Kits</h2>
@@ -175,7 +214,7 @@ export default async function DashboardOverviewPage() {
           </div>
         ) : (
           <div className="divide-y divide-white/10">
-            {recentKits.map(kit => (
+            {recentKits.map((kit) => (
               <div key={kit.id} className="flex items-center justify-between px-5 py-4">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-white truncate">{kit.title}</p>
