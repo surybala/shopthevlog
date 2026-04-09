@@ -1,9 +1,8 @@
 """
 Tests for app.tasks.process_vlog.
 
-Phase 1 now builds the transcript graph before keeping the legacy TripKit
-projection step alive, so the task ordering is:
-transcribe -> sync transcript graph -> publish TripKit projection.
+The graph pipeline now stops at review readiness:
+transcribe -> sync transcript graph -> rank opportunities -> REVIEW_PENDING.
 """
 import pytest
 from unittest.mock import call, patch
@@ -91,7 +90,7 @@ class TestProcessVlogGuards:
 
 class TestPhaseOnePipeline:
     @pytest.mark.asyncio
-    async def test_pending_status_runs_transcript_graph_visual_sync_then_tripkit_projection(self):
+    async def test_pending_status_runs_transcript_graph_visual_sync_then_review_pending(self):
         pg = _make_vlog_pg("PENDING")
         with (
             patch("app.tasks.process_vlog.PgClient", return_value=pg),
@@ -101,7 +100,6 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog.fuse_candidate_entities", return_value={"clusters": 1}) as mock_fuse,
             patch("app.tasks.process_vlog.resolve_candidates", return_value={"resolved": 2}) as mock_resolve,
             patch("app.tasks.process_vlog.rank_opportunities", return_value={"ranked": 2}) as mock_rank,
-            patch("app.tasks.process_vlog.publish_tripkit_from_graph", return_value=True) as mock_publish_tripkit,
             patch("app.tasks.process_vlog._update_vlog_status") as mock_update_status,
         ):
             from app.tasks.process_vlog import process_vlog_task
@@ -126,7 +124,6 @@ class TestPhaseOnePipeline:
             call("vlog-001", "RANKED"),
             call("vlog-001", "REVIEW_PENDING"),
         ])
-        mock_publish_tripkit.assert_called_once_with("vlog-001")
 
     @pytest.mark.asyncio
     async def test_failed_status_can_retry(self):
@@ -139,7 +136,6 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog.fuse_candidate_entities", return_value={"clusters": 1}),
             patch("app.tasks.process_vlog.resolve_candidates", return_value={"resolved": 1}),
             patch("app.tasks.process_vlog.rank_opportunities", return_value={"ranked": 1}),
-            patch("app.tasks.process_vlog.publish_tripkit_from_graph", return_value=True),
         ):
             from app.tasks.process_vlog import process_vlog_task
             await process_vlog_task("vlog-001")
@@ -156,7 +152,6 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog.fuse_candidate_entities") as mock_fuse,
             patch("app.tasks.process_vlog.resolve_candidates") as mock_resolve,
             patch("app.tasks.process_vlog.rank_opportunities") as mock_rank,
-            patch("app.tasks.process_vlog.publish_tripkit_from_graph") as mock_publish_tripkit,
         ):
             from app.tasks.process_vlog import process_vlog_task
             await process_vlog_task("vlog-001")
@@ -165,10 +160,9 @@ class TestPhaseOnePipeline:
         mock_fuse.assert_not_called()
         mock_resolve.assert_not_called()
         mock_rank.assert_not_called()
-        mock_publish_tripkit.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_graph_failure_aborts_tripkit_projection(self):
+    async def test_graph_failure_aborts_review_pipeline(self):
         pg = _make_vlog_pg("PENDING")
         with (
             patch("app.tasks.process_vlog.PgClient", return_value=pg),
@@ -178,7 +172,6 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog.fuse_candidate_entities") as mock_fuse,
             patch("app.tasks.process_vlog.resolve_candidates") as mock_resolve,
             patch("app.tasks.process_vlog.rank_opportunities") as mock_rank,
-            patch("app.tasks.process_vlog.publish_tripkit_from_graph") as mock_publish_tripkit,
             patch("app.tasks.process_vlog._mark_vlog_failed") as mock_mark_failed,
         ):
             from app.tasks.process_vlog import process_vlog_task
@@ -187,7 +180,6 @@ class TestPhaseOnePipeline:
         mock_fuse.assert_not_called()
         mock_resolve.assert_not_called()
         mock_rank.assert_not_called()
-        mock_publish_tripkit.assert_not_called()
         mock_mark_failed.assert_called_once_with("vlog-001")
 
     @pytest.mark.asyncio
@@ -201,7 +193,6 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog.fuse_candidate_entities", return_value={"clusters": 2}) as mock_fuse,
             patch("app.tasks.process_vlog.resolve_candidates", return_value={"resolved": 2}) as mock_resolve,
             patch("app.tasks.process_vlog.rank_opportunities", return_value={"ranked": 3}) as mock_rank,
-            patch("app.tasks.process_vlog.publish_tripkit_from_graph", return_value=True) as mock_publish_tripkit,
             patch("app.tasks.process_vlog._update_vlog_status") as mock_update_status,
             patch("app.tasks.process_vlog._update_vlog_pipeline_error") as mock_pipeline_error,
         ):
@@ -219,10 +210,9 @@ class TestPhaseOnePipeline:
             call("vlog-001", "RANKED"),
             call("vlog-001", "REVIEW_PENDING"),
         ])
-        mock_publish_tripkit.assert_called_once_with("vlog-001")
 
     @pytest.mark.asyncio
-    async def test_fusion_failure_aborts_resolution_ranking_and_publish(self):
+    async def test_fusion_failure_aborts_resolution_and_ranking(self):
         pg = _make_vlog_pg("PENDING")
         with (
             patch("app.tasks.process_vlog.PgClient", return_value=pg),
@@ -232,7 +222,6 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog.fuse_candidate_entities", side_effect=RuntimeError("fusion exploded")),
             patch("app.tasks.process_vlog.resolve_candidates") as mock_resolve,
             patch("app.tasks.process_vlog.rank_opportunities") as mock_rank,
-            patch("app.tasks.process_vlog.publish_tripkit_from_graph") as mock_publish_tripkit,
             patch("app.tasks.process_vlog._mark_vlog_failed") as mock_mark_failed,
         ):
             from app.tasks.process_vlog import process_vlog_task
@@ -240,11 +229,10 @@ class TestPhaseOnePipeline:
 
         mock_resolve.assert_not_called()
         mock_rank.assert_not_called()
-        mock_publish_tripkit.assert_not_called()
         mock_mark_failed.assert_called_once_with("vlog-001")
 
     @pytest.mark.asyncio
-    async def test_resolution_failure_aborts_ranking_and_publish(self):
+    async def test_resolution_failure_aborts_ranking(self):
         pg = _make_vlog_pg("PENDING")
         with (
             patch("app.tasks.process_vlog.PgClient", return_value=pg),
@@ -254,40 +242,13 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog.fuse_candidate_entities", return_value={"clusters": 2}),
             patch("app.tasks.process_vlog.resolve_candidates", side_effect=RuntimeError("resolver exploded")),
             patch("app.tasks.process_vlog.rank_opportunities") as mock_rank,
-            patch("app.tasks.process_vlog.publish_tripkit_from_graph") as mock_publish_tripkit,
             patch("app.tasks.process_vlog._mark_vlog_failed") as mock_mark_failed,
         ):
             from app.tasks.process_vlog import process_vlog_task
             await process_vlog_task("vlog-001")
 
         mock_rank.assert_not_called()
-        mock_publish_tripkit.assert_not_called()
         mock_mark_failed.assert_called_once_with("vlog-001")
-
-    @pytest.mark.asyncio
-    async def test_tripkit_projection_failure_is_swallowed(self):
-        pg = _make_vlog_pg("PENDING")
-        with (
-            patch("app.tasks.process_vlog.PgClient", return_value=pg),
-            patch("app.tasks.process_vlog.transcribe_vlog", return_value="graph transcript"),
-            patch("app.tasks.process_vlog.sync_transcript_graph", return_value={"opportunities": 3}),
-            patch("app.tasks.process_vlog.sync_visual_evidence", return_value={"scene_segments": 3}),
-            patch("app.tasks.process_vlog.fuse_candidate_entities", return_value={"clusters": 2}),
-            patch("app.tasks.process_vlog.resolve_candidates", return_value={"resolved": 2}),
-            patch("app.tasks.process_vlog.rank_opportunities", return_value={"ranked": 3}),
-            patch("app.tasks.process_vlog.publish_tripkit_from_graph", return_value=False),
-            patch("app.tasks.process_vlog._update_vlog_status") as mock_update_status,
-        ):
-            from app.tasks.process_vlog import process_vlog_task
-            await process_vlog_task("vlog-001")
-        mock_update_status.assert_has_calls([
-            call("vlog-001", "TRANSCRIPT_DONE"),
-            call("vlog-001", "VISION_DONE"),
-            call("vlog-001", "FUSED"),
-            call("vlog-001", "RESOLVED"),
-            call("vlog-001", "RANKED"),
-            call("vlog-001", "REVIEW_PENDING"),
-        ])
 
 
 class TestExceptionHandling:

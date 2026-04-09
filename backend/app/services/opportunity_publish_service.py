@@ -1,8 +1,10 @@
 """
 Graph-backed storefront publishing.
 
-Phase 2 projects approved or auto-approved itinerary opportunities into the
-existing TripKit / ItineraryDay / DayActivity storefront tables.
+Manual graph-backed storefront publishing.
+
+When this service is invoked, it should behave like the explicit creator
+publish action and produce a live published TripKit projection.
 """
 from __future__ import annotations
 
@@ -82,6 +84,7 @@ def publish_tripkit_from_graph(vlog_id: str) -> bool:
                        "estimatedBudgetLow" = %s,
                        "estimatedBudgetHigh" = %s,
                        "generatedByAI" = true,
+                       "isPublished" = true,
                        "updatedAt" = NOW()
                    WHERE id = %s''',
                 (
@@ -117,7 +120,7 @@ def publish_tripkit_from_graph(vlog_id: str) -> bool:
                     gen_random_uuid()::text, %s, %s, %s, %s,
                     %s, %s, %s,
                     %s, %s, %s,
-                    false, false, true,
+                    true, false, true,
                     0, 0, 0, 0, 0, 0,
                     NOW(), NOW()
                 ) RETURNING id''',

@@ -75,6 +75,7 @@ def test_publish_tripkit_from_graph_creates_tripkit_when_none_exists():
     assert any('INSERT INTO "ItineraryDay"' in sql for sql in sql_statements)
     assert any('INSERT INTO "DayActivity"' in sql for sql in sql_statements)
     assert any('UPDATE "Opportunity"' in sql for sql in sql_statements)
+    assert 'true, false, true' in next(sql for sql in sql_statements if 'INSERT INTO "TripKit"' in sql)
     assert any("PUBLISHED" in sql for sql in sql_statements if 'UPDATE "Vlog"' in sql)
 
 
@@ -113,6 +114,7 @@ def test_publish_tripkit_from_graph_updates_existing_tripkit():
     assert any('UPDATE "TripKit"' in sql for sql in sql_statements)
     assert any('DELETE FROM "DayActivity"' in sql for sql in sql_statements)
     assert any('DELETE FROM "ItineraryDay"' in sql for sql in sql_statements)
+    assert '"isPublished" = true' in next(sql for sql in sql_statements if 'UPDATE "TripKit"' in sql)
 
 
 def test_publish_tripkit_from_graph_returns_false_without_publishable_itinerary():
