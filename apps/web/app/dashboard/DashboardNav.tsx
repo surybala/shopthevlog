@@ -4,18 +4,19 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const navItems = [
-  { href: '/dashboard', label: 'Overview', icon: '▣' },
-  { href: '/dashboard/vlogs', label: 'Vlogs', icon: '🎬' },
-  { href: '/dashboard/kits', label: 'Trip Kits', icon: '🗺' },
-  { href: '/dashboard/affiliates', label: 'Affiliate Links', icon: '🔗' },
-  { href: '/dashboard/subscribers', label: 'Subscribers', icon: '👥' },
-  { href: '/dashboard/analytics', label: 'Analytics', icon: '📊' },
-  { href: '/dashboard/payouts', label: 'Payouts', icon: '💰' },
-  { href: '/dashboard/settings', label: 'Settings', icon: '⚙️' },
+  { href: '/dashboard', label: 'Overview', icon: '[ ]' },
+  { href: '/dashboard/vlogs', label: 'Vlogs', icon: '[V]' },
+  { href: '/dashboard/review', label: 'Review Queue', icon: '[R]' },
+  { href: '/dashboard/kits', label: 'Trip Kits', icon: '[K]' },
+  { href: '/dashboard/affiliates', label: 'Affiliate Links', icon: '[L]' },
+  { href: '/dashboard/subscribers', label: 'Subscribers', icon: '[S]' },
+  { href: '/dashboard/analytics', label: 'Analytics', icon: '[A]' },
+  { href: '/dashboard/payouts', label: 'Payouts', icon: '[$]' },
+  { href: '/dashboard/settings', label: 'Settings', icon: '[*]' },
 ]
 
 const adminNavItems = [
-  { href: '/dashboard/waitlist', label: 'Waitlist', icon: '🔒' },
+  { href: '/dashboard/waitlist', label: 'Waitlist', icon: '[!]' },
 ]
 
 export default function DashboardNav({ handle, isAdmin = false }: { handle: string | null; isAdmin?: boolean }) {
@@ -23,7 +24,7 @@ export default function DashboardNav({ handle, isAdmin = false }: { handle: stri
 
   return (
     <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-      {[...navItems, ...(isAdmin ? adminNavItems : [])].map(item => {
+      {[...navItems, ...(isAdmin ? adminNavItems : [])].map((item) => {
         const active = item.href === '/dashboard'
           ? pathname === '/dashboard'
           : pathname.startsWith(item.href)
@@ -37,7 +38,7 @@ export default function DashboardNav({ handle, isAdmin = false }: { handle: stri
                 : 'text-white/50 hover:text-white hover:bg-white/5'
             }`}
           >
-            <span className="text-base leading-none">{item.icon}</span>
+            <span className="text-xs leading-none font-mono">{item.icon}</span>
             {item.label}
           </Link>
         )
@@ -48,7 +49,7 @@ export default function DashboardNav({ handle, isAdmin = false }: { handle: stri
           href="/account"
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/50 hover:text-white hover:bg-white/5 transition-colors"
         >
-          <span className="text-base leading-none">👤</span>
+          <span className="text-xs leading-none font-mono">[U]</span>
           My Account
         </Link>
         {handle && (
@@ -56,7 +57,7 @@ export default function DashboardNav({ handle, isAdmin = false }: { handle: stri
             href={`/@${handle}`}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/50 hover:text-white hover:bg-white/5 transition-colors"
           >
-            <span className="text-base leading-none">↗</span>
+            <span className="text-xs leading-none font-mono">[>]</span>
             View Storefront
           </Link>
         )}
@@ -65,7 +66,7 @@ export default function DashboardNav({ handle, isAdmin = false }: { handle: stri
             type="submit"
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/50 hover:text-white hover:bg-white/5 transition-colors text-left"
           >
-            <span className="text-base leading-none">⎋</span>
+            <span className="text-xs leading-none font-mono">[X]</span>
             Sign out
           </button>
         </form>
