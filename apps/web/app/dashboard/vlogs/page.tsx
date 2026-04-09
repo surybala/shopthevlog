@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
+import { getCreatorPlanConfig } from '@/lib/creatorPlans'
 import VlogsClient from './VlogsClient'
 
 export default async function VlogsPage() {
@@ -10,6 +11,7 @@ export default async function VlogsPage() {
 
   const creator = await prisma.creator.findUnique({ where: { userId: user.id } })
   if (!creator) redirect('/onboarding')
+  const planConfig = getCreatorPlanConfig(creator.plan)
 
   const vlogs = await prisma.vlog.findMany({
     where: { creatorId: creator.id },
@@ -32,7 +34,7 @@ export default async function VlogsPage() {
           <div>
             <h1 className="text-2xl font-bold text-white">Vlogs</h1>
             <p className="text-white/40 text-sm mt-1">
-              {vlogs.length} video{vlogs.length !== 1 ? 's' : ''} imported
+              {vlogs.length}/{planConfig.maxImportedVlogs} video{planConfig.maxImportedVlogs !== 1 ? 's' : ''} imported
             </p>
           </div>
           {vlogs.length === 0 && (

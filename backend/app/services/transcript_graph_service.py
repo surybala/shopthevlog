@@ -17,7 +17,7 @@ from typing import Iterable
 from uuid import uuid4
 
 from app.db.pg_client import PgClient
-from app.services.gemini_service import extract_itinerary_blueprint, extract_transcript_opportunities
+from app.services.gemini_service import extract_transcript_graph_payload
 
 logger = logging.getLogger(__name__)
 
@@ -191,8 +191,9 @@ def sync_transcript_graph(
     Returns summary counts for observability and tests.
     """
     segments = build_transcript_segments(transcript, duration_seconds)
-    claims = extract_transcript_opportunities(transcript, title)
-    itinerary_blueprint = extract_itinerary_blueprint(transcript, title)
+    graph_payload = extract_transcript_graph_payload(transcript, title)
+    claims = graph_payload.get("opportunities") or []
+    itinerary_blueprint = graph_payload.get("itinerary")
 
     if not claims:
         logger.info("No transcript opportunities extracted for vlog %s", vlog_id)
@@ -220,7 +221,7 @@ def sync_transcript_graph(
                 ),
             )
 
-        if itinerary_blueprint and not itinerary_blueprint.get("skip") and not itinerary_blueprint.get("not_travel"):
+        if itinerary_blueprint and not graph_payload.get("skip"):
             itinerary_opportunity_id = str(uuid4())
             itinerary_evidence_id = str(uuid4())
             latest_end = segments[-1].end_sec if segments else float(duration_seconds or 30)

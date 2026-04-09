@@ -15,6 +15,7 @@ const mockCreatorFindUnique = vi.fn()
 const mockCreatorUpdate = vi.fn()
 const mockCreatorChannelTokenFindUnique = vi.fn()
 const mockCreatorChannelTokenUpdate = vi.fn()
+const mockVlogFindMany = vi.fn()
 const mockVlogUpsert = vi.fn()
 
 vi.mock('@/lib/prisma/client', () => ({
@@ -28,6 +29,7 @@ vi.mock('@/lib/prisma/client', () => ({
       update: (...args: unknown[]) => mockCreatorChannelTokenUpdate(...args),
     },
     vlog: {
+      findMany: (...args: unknown[]) => mockVlogFindMany(...args),
       upsert: (...args: unknown[]) => mockVlogUpsert(...args),
     },
   },
@@ -44,8 +46,10 @@ describe('creator scan trigger route', () => {
       id: 'creator-1',
       userId: 'user-1',
       youtubeChannelId: 'channel-1',
+      plan: 'PRO',
     })
     mockCreatorUpdate.mockResolvedValue({})
+    mockVlogFindMany.mockResolvedValue([])
     mockCreatorChannelTokenFindUnique.mockResolvedValue({
       creatorId: 'creator-1',
       accessToken: 'access-1',
@@ -121,6 +125,7 @@ describe('creator scan trigger route', () => {
       id: 'creator-1',
       userId: 'user-1',
       youtubeChannelId: null,
+      plan: 'PRO',
     })
 
     const res = await triggerScan(new NextRequest('http://localhost/api/creator/scan', { method: 'POST' }))
@@ -144,6 +149,35 @@ describe('creator scan trigger route', () => {
           where: { platform_externalId: { platform: 'YOUTUBE', externalId: 'video-1' } },
         })
       )
+      expect(mockCreatorUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'creator-1' },
+          data: expect.objectContaining({ catalogScanStatus: 'COMPLETE' }),
+        })
+      )
+    })
+  })
+
+  it('does not import new videos once the creator has reached the plan video cap', async () => {
+    mockCreatorFindUnique.mockResolvedValue({
+      id: 'creator-1',
+      userId: 'user-1',
+      youtubeChannelId: 'channel-1',
+      plan: 'FREE',
+    })
+    mockVlogFindMany.mockResolvedValue([
+      { externalId: 'video-a' },
+      { externalId: 'video-b' },
+      { externalId: 'video-c' },
+      { externalId: 'video-d' },
+      { externalId: 'video-e' },
+    ])
+
+    const res = await triggerScan(new NextRequest('http://localhost/api/creator/scan', { method: 'POST' }))
+
+    expect(res.status).toBe(200)
+    await vi.waitFor(() => {
+      expect(mockVlogUpsert).not.toHaveBeenCalled()
       expect(mockCreatorUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'creator-1' },

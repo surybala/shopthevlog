@@ -17,7 +17,7 @@ import logging
 from uuid import uuid4
 
 from app.db.pg_client import PgClient
-from app.services.gemini_service import extract_visual_opportunities
+from app.services.gemini_service import extract_visual_opportunities_batch
 
 logger = logging.getLogger(__name__)
 
@@ -148,8 +148,20 @@ def enrich_visual_graph(vlog_id: str, creator_id: str, title: str) -> dict:
 
         _delete_existing_visual_enrichment_rows(db, vlog_id)
 
+        signals_by_frame = extract_visual_opportunities_batch(
+            [
+                {
+                    "frame_id": frame["id"],
+                    "image_url": frame["imageUri"],
+                    "scene_summary": frame.get("summary"),
+                }
+                for frame in frames
+            ],
+            title,
+        )
+
         for frame in frames:
-            signals = extract_visual_opportunities(frame["imageUri"], title, frame.get("summary"))
+            signals = signals_by_frame.get(frame["id"], [])
             start_sec = float(frame.get("startSec") or frame["timestampSec"])
             end_sec = float(frame.get("endSec") or frame["timestampSec"])
 

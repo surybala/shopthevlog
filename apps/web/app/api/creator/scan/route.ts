@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 import { rateLimit } from '@/lib/rateLimit'
+import { getCreatorPlanConfig } from '@/lib/creatorPlans'
 
 async function refreshYouTubeToken(token: { refreshToken: string; creatorId: string }) {
   const res = await fetch('https://oauth2.googleapis.com/token', {
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
   })
 
   // Run in background — don't await
-  runScan(creator.id, creator.youtubeChannelId).catch(async (e) => {
+  runScan(creator.id, creator.youtubeChannelId, creator.plan).catch(async (e) => {
     console.error('Scan failed:', e)
     await prisma.creator.update({
       where: { id: creator.id },
@@ -58,7 +59,8 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ status: 'SCANNING' })
 }
 
-async function runScan(creatorId: string, channelId: string) {
+async function runScan(creatorId: string, channelId: string, plan: string) {
+  const { maxImportedVlogs } = getCreatorPlanConfig(plan)
   // Get stored token
   const tokenRecord = await prisma.creatorChannelToken.findUnique({
     where: { creatorId_platform: { creatorId, platform: 'YOUTUBE' } },
@@ -84,8 +86,14 @@ async function runScan(creatorId: string, channelId: string) {
   // Paginate through all videos (max 50 per page)
   let pageToken: string | undefined
   let totalImported = 0
+  const existingVlogs = await prisma.vlog.findMany({
+    where: { creatorId },
+    select: { externalId: true },
+  })
+  const importedExternalIds = new Set(existingVlogs.map((vlog) => vlog.externalId))
+  let limitReached = importedExternalIds.size >= maxImportedVlogs
 
-  do {
+  while (!limitReached) {
     const params = new URLSearchParams({
       part: 'snippet,contentDetails',
       playlistId: uploadsPlaylistId,
@@ -103,6 +111,11 @@ async function runScan(creatorId: string, channelId: string) {
       const videoId = item.contentDetails?.videoId as string
       const snippet = item.snippet
       if (!videoId) continue
+      const isExisting = importedExternalIds.has(videoId)
+      if (!isExisting && importedExternalIds.size >= maxImportedVlogs) {
+        limitReached = true
+        break
+      }
 
       await prisma.vlog.upsert({
         where: { platform_externalId: { platform: 'YOUTUBE', externalId: videoId } },
@@ -123,11 +136,15 @@ async function runScan(creatorId: string, channelId: string) {
           thumbnailUrl: snippet?.thumbnails?.high?.url ?? snippet?.thumbnails?.default?.url ?? null,
         },
       })
-      totalImported++
+      if (!isExisting) {
+        importedExternalIds.add(videoId)
+        totalImported++
+      }
     }
 
     pageToken = playlistData.nextPageToken
-  } while (pageToken)
+    if (!pageToken) break
+  }
 
   await prisma.creator.update({
     where: { id: creatorId },

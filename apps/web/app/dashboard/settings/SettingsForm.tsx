@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { getCreatorPlanConfig } from '@/lib/creatorPlans'
 
 interface Tier {
   id: string
@@ -39,12 +40,6 @@ interface Props {
   creator: Creator | null
 }
 
-const planDetails = {
-  FREE: { label: 'Free', description: 'Up to 3 Trip Kits, basic features', price: '$0/mo' },
-  PRO: { label: 'Pro', description: 'Unlimited kits, AI scan, advanced analytics', price: '$49/mo' },
-  STUDIO: { label: 'Studio', description: 'Team seats, brand inbox, white-label domain', price: '$199/mo' },
-}
-
 const emptyTierForm = {
   name: '',
   monthlyPrice: '',
@@ -63,6 +58,12 @@ export default function SettingsForm({ userId, email, creator }: Props) {
   const [success, setSuccess] = useState('')
   const [scanStatus, setScanStatus] = useState(creator?.catalogScanStatus ?? 'PENDING')
   const [vlogCount, setVlogCount] = useState(0)
+  const planConfig = getCreatorPlanConfig(creator?.plan)
+  const billingPlans = {
+    FREE: getCreatorPlanConfig('FREE'),
+    PRO: getCreatorPlanConfig('PRO'),
+    STUDIO: getCreatorPlanConfig('STUDIO'),
+  } as const
 
   // Tier management state
   const [showTierForm, setShowTierForm] = useState(false)
@@ -81,6 +82,17 @@ export default function SettingsForm({ userId, email, creator }: Props) {
     const err = params.get('error')
     if (err) setError(`Connection failed: ${err.replace(/_/g, ' ')}`)
   }, [])
+
+  useEffect(() => {
+    if (!creator?.youtubeChannelId) return
+    void (async () => {
+      const res = await fetch('/api/creator/scan/status')
+      if (!res.ok) return
+      const data = await res.json()
+      setScanStatus(data.status)
+      setVlogCount(data.vlogCount)
+    })()
+  }, [creator?.youtubeChannelId])
 
   useEffect(() => {
     if (scanStatus !== 'SCANNING') return
@@ -371,9 +383,12 @@ export default function SettingsForm({ userId, email, creator }: Props) {
                     {scanStatus === 'SCANNING' ? 'Scanning…' : scanStatus}
                   </span>
                   {scanStatus === 'COMPLETE' && vlogCount > 0 && (
-                    <span className="text-xs text-white/30">{vlogCount} videos imported</span>
+                    <span className="text-xs text-white/30">{vlogCount}/{planConfig.maxImportedVlogs} videos imported</span>
                   )}
                 </div>
+                <p className="text-xs text-white/30">
+                  Your {planConfig.label} plan currently includes up to {planConfig.maxImportedVlogs} imported videos.
+                </p>
                 {(scanStatus === 'PENDING' || scanStatus === 'COMPLETE' || scanStatus === 'FAILED') && (
                   <button
                     onClick={async () => {
@@ -596,7 +611,7 @@ export default function SettingsForm({ userId, email, creator }: Props) {
           <div className="glass-card p-6">
             <h2 className="font-semibold text-white mb-4">VlogShopper Plan</h2>
             <div className="space-y-3">
-              {(Object.entries(planDetails) as [keyof typeof planDetails, typeof planDetails.FREE][]).map(
+              {(Object.entries(billingPlans) as [keyof typeof billingPlans, typeof billingPlans.FREE][]).map(
                 ([key, p]) => (
                   <div
                     key={key}

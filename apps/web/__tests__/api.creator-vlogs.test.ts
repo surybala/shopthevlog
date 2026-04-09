@@ -39,7 +39,7 @@ describe('creator vlog routes', () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
     mockGetSession.mockResolvedValue({ data: { session: { access_token: 'session-token' } } });
     mockRateLimit.mockReturnValue(false);
-    mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1', catalogScanStatus: 'COMPLETE', lastCatalogScan: '2025-01-01', _count: { vlogs: 2 } });
+    mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1', plan: 'PRO', catalogScanStatus: 'COMPLETE', lastCatalogScan: '2025-01-01', _count: { vlogs: 2 } });
     mockVlogFindMany.mockResolvedValue([{ id: 'vlog-1' }]);
     mockVlogFindFirst.mockResolvedValue({ id: 'vlog-1', creatorId: 'creator-1', processingStatus: 'PENDING' });
     process.env.AI_PIPELINE_URL = 'http://ai.example.com';
@@ -61,9 +61,13 @@ describe('creator vlog routes', () => {
   it('scan status returns creator scan metadata', async () => {
     const res = await getScanStatus();
     await expect(res.json()).resolves.toEqual({
+      plan: 'PRO',
       status: 'COMPLETE',
       lastCatalogScan: '2025-01-01',
       vlogCount: 2,
+      vlogLimit: 25,
+      remainingVlogSlots: 23,
+      limitReached: false,
     });
   });
 

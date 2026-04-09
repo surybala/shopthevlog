@@ -55,8 +55,11 @@ def test_enrich_visual_graph_persists_visual_evidence_candidates_and_opportuniti
     with (
         patch("app.services.visual_enrichment_service.PgClient", return_value=fake_pg),
         patch(
-            "app.services.visual_enrichment_service.extract_visual_opportunities",
-            side_effect=[visual_signals, []],
+            "app.services.visual_enrichment_service.extract_visual_opportunities_batch",
+            return_value={
+                "frame-001": visual_signals,
+                "frame-002": [],
+            },
         ),
     ):
         from app.services.visual_enrichment_service import enrich_visual_graph

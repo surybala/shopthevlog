@@ -140,6 +140,71 @@ Rules:
 - If the transcript has no clear opportunities, return {"opportunities":[]}.
 """
 
+TRANSCRIPT_GRAPH_SYSTEM_PROMPT = """You convert a travel vlog transcript into both:
+1. an itinerary blueprint for storefront publishing
+2. evidence-backed structured opportunities for the review graph
+
+Return ONE valid JSON object only. No markdown, no prose.
+
+Schema:
+{
+  "skip": false,
+  "itinerary": {
+    "title": "string",
+    "summary": "string",
+    "total_days": 1,
+    "destinations": ["string"],
+    "countries": ["string"],
+    "primary_city": "string",
+    "estimated_budget_usd": null,
+    "days": [
+      {
+        "day_number": 1,
+        "city": "string",
+        "country": "string",
+        "title": "string",
+        "summary": "string",
+        "activities": [
+          {
+            "sort_order": 0,
+            "type": "ACCOMMODATION|FOOD|TOUR|ADVENTURE|CULTURAL|WELLNESS|NIGHTLIFE|TRANSPORT|ATTRACTION|OTHER",
+            "title": "string",
+            "description": "string",
+            "time": "HH:MM or null",
+            "latitude": null,
+            "longitude": null,
+            "image_url": null
+          }
+        ]
+      }
+    ]
+  },
+  "opportunities": [
+    {
+      "claim_type": "itinerary_step|stayed_at|visited|ate_at|drank_at|packed|used|recommends|purchased",
+      "entity_type": "experience|place|product|brand",
+      "subtype": "hotel|restaurant|cafe|attraction|activity|travel_product|packing_item|itinerary_step",
+      "title": "short human title",
+      "raw_label": "raw extracted label",
+      "description": "short factual description",
+      "confidence": 0.0,
+      "start_sec": 0,
+      "end_sec": 30,
+      "evidence_summary": "brief evidence summary",
+      "attributes": {}
+    }
+  ]
+}
+
+Rules:
+- If the vlog is not shoppable travel content, return {"skip": true, "itinerary": null, "opportunities": []}.
+- Only extract places, products, and experiences explicitly supported by the transcript.
+- Never invent places or filler activities.
+- Prefer travel-relevant named opportunities.
+- Include itinerary steps when the transcript clearly describes the sequence of the trip.
+- Confidence must be between 0 and 1.
+"""
+
 VISUAL_OPPORTUNITY_SYSTEM_PROMPT = """You analyze a single travel vlog frame and return only high-signal travel-shopping evidence.
 
 Return ONE valid JSON object only. No markdown, no prose.
@@ -170,6 +235,44 @@ Rules:
 - logo_detection should only include logos/brands that are clearly visible.
 - clip_summary may summarize the scene only when it gives useful travel context.
 - If the frame contains no useful travel-shopping signal, return {"signals":[]}.
+"""
+
+VISUAL_BATCH_OPPORTUNITY_SYSTEM_PROMPT = """You analyze a small batch of travel vlog frames and return only high-signal travel-shopping evidence.
+
+Return ONE valid JSON object only. No markdown, no prose.
+
+Schema:
+{
+  "frames": [
+    {
+      "frame_id": "string",
+      "signals": [
+        {
+          "source_type": "ocr|object_detection|logo_detection|clip_summary",
+          "entity_type": "place|product|experience|brand",
+          "subtype": "hotel|restaurant|cafe|attraction|activity|travel_product|packing_item|brand|scene_summary",
+          "title": "short label",
+          "raw_label": "raw extracted text or object name",
+          "description": "short factual description",
+          "confidence": 0.0,
+          "claim_type": "visited|used|packed|recommends|itinerary_step|null",
+          "evidence_summary": "brief explanation of what is visible",
+          "attributes": {}
+        }
+      ]
+    }
+  ]
+}
+
+Rules:
+- Only extract what is actually visible in each frame.
+- Keep signals grouped under the correct frame_id.
+- Prefer named travel-relevant places, products, logos, and signs.
+- OCR should only include readable text that matters to a traveler.
+- object_detection should focus on luggage, gear, hotel room, restaurant table, landmark-like scenes, or transit.
+- logo_detection should only include logos/brands that are clearly visible.
+- clip_summary may summarize the scene only when it gives useful travel context.
+- If a frame contains no useful travel-shopping signal, return that frame with "signals": [].
 """
 
 
@@ -443,38 +546,107 @@ def extract_transcript_opportunities(transcript: str, title: str) -> list[dict]:
         return []
 
 
+def extract_transcript_graph_payload(transcript: str, title: str) -> dict:
+    """
+    Extract itinerary blueprint and transcript opportunities in one Gemini call.
+
+    Falls back to the legacy split calls if the combined response fails so the
+    graph pipeline preserves accuracy while reducing token use on the happy path.
+    """
+    try:
+        raw = _call_gemini(
+            TRANSCRIPT_GRAPH_SYSTEM_PROMPT,
+            f"Vlog title: {title}\n\nTranscript:\n{transcript[:20000]}",
+            max_tokens=8192,
+        )
+        parsed = _parse_response(raw, title, "transcript-graph")
+        if isinstance(parsed, dict):
+            itinerary = parsed.get("itinerary")
+            if itinerary is not None and not isinstance(itinerary, dict):
+                itinerary = None
+            opportunities = parsed.get("opportunities")
+            if not isinstance(opportunities, list):
+                opportunities = []
+            return {
+                "skip": bool(parsed.get("skip") or parsed.get("not_travel")),
+                "itinerary": itinerary,
+                "opportunities": [item for item in opportunities if isinstance(item, dict)],
+            }
+    except Exception as e:
+        logger.warning("extract_transcript_graph_payload failed: %s", e)
+
+    itinerary = extract_itinerary_blueprint(transcript, title)
+    opportunities = extract_transcript_opportunities(transcript, title)
+    return {
+        "skip": bool((itinerary or {}).get("skip") or (itinerary or {}).get("not_travel")),
+        "itinerary": itinerary if isinstance(itinerary, dict) and not itinerary.get("skip") and not itinerary.get("not_travel") else None,
+        "opportunities": opportunities,
+    }
+
+
 def extract_visual_opportunities(frame_image_url: str, title: str, scene_summary: str | None = None) -> list[dict]:
     """Extract structured visual evidence from a stored frame URL."""
-    if not frame_image_url:
-        return []
+    batched = extract_visual_opportunities_batch(
+        [{"frame_id": "frame-0", "image_url": frame_image_url, "scene_summary": scene_summary}],
+        title,
+    )
+    return batched.get("frame-0", [])
+
+
+def extract_visual_opportunities_batch(frames: list[dict], title: str) -> dict[str, list[dict]]:
+    """Extract structured visual evidence from a small batch of stored frame URLs."""
+    valid_frames = [
+        frame for frame in frames
+        if isinstance(frame, dict) and frame.get("frame_id") and frame.get("image_url")
+    ]
+    if not valid_frames:
+        return {}
 
     try:
-        response = httpx.get(frame_image_url, timeout=10.0)
-        response.raise_for_status()
-        content_type = response.headers.get("content-type", "image/jpeg").split(";")[0].strip() or "image/jpeg"
-        prompt = f"Vlog title: {title}\nScene summary: {scene_summary or 'Unknown'}"
+        prompt_lines = [f"Vlog title: {title}", "Frame context:"]
+        contents: list[types.Part] = []
+        for frame in valid_frames:
+            response = httpx.get(frame["image_url"], timeout=10.0)
+            response.raise_for_status()
+            content_type = response.headers.get("content-type", "image/jpeg").split(";")[0].strip() or "image/jpeg"
+            contents.append(types.Part.from_bytes(data=response.content, mime_type=content_type))
+            prompt_lines.append(
+                f'- frame_id="{frame["frame_id"]}"; scene_summary="{frame.get("scene_summary") or "Unknown"}"'
+            )
+
+        contents.append(types.Part.from_text(text="\n".join(prompt_lines)))
         raw = _client().models.generate_content(
             model=GEMINI_MODEL,
-            contents=[
-                types.Part.from_bytes(data=response.content, mime_type=content_type),
-                types.Part.from_text(text=prompt),
-            ],
+            contents=contents,
             config=types.GenerateContentConfig(
-                system_instruction=VISUAL_OPPORTUNITY_SYSTEM_PROMPT,
-                max_output_tokens=2048,
+                system_instruction=VISUAL_BATCH_OPPORTUNITY_SYSTEM_PROMPT,
+                max_output_tokens=4096,
                 temperature=0.2,
             ),
         ).text or ""
-        parsed = _parse_response(raw, title, "visual-opportunities")
+        parsed = _parse_response(raw, title, "visual-opportunities-batch")
         if not parsed:
-            return []
-        signals = parsed.get("signals")
-        if not isinstance(signals, list):
-            return []
-        return [item for item in signals if isinstance(item, dict)]
+            return {frame["frame_id"]: [] for frame in valid_frames}
+
+        payload_frames = parsed.get("frames")
+        if not isinstance(payload_frames, list):
+            return {frame["frame_id"]: [] for frame in valid_frames}
+
+        signals_by_frame: dict[str, list[dict]] = {frame["frame_id"]: [] for frame in valid_frames}
+        for payload_frame in payload_frames:
+            if not isinstance(payload_frame, dict):
+                continue
+            frame_id = payload_frame.get("frame_id")
+            if frame_id not in signals_by_frame:
+                continue
+            signals = payload_frame.get("signals")
+            if not isinstance(signals, list):
+                continue
+            signals_by_frame[frame_id] = [item for item in signals if isinstance(item, dict)]
+        return signals_by_frame
     except Exception as e:
-        logger.warning("extract_visual_opportunities failed: %s", e)
-        return []
+        logger.warning("extract_visual_opportunities_batch failed: %s", e)
+        return {frame["frame_id"]: [] for frame in valid_frames}
 
 
 def extract_itinerary_blueprint(transcript: str, title: str) -> Optional[dict]:

@@ -66,18 +66,21 @@ def test_sync_transcript_graph_persists_segments_evidence_candidates_and_opportu
 
     with (
         patch("app.services.transcript_graph_service.PgClient", return_value=fake_pg),
-        patch("app.services.transcript_graph_service.extract_transcript_opportunities", return_value=extracted_claims),
         patch(
-            "app.services.transcript_graph_service.extract_itinerary_blueprint",
+            "app.services.transcript_graph_service.extract_transcript_graph_payload",
             return_value={
-                "title": "5 Days in Tokyo",
-                "summary": "A fantastic trip through Tokyo.",
-                "total_days": 5,
-                "destinations": ["Tokyo"],
-                "countries": ["Japan"],
-                "primary_city": "Tokyo",
-                "estimated_budget_usd": 2000,
-                "days": [],
+                "skip": False,
+                "itinerary": {
+                    "title": "5 Days in Tokyo",
+                    "summary": "A fantastic trip through Tokyo.",
+                    "total_days": 5,
+                    "destinations": ["Tokyo"],
+                    "countries": ["Japan"],
+                    "primary_city": "Tokyo",
+                    "estimated_budget_usd": 2000,
+                    "days": [],
+                },
+                "opportunities": extracted_claims,
             },
         ),
     ):
@@ -112,8 +115,10 @@ def test_sync_transcript_graph_clears_existing_rows_before_reinserting():
 
     with (
         patch("app.services.transcript_graph_service.PgClient", return_value=fake_pg),
-        patch("app.services.transcript_graph_service.extract_transcript_opportunities", return_value=[]),
-        patch("app.services.transcript_graph_service.extract_itinerary_blueprint", return_value=None),
+        patch(
+            "app.services.transcript_graph_service.extract_transcript_graph_payload",
+            return_value={"skip": False, "itinerary": None, "opportunities": []},
+        ),
     ):
         from app.services.transcript_graph_service import sync_transcript_graph
 
