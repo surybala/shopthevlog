@@ -65,7 +65,7 @@ export default async function AccountPage({
           where: { subscriberId: subscriber.id },
           orderBy: { createdAt: 'desc' },
           include: {
-            tier:    { select: { name: true, monthlyPrice: true, perks: true } },
+            tier:    { select: { name: true, monthlyPrice: true, perks: true, kitAccess: true } },
             creator: { select: { handle: true, displayName: true, avatarUrl: true } },
           },
         })
