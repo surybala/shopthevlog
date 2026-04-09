@@ -8,6 +8,10 @@ import {
   selectPublishableItineraryOpportunity,
 } from '@/lib/opportunityPublish'
 
+function hasItineraryBlueprint(metadataJson: unknown) {
+  return Boolean(getItineraryBlueprint({ metadataJson }))
+}
+
 async function getOwnedVlogForPublish(vlogId: string, userId: string) {
   const creator = await prisma.creator.findUnique({ where: { userId } })
   if (!creator) return null
@@ -175,9 +179,28 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       },
     })
 
+    const competingItineraryOpportunityIds = owned.vlog.opportunities
+      .filter((opportunity) =>
+        opportunity.id !== sourceOpportunity.id
+        && hasItineraryBlueprint(opportunity.metadataJson)
+        && opportunity.publishState !== 'SUPPRESSED'
+      )
+      .map((opportunity) => opportunity.id)
+
+    if (competingItineraryOpportunityIds.length > 0) {
+      await tx.opportunity.updateMany({
+        where: {
+          id: { in: competingItineraryOpportunityIds },
+        },
+        data: {
+          publishState: 'SUPPRESSED',
+        },
+      })
+    }
+
     await tx.vlog.update({
       where: { id: owned.vlog.id },
-      data: {
+        data: {
         processingStatus: 'PUBLISHED',
         processedAt: new Date(),
         publishedFromGraphAt: new Date(),

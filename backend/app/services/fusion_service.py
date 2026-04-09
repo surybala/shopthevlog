@@ -31,10 +31,41 @@ def _coerce_evidence_bundle(raw: object) -> dict:
     return {}
 
 
-def _confidence_boost(confidences: list[float]) -> float:
+def _label_tokens(label: str | None) -> set[str]:
+    normalized = _normalize_label(label)
+    return {token for token in normalized.split() if token}
+
+
+def _labels_match(left: str | None, right: str | None) -> bool:
+    left_tokens = _label_tokens(left)
+    right_tokens = _label_tokens(right)
+    if not left_tokens or not right_tokens:
+        return False
+    if left_tokens == right_tokens:
+        return True
+    if left_tokens.issubset(right_tokens) or right_tokens.issubset(left_tokens):
+        return True
+    overlap = len(left_tokens & right_tokens)
+    return overlap / max(len(left_tokens), len(right_tokens)) >= 0.6
+
+
+def _source_types(bundle: dict) -> list[str]:
+    raw_source_types = bundle.get("sourceTypes")
+    if isinstance(raw_source_types, list):
+        return [str(source_type) for source_type in raw_source_types if source_type]
+
+    source = bundle.get("source")
+    if source == "VISUAL_ENRICHMENT_V1":
+        return ["VISUAL"]
+    return ["TRANSCRIPT"]
+
+
+def _confidence_boost(confidences: list[float], source_types: set[str]) -> float:
     if not confidences:
         return 0.0
     boosted = max(confidences) + (0.04 * max(0, len(confidences) - 1))
+    if len(source_types) > 1:
+        boosted += 0.06
     return max(0.0, min(boosted, 1.0))
 
 
@@ -50,81 +81,107 @@ def fuse_candidate_entities(vlog_id: str) -> dict:
         )
         rows = db.fetchall()
 
-        grouped: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
+        grouped: dict[tuple[str, str], list[dict]] = defaultdict(list)
         for row in rows:
             key = (
                 row["entityType"],
                 row.get("subtype") or "",
-                _normalize_label(row.get("canonicalLabel") or row.get("rawLabel")),
             )
             grouped[key].append(row)
 
         merged_candidates = 0
         fused_clusters = 0
 
-        for (entity_type, subtype, normalized_label), candidates in grouped.items():
-            if len(candidates) <= 1 or not normalized_label:
+        for (entity_type, subtype), candidates in grouped.items():
+            if len(candidates) <= 1:
                 continue
 
-            primary = candidates[0]
-            all_evidence_ids: list[str] = []
-            confidences: list[float] = []
-            start_sec = primary["startSec"]
-            end_sec = primary["endSec"]
-
+            consumed_ids: set[str] = set()
             for candidate in candidates:
-                bundle = _coerce_evidence_bundle(candidate.get("evidenceBundleJson"))
-                all_evidence_ids.extend(
-                    evidence_id
-                    for evidence_id in bundle.get("evidenceIds", [])
-                    if isinstance(evidence_id, str)
+                if candidate["id"] in consumed_ids:
+                    continue
+
+                cluster = [candidate]
+                candidate_label = candidate.get("canonicalLabel") or candidate.get("rawLabel")
+                for other in candidates:
+                    if other["id"] == candidate["id"] or other["id"] in consumed_ids:
+                        continue
+                    other_label = other.get("canonicalLabel") or other.get("rawLabel")
+                    if _labels_match(candidate_label, other_label):
+                        cluster.append(other)
+
+                if len(cluster) <= 1:
+                    consumed_ids.add(candidate["id"])
+                    continue
+
+                primary = cluster[0]
+                all_evidence_ids: list[str] = []
+                confidences: list[float] = []
+                source_types: set[str] = set()
+                start_sec = primary["startSec"]
+                end_sec = primary["endSec"]
+                preferred_label = max(
+                    (item.get("canonicalLabel") or item.get("rawLabel") or "" for item in cluster),
+                    key=lambda label: len(_label_tokens(label)),
                 )
-                if candidate.get("confidence") is not None:
-                    confidences.append(float(candidate["confidence"]))
-                start_sec = min(start_sec, candidate["startSec"])
-                end_sec = max(end_sec, candidate["endSec"])
 
-            unique_evidence_ids = list(dict.fromkeys(all_evidence_ids))
-            db.execute(
-                '''UPDATE "CandidateEntity"
-                   SET "canonicalLabel" = %s,
-                       "startSec" = %s,
-                       "endSec" = %s,
-                       confidence = %s,
-                       "evidenceBundleJson" = %s::jsonb,
-                       "updatedAt" = NOW()
-                   WHERE id = %s''',
-                (
-                    primary.get("canonicalLabel") or primary.get("rawLabel"),
-                    start_sec,
-                    end_sec,
-                    _confidence_boost(confidences),
-                    json.dumps(
-                        {
-                            "evidenceIds": unique_evidence_ids,
-                            "fusedCandidateIds": [candidate["id"] for candidate in candidates],
-                            "fusionVersion": "phase4-v1",
-                            "entityType": entity_type,
-                            "subtype": subtype or None,
-                            "normalizedLabel": normalized_label,
-                        }
-                    ),
-                    primary["id"],
-                ),
-            )
+                for clustered_candidate in cluster:
+                    consumed_ids.add(clustered_candidate["id"])
+                    bundle = _coerce_evidence_bundle(clustered_candidate.get("evidenceBundleJson"))
+                    all_evidence_ids.extend(
+                        evidence_id
+                        for evidence_id in bundle.get("evidenceIds", [])
+                        if isinstance(evidence_id, str)
+                    )
+                    source_types.update(_source_types(bundle))
+                    if clustered_candidate.get("confidence") is not None:
+                        confidences.append(float(clustered_candidate["confidence"]))
+                    start_sec = min(start_sec, clustered_candidate["startSec"])
+                    end_sec = max(end_sec, clustered_candidate["endSec"])
 
-            for duplicate in candidates[1:]:
+                unique_evidence_ids = list(dict.fromkeys(all_evidence_ids))
                 db.execute(
-                    '''UPDATE "Opportunity"
-                       SET "candidateEntityId" = %s, "updatedAt" = NOW()
-                       WHERE "candidateEntityId" = %s''',
-                    (primary["id"], duplicate["id"]),
+                    '''UPDATE "CandidateEntity"
+                       SET "canonicalLabel" = %s,
+                           "startSec" = %s,
+                           "endSec" = %s,
+                           confidence = %s,
+                           "evidenceBundleJson" = %s::jsonb,
+                           "updatedAt" = NOW()
+                       WHERE id = %s''',
+                    (
+                        preferred_label or primary.get("canonicalLabel") or primary.get("rawLabel"),
+                        start_sec,
+                        end_sec,
+                        _confidence_boost(confidences, source_types),
+                        json.dumps(
+                            {
+                                "evidenceIds": unique_evidence_ids,
+                                "fusedCandidateIds": [clustered_candidate["id"] for clustered_candidate in cluster],
+                                "fusionVersion": "phase4-v2",
+                                "entityType": entity_type,
+                                "subtype": subtype or None,
+                                "normalizedLabel": _normalize_label(preferred_label),
+                                "sourceTypes": sorted(source_types),
+                                "isMultimodal": len(source_types) > 1,
+                            }
+                        ),
+                        primary["id"],
+                    ),
                 )
-                db.execute('DELETE FROM "ResolvedEntity" WHERE "candidateEntityId" = %s', (duplicate["id"],))
-                db.execute('DELETE FROM "CandidateEntity" WHERE id = %s', (duplicate["id"],))
-                merged_candidates += 1
 
-            fused_clusters += 1
+                for duplicate in cluster[1:]:
+                    db.execute(
+                        '''UPDATE "Opportunity"
+                           SET "candidateEntityId" = %s, "updatedAt" = NOW()
+                           WHERE "candidateEntityId" = %s''',
+                        (primary["id"], duplicate["id"]),
+                    )
+                    db.execute('DELETE FROM "ResolvedEntity" WHERE "candidateEntityId" = %s', (duplicate["id"],))
+                    db.execute('DELETE FROM "CandidateEntity" WHERE id = %s', (duplicate["id"],))
+                    merged_candidates += 1
+
+                fused_clusters += 1
 
         db.execute(
             '''UPDATE "Vlog"

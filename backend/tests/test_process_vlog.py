@@ -18,6 +18,8 @@ def _make_vlog_pg(status: str, title: str = "Test Vlog") -> FakePgClient:
         "title": title,
         "durationSeconds": 420,
         "thumbnailUrl": "https://cdn.example.com/thumb.jpg",
+        "externalUrl": "https://youtube.com/watch?v=abc123",
+        "hasOpportunities": False,
     }])
 
 
@@ -87,6 +89,26 @@ class TestProcessVlogGuards:
             await process_vlog_task("missing-vlog")
         mock_transcribe.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_existing_opportunities_skip_reprocessing(self):
+        pg = FakePgClient(rows=[{
+            "id": "vlog-001",
+            "processingStatus": "FAILED",
+            "creatorId": "creator-001",
+            "title": "Test Vlog",
+            "durationSeconds": 420,
+            "thumbnailUrl": "https://cdn.example.com/thumb.jpg",
+            "externalUrl": "https://youtube.com/watch?v=abc123",
+            "hasOpportunities": True,
+        }])
+        with (
+            patch("app.tasks.process_vlog.PgClient", return_value=pg),
+            patch("app.tasks.process_vlog.transcribe_vlog") as mock_transcribe,
+        ):
+            from app.tasks.process_vlog import process_vlog_task
+            await process_vlog_task("vlog-001")
+        mock_transcribe.assert_not_called()
+
 
 class TestPhaseOnePipeline:
     @pytest.mark.asyncio
@@ -97,6 +119,7 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog.transcribe_vlog", return_value="full transcript") as mock_transcribe,
             patch("app.tasks.process_vlog.sync_transcript_graph", return_value={"opportunities": 2}) as mock_sync_graph,
             patch("app.tasks.process_vlog.sync_visual_evidence", return_value={"scene_segments": 3}) as mock_visual_sync,
+            patch("app.tasks.process_vlog.enrich_visual_graph", return_value={"opportunities": 1}) as mock_visual_enrich,
             patch("app.tasks.process_vlog.fuse_candidate_entities", return_value={"clusters": 1}) as mock_fuse,
             patch("app.tasks.process_vlog.resolve_candidates", return_value={"resolved": 2}) as mock_resolve,
             patch("app.tasks.process_vlog.rank_opportunities", return_value={"ranked": 2}) as mock_rank,
@@ -109,10 +132,13 @@ class TestPhaseOnePipeline:
         mock_sync_graph.assert_called_once_with("vlog-001", "creator-001", "Test Vlog", "full transcript")
         mock_visual_sync.assert_called_once_with(
             "vlog-001",
+            "creator-001",
             "Test Vlog",
             duration_seconds=420,
+            external_video_url="https://youtube.com/watch?v=abc123",
             thumbnail_url="https://cdn.example.com/thumb.jpg",
         )
+        mock_visual_enrich.assert_called_once_with("vlog-001", "creator-001", "Test Vlog")
         mock_fuse.assert_called_once_with("vlog-001")
         mock_resolve.assert_called_once_with("vlog-001")
         mock_rank.assert_called_once_with("vlog-001")
@@ -133,6 +159,7 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog.transcribe_vlog", return_value="retry transcript") as mock_transcribe,
             patch("app.tasks.process_vlog.sync_transcript_graph", return_value={"opportunities": 1}),
             patch("app.tasks.process_vlog.sync_visual_evidence", return_value={"scene_segments": 1}),
+            patch("app.tasks.process_vlog.enrich_visual_graph", return_value={"opportunities": 1}),
             patch("app.tasks.process_vlog.fuse_candidate_entities", return_value={"clusters": 1}),
             patch("app.tasks.process_vlog.resolve_candidates", return_value={"resolved": 1}),
             patch("app.tasks.process_vlog.rank_opportunities", return_value={"ranked": 1}),
@@ -149,6 +176,7 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog.transcribe_vlog", return_value=None),
             patch("app.tasks.process_vlog.sync_transcript_graph") as mock_sync_graph,
             patch("app.tasks.process_vlog.sync_visual_evidence") as mock_visual_sync,
+            patch("app.tasks.process_vlog.enrich_visual_graph") as mock_visual_enrich,
             patch("app.tasks.process_vlog.fuse_candidate_entities") as mock_fuse,
             patch("app.tasks.process_vlog.resolve_candidates") as mock_resolve,
             patch("app.tasks.process_vlog.rank_opportunities") as mock_rank,
@@ -157,6 +185,7 @@ class TestPhaseOnePipeline:
             await process_vlog_task("vlog-001")
         mock_sync_graph.assert_not_called()
         mock_visual_sync.assert_not_called()
+        mock_visual_enrich.assert_not_called()
         mock_fuse.assert_not_called()
         mock_resolve.assert_not_called()
         mock_rank.assert_not_called()
@@ -169,6 +198,7 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog.transcribe_vlog", return_value="graph transcript"),
             patch("app.tasks.process_vlog.sync_transcript_graph", side_effect=RuntimeError("graph write failed")),
             patch("app.tasks.process_vlog.sync_visual_evidence") as mock_visual_sync,
+            patch("app.tasks.process_vlog.enrich_visual_graph") as mock_visual_enrich,
             patch("app.tasks.process_vlog.fuse_candidate_entities") as mock_fuse,
             patch("app.tasks.process_vlog.resolve_candidates") as mock_resolve,
             patch("app.tasks.process_vlog.rank_opportunities") as mock_rank,
@@ -177,6 +207,7 @@ class TestPhaseOnePipeline:
             from app.tasks.process_vlog import process_vlog_task
             await process_vlog_task("vlog-001")
         mock_visual_sync.assert_not_called()
+        mock_visual_enrich.assert_not_called()
         mock_fuse.assert_not_called()
         mock_resolve.assert_not_called()
         mock_rank.assert_not_called()
@@ -190,6 +221,7 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog.transcribe_vlog", return_value="graph transcript"),
             patch("app.tasks.process_vlog.sync_transcript_graph", return_value={"opportunities": 3}),
             patch("app.tasks.process_vlog.sync_visual_evidence", side_effect=RuntimeError("ffmpeg unavailable")),
+            patch("app.tasks.process_vlog.enrich_visual_graph") as mock_visual_enrich,
             patch("app.tasks.process_vlog.fuse_candidate_entities", return_value={"clusters": 2}) as mock_fuse,
             patch("app.tasks.process_vlog.resolve_candidates", return_value={"resolved": 2}) as mock_resolve,
             patch("app.tasks.process_vlog.rank_opportunities", return_value={"ranked": 3}) as mock_rank,
@@ -200,6 +232,7 @@ class TestPhaseOnePipeline:
             await process_vlog_task("vlog-001")
 
         mock_pipeline_error.assert_called_once_with("vlog-001", "visual_evidence_failed: ffmpeg unavailable")
+        mock_visual_enrich.assert_not_called()
         mock_fuse.assert_called_once_with("vlog-001")
         mock_resolve.assert_called_once_with("vlog-001")
         mock_rank.assert_called_once_with("vlog-001")
@@ -219,6 +252,7 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog.transcribe_vlog", return_value="graph transcript"),
             patch("app.tasks.process_vlog.sync_transcript_graph", return_value={"opportunities": 3}),
             patch("app.tasks.process_vlog.sync_visual_evidence", return_value={"scene_segments": 3}),
+            patch("app.tasks.process_vlog.enrich_visual_graph", return_value={"opportunities": 1}),
             patch("app.tasks.process_vlog.fuse_candidate_entities", side_effect=RuntimeError("fusion exploded")),
             patch("app.tasks.process_vlog.resolve_candidates") as mock_resolve,
             patch("app.tasks.process_vlog.rank_opportunities") as mock_rank,
@@ -239,6 +273,7 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog.transcribe_vlog", return_value="graph transcript"),
             patch("app.tasks.process_vlog.sync_transcript_graph", return_value={"opportunities": 3}),
             patch("app.tasks.process_vlog.sync_visual_evidence", return_value={"scene_segments": 3}),
+            patch("app.tasks.process_vlog.enrich_visual_graph", return_value={"opportunities": 1}),
             patch("app.tasks.process_vlog.fuse_candidate_entities", return_value={"clusters": 2}),
             patch("app.tasks.process_vlog.resolve_candidates", side_effect=RuntimeError("resolver exploded")),
             patch("app.tasks.process_vlog.rank_opportunities") as mock_rank,

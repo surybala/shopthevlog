@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { buildE2EUser, getE2EUserIdFromCookies } from '@/lib/e2eAuth'
 import { isWhitelisted } from '@/lib/whitelist'
 
 // Routes that require the user to be on the whitelist.
@@ -12,30 +13,35 @@ export async function middleware(req: NextRequest) {
   // Must run on every request. Without this the JWT expires and server
   // components see no user — causing the "sign in again" loop.
   let response = NextResponse.next({ request: req })
+  const e2eUserId = getE2EUserIdFromCookies(req.cookies)
+  let user = e2eUserId ? buildE2EUser(e2eUserId) : null
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return req.cookies.getAll()
+  if (!user) {
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return req.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            // Write refreshed tokens to both request (so server components see
+            // them) and response (so the browser receives updated cookies).
+            cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value))
+            response = NextResponse.next({ request: req })
+            cookiesToSet.forEach(({ name, value, options }) =>
+              response.cookies.set(name, value, options)
+            )
+          },
         },
-        setAll(cookiesToSet) {
-          // Write refreshed tokens to both request (so server components see
-          // them) and response (so the browser receives updated cookies).
-          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value))
-          response = NextResponse.next({ request: req })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
+      }
+    )
 
-  // Refresh session if expired — do NOT remove this line
-  const { data: { user } } = await supabase.auth.getUser()
+    // Refresh session if expired — do NOT remove this line
+    const result = await supabase.auth.getUser()
+    user = result.data.user
+  }
   // ─────────────────────────────────────────────────────────────────────────
 
   // ── Whitelist enforcement ────────────────────────────────────────────────

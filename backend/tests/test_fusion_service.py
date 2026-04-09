@@ -18,7 +18,7 @@ def test_fuse_candidate_entities_merges_duplicate_candidates_and_repoints_opport
             "endSec": 60.0,
             "confidence": 0.81,
             "status": "NEW",
-            "evidenceBundleJson": {"evidenceIds": ["ev-001"]},
+            "evidenceBundleJson": {"evidenceIds": ["ev-001"], "sourceTypes": ["TRANSCRIPT"]},
         },
         {
             "id": "cand-002",
@@ -30,7 +30,7 @@ def test_fuse_candidate_entities_merges_duplicate_candidates_and_repoints_opport
             "endSec": 84.0,
             "confidence": 0.74,
             "status": "NEW",
-            "evidenceBundleJson": {"evidenceIds": ["ev-002"]},
+            "evidenceBundleJson": {"evidenceIds": ["ev-002"], "sourceTypes": ["TRANSCRIPT"]},
         },
         {
             "id": "cand-003",
@@ -42,7 +42,7 @@ def test_fuse_candidate_entities_merges_duplicate_candidates_and_repoints_opport
             "endSec": 150.0,
             "confidence": 0.7,
             "status": "NEW",
-            "evidenceBundleJson": {"evidenceIds": ["ev-003"]},
+            "evidenceBundleJson": {"evidenceIds": ["ev-003"], "sourceTypes": ["TRANSCRIPT"]},
         },
     ])
 
@@ -67,6 +67,7 @@ def test_fuse_candidate_entities_merges_duplicate_candidates_and_repoints_opport
     assert update_params[1] == 30.0
     assert update_params[2] == 84.0
     assert update_params[3] > 0.81
+    assert '"fusionVersion": "phase4-v2"' in update_params[4]
 
 
 def test_fuse_candidate_entities_leaves_unique_candidates_unchanged():
@@ -81,7 +82,7 @@ def test_fuse_candidate_entities_leaves_unique_candidates_unchanged():
             "endSec": 60.0,
             "confidence": 0.81,
             "status": "NEW",
-            "evidenceBundleJson": {"evidenceIds": ["ev-001"]},
+            "evidenceBundleJson": {"evidenceIds": ["ev-001"], "sourceTypes": ["TRANSCRIPT"]},
         }
     ])
 
@@ -98,3 +99,49 @@ def test_fuse_candidate_entities_leaves_unique_candidates_unchanged():
 
     sql_statements = [query for query, _params in fake_pg.cursor.queries]
     assert not any('DELETE FROM "CandidateEntity"' in sql for sql in sql_statements)
+
+
+def test_fuse_candidate_entities_merges_multimodal_aliases_and_marks_multimodal_bundle():
+    fake_pg = FakePgClient(rows=[
+        {
+            "id": "cand-001",
+            "entityType": "PLACE",
+            "subtype": "hotel",
+            "canonicalLabel": "Park Hyatt",
+            "rawLabel": "Park Hyatt",
+            "startSec": 30.0,
+            "endSec": 60.0,
+            "confidence": 0.72,
+            "status": "NEW",
+            "evidenceBundleJson": {"evidenceIds": ["ev-001"], "sourceTypes": ["TRANSCRIPT"]},
+        },
+        {
+            "id": "cand-002",
+            "entityType": "PLACE",
+            "subtype": "hotel",
+            "canonicalLabel": "Park Hyatt Tokyo",
+            "rawLabel": "Park Hyatt Tokyo",
+            "startSec": 31.0,
+            "endSec": 61.0,
+            "confidence": 0.83,
+            "status": "NEW",
+            "evidenceBundleJson": {"evidenceIds": ["ev-002"], "sourceTypes": ["VISUAL"]},
+        },
+    ])
+
+    with patch("app.services.fusion_service.PgClient", return_value=fake_pg):
+        from app.services.fusion_service import fuse_candidate_entities
+
+        result = fuse_candidate_entities("vlog-001")
+
+    assert result == {
+        "clusters": 1,
+        "merged_candidates": 1,
+        "remaining_candidates": 1,
+    }
+
+    update_params = next(params for sql, params in fake_pg.cursor.queries if 'UPDATE "CandidateEntity"' in sql)
+    assert update_params[0] == "Park Hyatt Tokyo"
+    assert update_params[3] > 0.87
+    assert '"isMultimodal": true' in update_params[4]
+    assert '"sourceTypes": ["TRANSCRIPT", "VISUAL"]' in update_params[4]

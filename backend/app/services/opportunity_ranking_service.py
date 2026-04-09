@@ -159,6 +159,52 @@ def _resolution_bonus(row: dict) -> float:
     return 0.0
 
 
+def _multimodal_signal_metadata(row: dict) -> tuple[bool, list[str]]:
+    bundle = _metadata_dict(row.get("candidateEvidenceBundleJson"))
+    source_types = bundle.get("sourceTypes")
+    if not isinstance(source_types, list):
+        source_types = []
+    normalized_source_types = sorted({str(source_type) for source_type in source_types if source_type})
+    is_multimodal = bool(bundle.get("isMultimodal")) or len(normalized_source_types) > 1
+    return is_multimodal, normalized_source_types
+
+
+def _multimodal_bonus(row: dict) -> float:
+    is_multimodal, source_types = _multimodal_signal_metadata(row)
+    if not is_multimodal:
+        return 0.0
+    return min(0.08, 0.04 + (0.01 * len(source_types)))
+
+
+def _weak_signal_penalty(row: dict) -> float:
+    confidence = _clamp(float(row.get("confidence") or 0.0))
+    resolution_match_type = row.get("resolutionMatchType")
+    _is_multimodal, source_types = _multimodal_signal_metadata(row)
+    if not source_types:
+        return 0.0
+
+    visual_only_source_types = {
+        "OCR",
+        "SCENE_SUMMARY",
+        "OBJECT_DETECTION",
+        "LOGO_DETECTION",
+        "CLIP_SUMMARY",
+        "VISUAL",
+    }
+    is_visual_only = set(source_types).issubset(visual_only_source_types)
+    if not is_visual_only or resolution_match_type in {"EXACT", "LIKELY", "SIMILAR"}:
+        return 0.0
+
+    penalty = 0.0
+    if confidence < 0.72:
+        penalty -= 0.14
+    if len(source_types) == 1:
+        penalty -= 0.05
+    if source_types == ["LOGO_DETECTION"]:
+        penalty -= 0.06
+    return penalty
+
+
 def _review_recommendation(
     row: dict,
     score: float,
@@ -168,6 +214,7 @@ def _review_recommendation(
     resolution_match_type = row.get("resolutionMatchType")
     confidence = _clamp(float(row.get("confidence") or 0.0))
     memory_signals = _memory_signals(row, creator_memory)
+    is_multimodal, source_types = _multimodal_signal_metadata(row)
 
     active_signals: list[str] = []
     if memory_signals["accepted"]:
@@ -182,6 +229,21 @@ def _review_recommendation(
         active_signals.append("exact_resolution")
     elif resolution_match_type == "LIKELY":
         active_signals.append("resolved_match")
+    if is_multimodal:
+        active_signals.append("multimodal_evidence")
+    if source_types:
+        active_signals.extend(f"source:{source_type.lower()}" for source_type in source_types)
+    visual_only_source_types = {
+        "OCR",
+        "SCENE_SUMMARY",
+        "OBJECT_DETECTION",
+        "LOGO_DETECTION",
+        "CLIP_SUMMARY",
+        "VISUAL",
+    }
+    is_visual_only = bool(source_types) and set(source_types).issubset(visual_only_source_types)
+    if is_visual_only and resolution_match_type not in {"EXACT", "LIKELY", "SIMILAR"} and confidence < 0.72:
+        active_signals.append("weak_visual_only_signal")
 
     if current_review_state in {"APPROVED", "EDITED", "REJECTED", "AUTO_APPROVED"}:
         return (
@@ -196,6 +258,14 @@ def _review_recommendation(
             "UNREVIEWED",
             "needs_scrutiny",
             "Creator history shows a similar item was rejected before, so this should be reviewed manually.",
+            active_signals,
+        )
+
+    if "weak_visual_only_signal" in active_signals:
+        return (
+            "UNREVIEWED",
+            "needs_scrutiny",
+            "This item is only backed by a weak visual-only signal without a successful resolution match.",
             active_signals,
         )
 
@@ -219,6 +289,14 @@ def _review_recommendation(
             "UNREVIEWED",
             "likely_approve",
             "Creator history suggests this opportunity is likely a good fit, but it still needs a quick review.",
+            active_signals,
+        )
+
+    if is_multimodal and has_resolved_match and score >= 0.76 and confidence >= 0.64:
+        return (
+            "UNREVIEWED",
+            "strong_candidate",
+            "This item is supported by both transcript and visual evidence with a successful resolution match.",
             active_signals,
         )
 
@@ -251,6 +329,8 @@ def score_opportunity(row: dict, creator_memory: dict[tuple[str, str], dict] | N
         + DEMAND_PROXY.get(opportunity_type, 0.55) * 0.10
         + _review_bonus(row.get("reviewState"))
         + _resolution_bonus(row)
+        + _multimodal_bonus(row)
+        + _weak_signal_penalty(row)
         + _memory_adjustment(row, creator_memory)
     )
     return round(_clamp(score), 4)
@@ -267,6 +347,9 @@ def build_review_metadata(
     metadata["reviewRecommendation"] = recommendation
     metadata["reviewRecommendationReason"] = reason
     metadata["reviewSignals"] = signals
+    is_multimodal, source_types = _multimodal_signal_metadata(row)
+    metadata["isMultimodal"] = is_multimodal
+    metadata["sourceTypes"] = source_types
     return review_state, metadata
 
 
@@ -279,6 +362,7 @@ def rank_opportunities(vlog_id: str) -> dict:
                       cand."entityType" AS "candidateEntityType",
                       cand."canonicalLabel" AS "candidateCanonicalLabel",
                       cand."rawLabel" AS "candidateRawLabel",
+                      cand."evidenceBundleJson" AS "candidateEvidenceBundleJson",
                       resolved."resolvedName",
                       resolved."matchType" AS "resolutionMatchType"
                FROM "Opportunity" opp

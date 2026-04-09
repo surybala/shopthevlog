@@ -31,6 +31,7 @@ def test_score_opportunity_prefers_high_confidence_hotel_over_generic_city_guide
             "candidateEntityType": "PLACE",
             "candidateCanonicalLabel": "Park Hyatt Tokyo",
             "candidateRawLabel": "Park Hyatt Tokyo",
+            "candidateEvidenceBundleJson": {"sourceTypes": ["TRANSCRIPT"]},
             "resolvedName": "Park Hyatt Tokyo",
             "resolutionMatchType": "EXACT",
         }
@@ -46,6 +47,7 @@ def test_score_opportunity_prefers_high_confidence_hotel_over_generic_city_guide
             "candidateEntityType": "PLACE",
             "candidateCanonicalLabel": None,
             "candidateRawLabel": None,
+            "candidateEvidenceBundleJson": {},
             "resolvedName": None,
             "resolutionMatchType": None,
         }
@@ -69,6 +71,7 @@ def test_score_opportunity_applies_creator_memory_boost_and_penalty():
             "candidateEntityType": "PLACE",
             "candidateCanonicalLabel": "Park Hyatt Tokyo",
             "candidateRawLabel": "Park Hyatt",
+            "candidateEvidenceBundleJson": {"sourceTypes": ["TRANSCRIPT"]},
             "resolvedName": "Park Hyatt Tokyo",
             "resolutionMatchType": "LIKELY",
         },
@@ -90,6 +93,7 @@ def test_score_opportunity_applies_creator_memory_boost_and_penalty():
             "candidateEntityType": "PLACE",
             "candidateCanonicalLabel": "Mystery Hotel",
             "candidateRawLabel": "Mystery Hotel",
+            "candidateEvidenceBundleJson": {"sourceTypes": ["TRANSCRIPT"]},
             "resolvedName": "Mystery Hotel",
             "resolutionMatchType": "LIKELY",
         },
@@ -116,6 +120,7 @@ def test_build_review_metadata_auto_approves_when_positive_memory_and_resolution
             "candidateEntityType": "PRODUCT",
             "candidateCanonicalLabel": "Peak Design 45L Travel Backpack",
             "candidateRawLabel": "Peak Design backpack",
+            "candidateEvidenceBundleJson": {"sourceTypes": ["TRANSCRIPT", "VISUAL"], "isMultimodal": True},
             "resolvedName": "Peak Design 45L Travel Backpack",
             "resolutionMatchType": "EXACT",
         },
@@ -131,6 +136,9 @@ def test_build_review_metadata_auto_approves_when_positive_memory_and_resolution
     assert metadata["reviewRecommendation"] == "auto_approved_from_memory"
     assert "accepted_memory" in metadata["reviewSignals"]
     assert "exact_resolution" in metadata["reviewSignals"]
+    assert "multimodal_evidence" in metadata["reviewSignals"]
+    assert metadata["isMultimodal"] is True
+    assert metadata["sourceTypes"] == ["TRANSCRIPT", "VISUAL"]
 
 
 def test_build_review_metadata_flags_rejected_memory_for_manual_review():
@@ -148,6 +156,7 @@ def test_build_review_metadata_flags_rejected_memory_for_manual_review():
             "candidateEntityType": "PLACE",
             "candidateCanonicalLabel": "Mystery Hotel",
             "candidateRawLabel": "Mystery Hotel",
+            "candidateEvidenceBundleJson": {"sourceTypes": ["TRANSCRIPT"]},
             "resolvedName": "Mystery Hotel",
             "resolutionMatchType": "LIKELY",
         },
@@ -160,6 +169,104 @@ def test_build_review_metadata_flags_rejected_memory_for_manual_review():
     assert review_state == "UNREVIEWED"
     assert metadata["reviewRecommendation"] == "needs_scrutiny"
     assert "rejected_memory" in metadata["reviewSignals"]
+
+
+def test_build_review_metadata_marks_multimodal_resolved_match_as_strong_candidate():
+    from app.services.opportunity_ranking_service import build_review_metadata
+
+    review_state, metadata = build_review_metadata(
+        {
+            "id": "opp-003",
+            "title": "Park Hyatt Tokyo",
+            "opportunityType": "HOTEL",
+            "confidence": 0.68,
+            "reviewState": "UNREVIEWED",
+            "metadataJson": {},
+            "candidateSubtype": "hotel",
+            "candidateEntityType": "PLACE",
+            "candidateCanonicalLabel": "Park Hyatt Tokyo",
+            "candidateRawLabel": "Park Hyatt",
+            "candidateEvidenceBundleJson": {"sourceTypes": ["TRANSCRIPT", "VISUAL"], "isMultimodal": True},
+            "resolvedName": "Park Hyatt Tokyo",
+            "resolutionMatchType": "EXACT",
+        },
+        0.79,
+        {},
+    )
+
+    assert review_state == "UNREVIEWED"
+    assert metadata["reviewRecommendation"] == "strong_candidate"
+    assert "multimodal_evidence" in metadata["reviewSignals"]
+
+
+def test_score_opportunity_boosts_multimodal_candidates():
+    from app.services.opportunity_ranking_service import score_opportunity
+
+    transcript_only = score_opportunity(
+        {
+            "id": "opp-001",
+            "title": "Park Hyatt Tokyo",
+            "opportunityType": "HOTEL",
+            "confidence": 0.8,
+            "reviewState": "UNREVIEWED",
+            "metadataJson": {"startSec": 30, "endSec": 90},
+            "candidateSubtype": "hotel",
+            "candidateEntityType": "PLACE",
+            "candidateCanonicalLabel": "Park Hyatt Tokyo",
+            "candidateRawLabel": "Park Hyatt Tokyo",
+            "candidateEvidenceBundleJson": {"sourceTypes": ["TRANSCRIPT"]},
+            "resolvedName": "Park Hyatt Tokyo",
+            "resolutionMatchType": "LIKELY",
+        }
+    )
+    multimodal = score_opportunity(
+        {
+            "id": "opp-002",
+            "title": "Park Hyatt Tokyo",
+            "opportunityType": "HOTEL",
+            "confidence": 0.8,
+            "reviewState": "UNREVIEWED",
+            "metadataJson": {"startSec": 30, "endSec": 90},
+            "candidateSubtype": "hotel",
+            "candidateEntityType": "PLACE",
+            "candidateCanonicalLabel": "Park Hyatt Tokyo",
+            "candidateRawLabel": "Park Hyatt Tokyo",
+            "candidateEvidenceBundleJson": {"sourceTypes": ["TRANSCRIPT", "VISUAL"], "isMultimodal": True},
+            "resolvedName": "Park Hyatt Tokyo",
+            "resolutionMatchType": "LIKELY",
+        }
+    )
+
+    assert multimodal > transcript_only
+
+
+def test_score_opportunity_penalizes_weak_logo_only_visual_candidates():
+    from app.services.opportunity_ranking_service import build_review_metadata, score_opportunity
+
+    row = {
+        "id": "opp-004",
+        "title": "Generic Travel Brand",
+        "opportunityType": "TRAVEL_PRODUCT",
+        "confidence": 0.58,
+        "reviewState": "UNREVIEWED",
+        "metadataJson": {},
+        "candidateSubtype": "travel_product",
+        "candidateEntityType": "BRAND",
+        "candidateCanonicalLabel": "Generic Travel Brand",
+        "candidateRawLabel": "GTB",
+        "candidateEvidenceBundleJson": {"sourceTypes": ["LOGO_DETECTION"]},
+        "resolvedName": None,
+        "resolutionMatchType": None,
+    }
+
+    score = score_opportunity(row)
+    review_state, metadata = build_review_metadata(row, score, {})
+
+    assert score <= 0.62
+    assert review_state == "UNREVIEWED"
+    assert metadata["reviewRecommendation"] == "needs_scrutiny"
+    assert "weak_visual_only_signal" in metadata["reviewSignals"]
+    assert "source:logo_detection" in metadata["reviewSignals"]
 
 
 def test_rank_opportunities_updates_each_row_with_deterministic_score():
@@ -177,6 +284,7 @@ def test_rank_opportunities_updates_each_row_with_deterministic_score():
                 "candidateEntityType": "PLACE",
                 "candidateCanonicalLabel": "Park Hyatt Tokyo",
                 "candidateRawLabel": "Park Hyatt Tokyo",
+                "candidateEvidenceBundleJson": {"sourceTypes": ["TRANSCRIPT", "VISUAL"], "isMultimodal": True},
                 "resolvedName": "Park Hyatt Tokyo",
                 "resolutionMatchType": "EXACT",
             },
@@ -192,6 +300,7 @@ def test_rank_opportunities_updates_each_row_with_deterministic_score():
                 "candidateEntityType": "PLACE",
                 "candidateCanonicalLabel": None,
                 "candidateRawLabel": None,
+                "candidateEvidenceBundleJson": {},
                 "resolvedName": None,
                 "resolutionMatchType": None,
             },
@@ -217,6 +326,7 @@ def test_rank_opportunities_updates_each_row_with_deterministic_score():
     assert update_params[0][0] > update_params[1][0]
     assert update_params[0][1] == "AUTO_APPROVED"
     assert '"reviewRecommendation": "auto_approved_from_memory"' in update_params[0][2]
+    assert '"isMultimodal": true' in update_params[0][2]
     assert update_params[1][1] == "UNREVIEWED"
     assert any('UPDATE "Vlog"' in sql for sql, _params in fake_pg.cursor.queries)
 

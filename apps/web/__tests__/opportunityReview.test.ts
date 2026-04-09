@@ -3,6 +3,7 @@ import {
   buildOpportunityReviewSummary,
   formatReviewRecommendationLabel,
   formatOpportunityTypeLabel,
+  getMultimodalEvidenceLabel,
   getReviewRecommendation,
   getReviewRecommendationReason,
   rankReviewQueue,
@@ -22,12 +23,16 @@ describe('opportunity review helpers', () => {
         publishState: 'DRAFT',
         confidence: 0.92,
         rankScore: 0.88,
+        metadataJson: {
+          isMultimodal: true,
+          sourceTypes: ['TRANSCRIPT', 'VISUAL'],
+        },
         evidences: [
           { evidence: { sourceType: 'TRANSCRIPT', startSec: 10, endSec: 40 } },
-          { evidence: { sourceType: 'SCENE_SUMMARY', startSec: 15, endSec: 45 } },
+          { evidence: { sourceType: 'OCR', startSec: 15, endSec: 45 } },
         ],
       })
-    ).toBe('Transcript, Scene Summary')
+    ).toBe('Transcript, Visual, Ocr')
   })
 
   it('builds summary totals and review ordering', () => {
@@ -70,5 +75,16 @@ describe('opportunity review helpers', () => {
     expect(getReviewRecommendationReason(opportunity)).toContain('rejected before')
     expect(formatReviewRecommendationLabel('needs_scrutiny')).toBe('Needs scrutiny')
     expect(reviewRecommendationTone('needs_scrutiny')).toContain('text-red-200')
+  })
+
+  it('formats multimodal evidence labels from ranking metadata', () => {
+    expect(
+      getMultimodalEvidenceLabel({
+        metadataJson: {
+          isMultimodal: true,
+          sourceTypes: ['TRANSCRIPT', 'VISUAL'],
+        },
+      } as never)
+    ).toBe('Backed by Transcript + Visual')
   })
 })

@@ -10,6 +10,7 @@ from typing import Optional
 
 from google import genai
 from google.genai import types
+import httpx
 
 from app.core.config import settings
 from app.db.pg_client import PgClient
@@ -137,6 +138,38 @@ Rules:
 - Include itinerary steps when the transcript clearly describes the sequence of the trip.
 - Use confidence between 0 and 1.
 - If the transcript has no clear opportunities, return {"opportunities":[]}.
+"""
+
+VISUAL_OPPORTUNITY_SYSTEM_PROMPT = """You analyze a single travel vlog frame and return only high-signal travel-shopping evidence.
+
+Return ONE valid JSON object only. No markdown, no prose.
+
+Schema:
+{
+  "signals": [
+    {
+      "source_type": "ocr|object_detection|logo_detection|clip_summary",
+      "entity_type": "place|product|experience|brand",
+      "subtype": "hotel|restaurant|cafe|attraction|activity|travel_product|packing_item|brand|scene_summary",
+      "title": "short label",
+      "raw_label": "raw extracted text or object name",
+      "description": "short factual description",
+      "confidence": 0.0,
+      "claim_type": "visited|used|packed|recommends|itinerary_step|null",
+      "evidence_summary": "brief explanation of what is visible",
+      "attributes": {}
+    }
+  ]
+}
+
+Rules:
+- Extract only what is actually visible in the frame.
+- Prefer named travel-relevant places, products, logos, and signs.
+- OCR should only include readable text that matters to a traveler.
+- object_detection should focus on luggage, gear, hotel room, restaurant table, landmark-like scenes, or transit.
+- logo_detection should only include logos/brands that are clearly visible.
+- clip_summary may summarize the scene only when it gives useful travel context.
+- If the frame contains no useful travel-shopping signal, return {"signals":[]}.
 """
 
 
@@ -407,6 +440,40 @@ def extract_transcript_opportunities(transcript: str, title: str) -> list[dict]:
         return [item for item in opportunities if isinstance(item, dict)]
     except Exception as e:
         logger.warning("extract_transcript_opportunities failed: %s", e)
+        return []
+
+
+def extract_visual_opportunities(frame_image_url: str, title: str, scene_summary: str | None = None) -> list[dict]:
+    """Extract structured visual evidence from a stored frame URL."""
+    if not frame_image_url:
+        return []
+
+    try:
+        response = httpx.get(frame_image_url, timeout=10.0)
+        response.raise_for_status()
+        content_type = response.headers.get("content-type", "image/jpeg").split(";")[0].strip() or "image/jpeg"
+        prompt = f"Vlog title: {title}\nScene summary: {scene_summary or 'Unknown'}"
+        raw = _client().models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[
+                types.Part.from_bytes(data=response.content, mime_type=content_type),
+                types.Part.from_text(text=prompt),
+            ],
+            config=types.GenerateContentConfig(
+                system_instruction=VISUAL_OPPORTUNITY_SYSTEM_PROMPT,
+                max_output_tokens=2048,
+                temperature=0.2,
+            ),
+        ).text or ""
+        parsed = _parse_response(raw, title, "visual-opportunities")
+        if not parsed:
+            return []
+        signals = parsed.get("signals")
+        if not isinstance(signals, list):
+            return []
+        return [item for item in signals if isinstance(item, dict)]
+    except Exception as e:
+        logger.warning("extract_visual_opportunities failed: %s", e)
         return []
 
 

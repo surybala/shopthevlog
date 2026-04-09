@@ -45,7 +45,12 @@ async def trigger_process(
     """Trigger AI processing (transcription + TripKit generation) for a vlog."""
     with PgClient() as db:
         db.execute(
-            '''SELECT v.id, v."processingStatus"
+            '''SELECT v.id, v."processingStatus",
+                      EXISTS(
+                          SELECT 1
+                          FROM "Opportunity" opp
+                          WHERE opp."vlogId" = v.id
+                      ) AS "hasOpportunities"
                FROM "Vlog" v
                JOIN "Creator" c ON c.id = v."creatorId"
                WHERE v.id = %s AND c."userId" = %s''',
@@ -58,6 +63,12 @@ async def trigger_process(
 
     if vlog["processingStatus"] in ("TRANSCRIBING", "EXTRACTING"):
         return {"status": vlog["processingStatus"], "message": "Already processing"}
+
+    if vlog.get("hasOpportunities"):
+        return {
+            "status": "REVIEW_PENDING",
+            "message": "Already processed; review opportunities already exist",
+        }
 
     with PgClient() as db:
         db.execute(

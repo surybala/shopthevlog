@@ -16,6 +16,22 @@ type ReviewableOpportunity = {
   }>
 }
 
+function metadataObject(metadataJson: unknown) {
+  if (!metadataJson || typeof metadataJson !== 'object') {
+    return null
+  }
+
+  return metadataJson as Record<string, unknown>
+}
+
+function formatSourceTypeLabel(sourceType: string) {
+  return sourceType
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
 export function formatOpportunityTypeLabel(opportunityType: string) {
   return opportunityType
     .toLowerCase()
@@ -25,23 +41,19 @@ export function formatOpportunityTypeLabel(opportunityType: string) {
 }
 
 export function summarizeEvidenceSources(opportunity: ReviewableOpportunity) {
-  const sourceTypes = Array.from(
-    new Set((opportunity.evidences ?? []).map((entry) => entry.evidence.sourceType))
-  )
+  const metadata = metadataObject(opportunity.metadataJson)
+  const metadataSourceTypes = Array.isArray(metadata?.sourceTypes)
+    ? metadata!.sourceTypes.filter((value): value is string => typeof value === 'string')
+    : []
+
+  const evidenceSourceTypes = (opportunity.evidences ?? []).map((entry) => entry.evidence.sourceType)
+  const sourceTypes = Array.from(new Set([...metadataSourceTypes, ...evidenceSourceTypes]))
 
   if (sourceTypes.length === 0) {
     return 'No evidence linked yet'
   }
 
-  return sourceTypes
-    .map((sourceType) =>
-      sourceType
-        .toLowerCase()
-        .split('_')
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(' ')
-    )
-    .join(', ')
+  return sourceTypes.map((sourceType) => formatSourceTypeLabel(sourceType)).join(', ')
 }
 
 export function buildOpportunityReviewSummary(opportunities: ReviewableOpportunity[]) {
@@ -78,21 +90,35 @@ export function rankReviewQueue<T extends ReviewableOpportunity>(opportunities: 
 }
 
 export function getReviewRecommendation(opportunity: Pick<ReviewableOpportunity, 'metadataJson'>) {
-  if (!opportunity.metadataJson || typeof opportunity.metadataJson !== 'object') {
-    return null
-  }
+  const metadata = metadataObject(opportunity.metadataJson)
+  if (!metadata) return null
 
-  const recommendation = (opportunity.metadataJson as { reviewRecommendation?: unknown }).reviewRecommendation
+  const recommendation = metadata.reviewRecommendation
   return typeof recommendation === 'string' ? recommendation : null
 }
 
 export function getReviewRecommendationReason(opportunity: Pick<ReviewableOpportunity, 'metadataJson'>) {
-  if (!opportunity.metadataJson || typeof opportunity.metadataJson !== 'object') {
+  const metadata = metadataObject(opportunity.metadataJson)
+  if (!metadata) return null
+
+  const reason = metadata.reviewRecommendationReason
+  return typeof reason === 'string' ? reason : null
+}
+
+export function getMultimodalEvidenceLabel(opportunity: Pick<ReviewableOpportunity, 'metadataJson'>) {
+  const metadata = metadataObject(opportunity.metadataJson)
+  if (!metadata) return null
+
+  const isMultimodal = metadata.isMultimodal === true
+  const sourceTypes = Array.isArray(metadata.sourceTypes)
+    ? metadata.sourceTypes.filter((value): value is string => typeof value === 'string')
+    : []
+
+  if (!isMultimodal || sourceTypes.length < 2) {
     return null
   }
 
-  const reason = (opportunity.metadataJson as { reviewRecommendationReason?: unknown }).reviewRecommendationReason
-  return typeof reason === 'string' ? reason : null
+  return `Backed by ${sourceTypes.map((sourceType) => formatSourceTypeLabel(sourceType)).join(' + ')}`
 }
 
 export function formatReviewRecommendationLabel(recommendation: string | null) {

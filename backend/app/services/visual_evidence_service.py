@@ -17,6 +17,12 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 from app.db.pg_client import PgClient
+from app.services.frame_storage_service import (
+    extract_video_frames,
+    load_cached_frame_assets,
+    store_frame_asset,
+    write_frame_manifest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,10 +73,6 @@ def build_scene_segments(
     return records
 
 
-def _frame_uri(vlog_id: str, timestamp_sec: float, thumbnail_url: str | None) -> str:
-    if thumbnail_url:
-        return f"{thumbnail_url}#t={int(timestamp_sec)}"
-    return f"vlog://{vlog_id}/frames/{int(timestamp_sec)}"
 def _delete_existing_visual_rows(db: PgClient, vlog_id: str) -> None:
     db.execute(
         '''DELETE FROM "OpportunityEvidence"
@@ -106,9 +108,11 @@ def _delete_existing_visual_rows(db: PgClient, vlog_id: str) -> None:
 
 def sync_visual_evidence(
     vlog_id: str,
+    creator_id: str,
     title: str,
     *,
     duration_seconds: int | None = None,
+    external_video_url: str | None = None,
     thumbnail_url: str | None = None,
 ) -> dict:
     """
@@ -119,9 +123,19 @@ def sync_visual_evidence(
     OCR and scene understanding later.
     """
     scenes = build_scene_segments(duration_seconds)
+    scene_midpoints = [round((scene.start_sec + scene.end_sec) / 2, 2) for scene in scenes]
+    cached_frames = load_cached_frame_assets(
+        creator_id=creator_id,
+        vlog_id=vlog_id,
+        source_video_url=external_video_url,
+        timestamps_sec=scene_midpoints,
+    )
+    missing_midpoints = [timestamp for timestamp in scene_midpoints if timestamp not in cached_frames]
+    extracted_frames = extract_video_frames(external_video_url, missing_midpoints)
     scene_count = 0
     frame_count = 0
     evidence_count = 0
+    persisted_frames: dict[float, object] = dict(cached_frames)
 
     with PgClient() as db:
         _delete_existing_visual_rows(db, vlog_id)
@@ -144,8 +158,20 @@ def sync_visual_evidence(
             )
             scene_count += 1
 
-            midpoint = round((scene.start_sec + scene.end_sec) / 2, 2)
+            midpoint = scene_midpoints[scene_count - 1]
             frame_id = str(uuid4())
+            stored_frame = cached_frames.get(midpoint)
+            if stored_frame is None:
+                extracted_frame = extracted_frames.get(midpoint)
+                stored_frame = store_frame_asset(
+                    creator_id=creator_id,
+                    vlog_id=vlog_id,
+                    timestamp_sec=midpoint,
+                    source_url=thumbnail_url,
+                    frame_content=extracted_frame[0] if extracted_frame else None,
+                    frame_content_type=extracted_frame[1] if extracted_frame else None,
+                )
+                persisted_frames[midpoint] = stored_frame
             db.execute(
                 '''INSERT INTO "FrameAsset" (
                     id, "vlogId", "sceneSegmentId", "timestampSec", "imageUri",
@@ -156,7 +182,7 @@ def sync_visual_evidence(
                     vlog_id,
                     scene.id,
                     midpoint,
-                    _frame_uri(vlog_id, midpoint, thumbnail_url),
+                    stored_frame.public_url,
                     None,
                     None,
                 ),
@@ -193,6 +219,14 @@ def sync_visual_evidence(
                 ),
             )
             evidence_count += 1
+
+        if external_video_url and persisted_frames:
+            write_frame_manifest(
+                creator_id=creator_id,
+                vlog_id=vlog_id,
+                source_video_url=external_video_url,
+                frame_assets=persisted_frames,
+            )
 
         db.execute(
             '''UPDATE "Vlog"

@@ -94,6 +94,13 @@ describe('DashboardReviewPage', () => {
     const page = await DashboardReviewPage()
     const html = renderToStaticMarkup(page)
 
+    expect(mockOpportunityFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          publishState: { in: ['DRAFT'] },
+        }),
+      })
+    )
     expect(html).toContain('Review Queue')
     expect(html).toContain('Park Hyatt Tokyo')
     expect(html).toContain('Needs Review')

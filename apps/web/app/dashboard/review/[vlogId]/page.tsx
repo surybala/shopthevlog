@@ -7,6 +7,7 @@ import { buildTripKitPublishSummary } from '@/lib/opportunityPublish'
 import {
   formatReviewRecommendationLabel,
   formatOpportunityTypeLabel,
+  getMultimodalEvidenceLabel,
   getReviewRecommendation,
   getReviewRecommendationReason,
   rankReviewQueue,
@@ -268,6 +269,7 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
                 const reviewRecommendation = getReviewRecommendation(opportunity)
                 const reviewRecommendationLabel = formatReviewRecommendationLabel(reviewRecommendation)
                 const reviewRecommendationReason = getReviewRecommendationReason(opportunity)
+                const multimodalEvidenceLabel = getMultimodalEvidenceLabel(opportunity)
 
                 return (
                   <>
@@ -336,6 +338,14 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
                   {reviewRecommendationReason ? (
                     <p className="mt-2 max-w-3xl text-xs text-white/40">{reviewRecommendationReason}</p>
                   ) : null}
+                </div>
+              ) : null}
+
+              {multimodalEvidenceLabel ? (
+                <div className="mb-4">
+                  <span className="rounded-full border border-violet-400/20 bg-violet-500/10 px-2 py-1 text-xs text-violet-100">
+                    {multimodalEvidenceLabel}
+                  </span>
                 </div>
               ) : null}
 

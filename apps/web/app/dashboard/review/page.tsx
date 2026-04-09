@@ -48,7 +48,7 @@ export default async function DashboardReviewPage() {
     where: {
       creatorId: creator.id,
       reviewState: { in: ['UNREVIEWED', 'AUTO_APPROVED', 'APPROVED', 'EDITED'] },
-      publishState: { not: 'SUPPRESSED' },
+      publishState: { in: ['DRAFT'] },
     },
     orderBy: [
       { rankScore: 'desc' },

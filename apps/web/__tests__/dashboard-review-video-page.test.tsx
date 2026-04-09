@@ -106,6 +106,8 @@ describe('DashboardReviewVideoPage', () => {
           metadataJson: {
             reviewRecommendation: 'likely_approve',
             reviewRecommendationReason: 'Creator history suggests this opportunity is likely a good fit, but it still needs a quick review.',
+            isMultimodal: true,
+            sourceTypes: ['TRANSCRIPT', 'VISUAL'],
             itinerary: {
               title: '5 Days in Tokyo',
               destinations: ['Tokyo'],
@@ -129,7 +131,7 @@ describe('DashboardReviewVideoPage', () => {
           },
           evidences: [
             { evidence: { sourceType: 'TRANSCRIPT', startSec: 45, endSec: 60 } },
-            { evidence: { sourceType: 'SCENE_SUMMARY', startSec: 50, endSec: 75 } },
+            { evidence: { sourceType: 'OCR', startSec: 50, endSec: 75 } },
           ],
         },
       ],
@@ -156,6 +158,7 @@ describe('DashboardReviewVideoPage', () => {
     expect(html).toContain('Recurring item')
     expect(html).toContain('Likely approve')
     expect(html).toContain('likely a good fit')
+    expect(html).toContain('Backed by Transcript + Visual')
     expect(html).toContain('EditForm')
     expect(html).toContain('DecisionButtons')
   })

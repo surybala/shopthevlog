@@ -1,0 +1,176 @@
+[
+  {
+    "name": "multimodal_hotel_exact_match",
+    "row": {
+      "id": "opp-golden-1",
+      "title": "Park Hyatt Tokyo",
+      "opportunityType": "HOTEL",
+      "confidence": 0.68,
+      "reviewState": "UNREVIEWED",
+      "metadataJson": { "startSec": 30, "endSec": 90 },
+      "candidateSubtype": "hotel",
+      "candidateEntityType": "PLACE",
+      "candidateCanonicalLabel": "Park Hyatt Tokyo",
+      "candidateRawLabel": "Park Hyatt",
+      "candidateEvidenceBundleJson": {
+        "sourceTypes": ["TRANSCRIPT", "VISUAL"],
+        "isMultimodal": true
+      },
+      "resolvedName": "Park Hyatt Tokyo",
+      "resolutionMatchType": "EXACT"
+    },
+    "creatorMemory": {},
+    "expected": {
+      "minScore": 0.76,
+      "reviewState": "UNREVIEWED",
+      "reviewRecommendation": "strong_candidate",
+      "requiredSignals": ["multimodal_evidence", "exact_resolution"]
+    }
+  },
+  {
+    "name": "creator_memory_auto_approve_product",
+    "row": {
+      "id": "opp-golden-2",
+      "title": "Peak Design 45L Travel Backpack",
+      "opportunityType": "TRAVEL_PRODUCT",
+      "confidence": 0.89,
+      "reviewState": "UNREVIEWED",
+      "metadataJson": {},
+      "candidateSubtype": "travel_product",
+      "candidateEntityType": "PRODUCT",
+      "candidateCanonicalLabel": "Peak Design 45L Travel Backpack",
+      "candidateRawLabel": "Peak Design backpack",
+      "candidateEvidenceBundleJson": {
+        "sourceTypes": ["TRANSCRIPT", "VISUAL"],
+        "isMultimodal": true
+      },
+      "resolvedName": "Peak Design 45L Travel Backpack",
+      "resolutionMatchType": "EXACT"
+    },
+    "creatorMemory": {
+      "ACCEPTED_PRODUCT|peak design 45l travel backpack": { "memoryType": "ACCEPTED_PRODUCT" },
+      "RECURRING_ITEM|peak design 45l travel backpack": { "memoryType": "RECURRING_ITEM" }
+    },
+    "expected": {
+      "minScore": 0.9,
+      "reviewState": "AUTO_APPROVED",
+      "reviewRecommendation": "auto_approved_from_memory",
+      "requiredSignals": ["accepted_memory", "multimodal_evidence", "exact_resolution"]
+    }
+  },
+  {
+    "name": "rejected_place_needs_scrutiny",
+    "row": {
+      "id": "opp-golden-3",
+      "title": "Mystery Hotel",
+      "opportunityType": "HOTEL",
+      "confidence": 0.83,
+      "reviewState": "UNREVIEWED",
+      "metadataJson": {},
+      "candidateSubtype": "hotel",
+      "candidateEntityType": "PLACE",
+      "candidateCanonicalLabel": "Mystery Hotel",
+      "candidateRawLabel": "Mystery Hotel",
+      "candidateEvidenceBundleJson": {
+        "sourceTypes": ["TRANSCRIPT"]
+      },
+      "resolvedName": "Mystery Hotel",
+      "resolutionMatchType": "LIKELY"
+    },
+    "creatorMemory": {
+      "REJECTED_PLACE|mystery hotel": { "memoryType": "REJECTED_PLACE" }
+    },
+    "expected": {
+      "minScore": 0.0,
+      "reviewState": "UNREVIEWED",
+      "reviewRecommendation": "needs_scrutiny",
+      "requiredSignals": ["rejected_memory"]
+    }
+  },
+  {
+    "name": "ocr_restaurant_signage_exact_match",
+    "row": {
+      "id": "opp-golden-4",
+      "title": "Ichiran Shibuya",
+      "opportunityType": "RESTAURANT",
+      "confidence": 0.74,
+      "reviewState": "UNREVIEWED",
+      "metadataJson": { "startSec": 215, "endSec": 240 },
+      "candidateSubtype": "restaurant",
+      "candidateEntityType": "PLACE",
+      "candidateCanonicalLabel": "Ichiran Shibuya",
+      "candidateRawLabel": "Ichiran",
+      "candidateEvidenceBundleJson": {
+        "sourceTypes": ["OCR", "SCENE_SUMMARY"],
+        "isMultimodal": true
+      },
+      "resolvedName": "Ichiran Shibuya",
+      "resolutionMatchType": "EXACT"
+    },
+    "creatorMemory": {},
+    "expected": {
+      "minScore": 0.74,
+      "reviewState": "UNREVIEWED",
+      "reviewRecommendation": "strong_candidate",
+      "requiredSignals": ["multimodal_evidence", "exact_resolution", "source:ocr"]
+    }
+  },
+  {
+    "name": "recurring_packing_item_auto_approved",
+    "row": {
+      "id": "opp-golden-5",
+      "title": "Away Carry-On",
+      "opportunityType": "PACKING_ITEM",
+      "confidence": 0.84,
+      "reviewState": "UNREVIEWED",
+      "metadataJson": { "startSec": 18, "endSec": 33 },
+      "candidateSubtype": "packing_item",
+      "candidateEntityType": "PRODUCT",
+      "candidateCanonicalLabel": "Away Carry-On",
+      "candidateRawLabel": "Away suitcase",
+      "candidateEvidenceBundleJson": {
+        "sourceTypes": ["TRANSCRIPT", "OBJECT_DETECTION"],
+        "isMultimodal": true
+      },
+      "resolvedName": "Away Carry-On",
+      "resolutionMatchType": "EXACT"
+    },
+    "creatorMemory": {
+      "ACCEPTED_PRODUCT|away carry on": { "memoryType": "ACCEPTED_PRODUCT" },
+      "RECURRING_ITEM|away carry on": { "memoryType": "RECURRING_ITEM" }
+    },
+    "expected": {
+      "minScore": 0.84,
+      "reviewState": "AUTO_APPROVED",
+      "reviewRecommendation": "auto_approved_from_memory",
+      "requiredSignals": ["accepted_memory", "recurring_item", "multimodal_evidence", "exact_resolution"]
+    }
+  },
+  {
+    "name": "weak_logo_only_signal_needs_scrutiny",
+    "row": {
+      "id": "opp-golden-6",
+      "title": "Generic Travel Brand",
+      "opportunityType": "TRAVEL_PRODUCT",
+      "confidence": 0.58,
+      "reviewState": "UNREVIEWED",
+      "metadataJson": {},
+      "candidateSubtype": "travel_product",
+      "candidateEntityType": "BRAND",
+      "candidateCanonicalLabel": "Generic Travel Brand",
+      "candidateRawLabel": "GTB",
+      "candidateEvidenceBundleJson": {
+        "sourceTypes": ["LOGO_DETECTION"]
+      },
+      "resolvedName": null,
+      "resolutionMatchType": null
+    },
+    "creatorMemory": {},
+    "expected": {
+      "maxScore": 0.62,
+      "reviewState": "UNREVIEWED",
+      "reviewRecommendation": "needs_scrutiny",
+      "requiredSignals": ["weak_visual_only_signal", "source:logo_detection"]
+    }
+  }
+]

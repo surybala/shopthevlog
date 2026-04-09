@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # Supabase
     SUPABASE_URL: str
     SUPABASE_SECRET_KEY: str          # formerly SUPABASE_SERVICE_ROLE_KEY
+    SUPABASE_STORAGE_BUCKET: str = "ai-pipeline-assets"
     # SUPABASE_JWT_SECRET removed — project uses new JWT Signing Keys (JWKS/ES256)
 
     # YouTube

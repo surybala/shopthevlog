@@ -149,7 +149,7 @@ class TestTriggerProcess:
         assert "not found" in resp.json()["detail"].lower()
 
     def test_already_transcribing_returns_early(self):
-        pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "TRANSCRIBING"}])
+        pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "TRANSCRIBING", "hasOpportunities": False}])
         with patch("app.api.v1.vlogs.PgClient", return_value=pg):
             client = _make_client(pg)
             resp = client.post("/api/v1/vlogs/vlog-001/process")
@@ -160,7 +160,7 @@ class TestTriggerProcess:
         assert "already" in data["message"].lower()
 
     def test_already_extracting_returns_early(self):
-        pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "EXTRACTING"}])
+        pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "EXTRACTING", "hasOpportunities": False}])
         with patch("app.api.v1.vlogs.PgClient", return_value=pg):
             client = _make_client(pg)
             resp = client.post("/api/v1/vlogs/vlog-001/process")
@@ -169,9 +169,20 @@ class TestTriggerProcess:
         data = resp.json()
         assert data["status"] == "EXTRACTING"
 
+    def test_existing_opportunities_return_already_processed(self):
+        pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "FAILED", "hasOpportunities": True}])
+        with patch("app.api.v1.vlogs.PgClient", return_value=pg):
+            client = _make_client(pg)
+            resp = client.post("/api/v1/vlogs/vlog-001/process")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "REVIEW_PENDING"
+        assert "already processed" in data["message"].lower()
+
     def test_pending_vlog_queued_and_task_added(self):
         # Two PgClient calls: one for the SELECT, one for the UPDATE
-        select_pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "PENDING"}])
+        select_pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "PENDING", "hasOpportunities": False}])
         update_pg = FakePgClient(rows=[])
 
         call_count = {"n": 0}
@@ -190,7 +201,7 @@ class TestTriggerProcess:
         assert data["vlog_id"] == "vlog-001"
 
     def test_failed_vlog_can_be_requeued(self):
-        select_pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "FAILED"}])
+        select_pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "FAILED", "hasOpportunities": False}])
         update_pg = FakePgClient(rows=[])
 
         with (
@@ -205,7 +216,7 @@ class TestTriggerProcess:
 
     def test_complete_vlog_can_be_reprocessed(self):
         """COMPLETE vlogs are allowed to be re-triggered (re-generation)."""
-        select_pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "COMPLETE"}])
+        select_pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "COMPLETE", "hasOpportunities": False}])
         update_pg = FakePgClient(rows=[])
 
         with (

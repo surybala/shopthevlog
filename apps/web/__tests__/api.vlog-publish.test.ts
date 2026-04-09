@@ -12,6 +12,7 @@ const txTripKitCreate = vi.fn()
 const txTripKitsOnVlogsCreate = vi.fn()
 const txItineraryDayCreate = vi.fn()
 const txOpportunityUpdate = vi.fn()
+const txOpportunityUpdateMany = vi.fn()
 const txVlogUpdate = vi.fn()
 const txTripKitFindUnique = vi.fn()
 
@@ -42,6 +43,7 @@ describe('vlog publish route', () => {
     txTripKitsOnVlogsCreate.mockResolvedValue({})
     txItineraryDayCreate.mockResolvedValue({})
     txOpportunityUpdate.mockResolvedValue({})
+    txOpportunityUpdateMany.mockResolvedValue({ count: 0 })
     txVlogUpdate.mockResolvedValue({})
     txTripKitFindUnique.mockResolvedValue({ id: 'kit-1', title: '5 Days in Tokyo', slug: '5-days-in-tokyo-abc123', isPublished: true })
 
@@ -63,6 +65,7 @@ describe('vlog publish route', () => {
       },
       opportunity: {
         update: txOpportunityUpdate,
+        updateMany: txOpportunityUpdateMany,
       },
       vlog: {
         update: txVlogUpdate,
@@ -141,6 +144,7 @@ describe('vlog publish route', () => {
       where: { id: 'opp-1' },
       data: { publishState: 'PUBLISHED' },
     })
+    expect(txOpportunityUpdateMany).not.toHaveBeenCalled()
   })
 
   it('republishes into an existing Trip Kit when one is already linked', async () => {
@@ -165,6 +169,24 @@ describe('vlog publish route', () => {
           },
           createdAt: new Date('2026-04-09T00:00:00.000Z'),
           updatedAt: new Date('2026-04-10T00:00:00.000Z'),
+        },
+        {
+          id: 'opp-older',
+          title: 'Old Tokyo itinerary',
+          description: 'Older version.',
+          reviewState: 'APPROVED',
+          publishState: 'PUBLISHED',
+          metadataJson: {
+            itinerary: {
+              title: 'Old Tokyo itinerary',
+              total_days: 1,
+              destinations: ['Tokyo'],
+              countries: ['Japan'],
+              days: [],
+            },
+          },
+          createdAt: new Date('2026-04-08T00:00:00.000Z'),
+          updatedAt: new Date('2026-04-08T00:00:00.000Z'),
         },
       ],
       tripKits: [
@@ -201,6 +223,14 @@ describe('vlog publish route', () => {
     expect(txItineraryDayDeleteMany).toHaveBeenCalledWith({
       where: {
         tripKitId: 'kit-existing',
+      },
+    })
+    expect(txOpportunityUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['opp-older'] },
+      },
+      data: {
+        publishState: 'SUPPRESSED',
       },
     })
   })
