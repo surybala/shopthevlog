@@ -53,6 +53,11 @@ vi.mock('../app/dashboard/review/ReviewEditForm', () => ({
     React.createElement('div', { 'data-opportunity-id': opportunityId }, 'EditForm'),
 }))
 
+vi.mock('../app/dashboard/review/PublishTripKitButton', () => ({
+  default: ({ vlogId, actionLabel, disabled }: { vlogId: string; actionLabel: string; disabled: boolean }) =>
+    React.createElement('div', { 'data-vlog-id': vlogId, 'data-disabled': String(disabled) }, actionLabel),
+}))
+
 import DashboardReviewVideoPage from '../app/dashboard/review/[vlogId]/page'
 
 describe('DashboardReviewVideoPage', () => {
@@ -70,20 +75,50 @@ describe('DashboardReviewVideoPage', () => {
       externalUrl: 'https://youtube.com/watch?v=abc',
       thumbnailUrl: null,
       processingStatus: 'REVIEW_PENDING',
+      tripKits: [
+        {
+          tripKit: {
+            id: 'kit-1',
+            title: 'Tokyo Draft',
+            slug: 'tokyo-draft-abc123',
+            isPublished: true,
+            primaryCity: 'Kyoto',
+            durationDays: 1,
+            days: [
+              {
+                id: 'day-1',
+                activities: [{ id: 'act-1' }],
+              },
+            ],
+          },
+        },
+      ],
       opportunities: [
         {
           id: 'opp-1',
           title: 'Park Hyatt Tokyo',
           description: 'Luxury hotel featured during the Tokyo leg.',
           opportunityType: 'HOTEL',
-          reviewState: 'UNREVIEWED',
+          reviewState: 'EDITED',
           publishState: 'DRAFT',
           confidence: 0.92,
           rankScore: 0.88,
           metadataJson: {
             reviewRecommendation: 'likely_approve',
             reviewRecommendationReason: 'Creator history suggests this opportunity is likely a good fit, but it still needs a quick review.',
+            itinerary: {
+              title: '5 Days in Tokyo',
+              destinations: ['Tokyo'],
+              countries: ['Japan'],
+              primary_city: 'Tokyo',
+              days: [
+                { day_number: 1, activities: [{ title: 'Park Hyatt Tokyo' }] },
+                { day_number: 2, activities: [{ title: 'Shibuya Crossing' }] },
+              ],
+            },
           },
+          createdAt: new Date('2026-04-09T00:00:00.000Z'),
+          updatedAt: new Date('2026-04-10T00:00:00.000Z'),
           candidateEntity: {
             canonicalLabel: 'Park Hyatt Tokyo',
             rawLabel: 'Park Hyatt',
@@ -107,6 +142,15 @@ describe('DashboardReviewVideoPage', () => {
 
     expect(html).toContain('Tokyo vlog')
     expect(html).toContain('Back to review queue')
+    expect(html).toContain('Publish Preview')
+    expect(html).toContain('Republish Trip Kit')
+    expect(html).toContain('Current Trip Kit')
+    expect(html).toContain('Tokyo Draft')
+    expect(html).toContain('Republish Changes')
+    expect(html).toContain('Title will change from')
+    expect(html).toContain('Primary destination will change to Tokyo')
+    expect(html).toContain('Day count will change from 1 to 2')
+    expect(html).toContain('Activity count will change from 1 to 2')
     expect(html).toContain('Park Hyatt Tokyo')
     expect(html).toContain('Previously approved')
     expect(html).toContain('Recurring item')

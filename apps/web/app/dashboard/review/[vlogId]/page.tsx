@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 import { buildCreatorMemoryHints, normalizeCreatorMemoryKey } from '@/lib/creatorMemory'
+import { buildTripKitPublishSummary } from '@/lib/opportunityPublish'
 import {
   formatReviewRecommendationLabel,
   formatOpportunityTypeLabel,
@@ -12,6 +13,7 @@ import {
   reviewRecommendationTone,
   summarizeEvidenceSources,
 } from '@/lib/opportunityReview'
+import PublishTripKitButton from '../PublishTripKitButton'
 import ReviewDecisionButtons from '../ReviewDecisionButtons'
 import ReviewEditForm from '../ReviewEditForm'
 
@@ -38,11 +40,47 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
       externalUrl: true,
       thumbnailUrl: true,
       processingStatus: true,
+      tripKits: {
+        select: {
+          tripKit: {
+            select: {
+              id: true,
+              title: true,
+              slug: true,
+              isPublished: true,
+              primaryCity: true,
+              durationDays: true,
+              days: {
+                select: {
+                  id: true,
+                  activities: {
+                    select: {
+                      id: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        take: 1,
+      },
       opportunities: {
         where: {
           publishState: { not: 'SUPPRESSED' },
         },
-        include: {
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          opportunityType: true,
+          reviewState: true,
+          publishState: true,
+          confidence: true,
+          rankScore: true,
+          metadataJson: true,
+          createdAt: true,
+          updatedAt: true,
           candidateEntity: {
             select: {
               canonicalLabel: true,
@@ -76,6 +114,11 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
   if (!vlog) notFound()
 
   const opportunities = rankReviewQueue(vlog.opportunities)
+  const publishSummary = buildTripKitPublishSummary({
+    creatorId: creator.id,
+    opportunities: vlog.opportunities,
+    existingTripKit: vlog.tripKits[0]?.tripKit ?? null,
+  })
   const memoryKeys = Array.from(
     new Set(
       opportunities
@@ -124,6 +167,11 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <PublishTripKitButton
+            vlogId={vlog.id}
+            disabled={!publishSummary.readyToPublish}
+            actionLabel={publishSummary.actionLabel}
+          />
           <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/60">
             {vlog.processingStatus}
           </span>
@@ -136,6 +184,70 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
             Open source vlog
           </a>
         </div>
+      </div>
+
+      <div className="mb-6 glass-card p-5">
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-white/30">Publish Preview</p>
+            <h2 className="mt-2 text-lg font-semibold text-white">
+              {publishSummary.readyToPublish
+                ? publishSummary.itinerary?.title
+                : 'No approved itinerary is ready to publish'}
+            </h2>
+            <p className="mt-2 max-w-3xl text-sm text-white/50">
+              {publishSummary.readyToPublish
+                ? 'Publishing will project the selected itinerary opportunity into the storefront Trip Kit.'
+                : 'Approve or edit an itinerary opportunity first, then publish it here.'}
+            </p>
+          </div>
+          {publishSummary.tripKit ? (
+            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/60">
+              <p className="text-xs uppercase tracking-wider text-white/35">Current Trip Kit</p>
+              <p className="mt-1 font-medium text-white">{publishSummary.tripKit.title}</p>
+              <p className="mt-1 text-xs text-white/40">/{publishSummary.tripKit.slug}</p>
+            </div>
+          ) : null}
+        </div>
+
+        {publishSummary.readyToPublish ? (
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-white/30">Source Opportunity</p>
+              <p className="mt-1 text-sm text-white">{publishSummary.opportunity?.title}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-white/30">Days</p>
+              <p className="mt-1 text-sm text-white">{publishSummary.totalDays}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-white/30">Activities</p>
+              <p className="mt-1 text-sm text-white">{publishSummary.totalActivities}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-white/30">Destination</p>
+              <p className="mt-1 text-sm text-white">
+                {publishSummary.itinerary?.primaryCity ?? publishSummary.itinerary?.destinations?.[0] ?? 'Not set'}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        {publishSummary.republishChanges.length > 0 ? (
+          <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
+            <p className="text-xs uppercase tracking-wider text-amber-200/80">Republish Changes</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {publishSummary.republishChanges.map((change) => (
+                <span
+                  key={change}
+                  className="rounded-full border border-amber-400/20 bg-black/20 px-2 py-1 text-xs text-amber-100"
+                >
+                  {change}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {opportunities.length === 0 ? (
