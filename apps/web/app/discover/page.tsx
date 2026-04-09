@@ -1,6 +1,13 @@
 import Link from 'next/link'
 import prisma from '@/lib/prisma/client'
+import {
+  getTripKitAccessReasonLabel,
+  rankTripKitsForViewer,
+  tripKitRankingOrder,
+} from '@/lib/ranking'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { getViewerCreatorAccessMap } from '@/lib/viewerAccess'
+import AccessBadge from '@/components/AccessBadge'
 import PublicNav from '@/components/PublicNav'
 
 export const metadata = {
@@ -21,8 +28,9 @@ export default async function DiscoverPage({
   const isCreator = user
     ? !!(await prisma.creator.findUnique({ where: { userId: user.id }, select: { id: true } }))
     : false
+  const viewerAccessByCreatorId = await getViewerCreatorAccessMap(user?.id)
 
-  const kits = await prisma.tripKit.findMany({
+  const rankedKits = rankTripKitsForViewer(await prisma.tripKit.findMany({
     where: {
       isPublished: true,
       creator: { isPublished: true },
@@ -37,26 +45,27 @@ export default async function DiscoverPage({
       ...(country && { countries: { has: country } }),
       ...(style && { travelStyle: { has: style as never } }),
     },
-    orderBy: [{ viewCount: 'desc' }, { updatedAt: 'desc' }],
-    take: 48,
+    orderBy: tripKitRankingOrder,
+    take: 96,
     select: {
       id: true, title: true, slug: true, coverImageUrl: true, primaryCity: true, countries: true,
-      durationDays: true, accessTier: true, viewCount: true, saveCount: true,
+      creatorId: true, durationDays: true, accessTier: true, viewCount: true, saveCount: true,
       estimatedBudgetLow: true, estimatedBudgetHigh: true, travelStyle: true, description: true,
       creator: { select: { handle: true, displayName: true, avatarUrl: true } },
     },
-  })
+  }), viewerAccessByCreatorId)
+  const kits = rankedKits.slice(0, 48)
 
-  const trending = await prisma.tripKit.findMany({
+  const trending = rankTripKitsForViewer(await prisma.tripKit.findMany({
     where: { isPublished: true, creator: { isPublished: true } },
-    orderBy: { viewCount: 'desc' },
-    take: 6,
+    orderBy: tripKitRankingOrder,
+    take: 24,
     select: {
       id: true, title: true, slug: true, coverImageUrl: true, primaryCity: true, countries: true,
-      durationDays: true, accessTier: true, viewCount: true,
+      creatorId: true, durationDays: true, accessTier: true, viewCount: true,
       creator: { select: { handle: true, displayName: true } },
     },
-  })
+  }), viewerAccessByCreatorId).slice(0, 6)
 
   const popularCountries = await prisma.tripKit.findMany({
     where: { isPublished: true, creator: { isPublished: true } },
@@ -67,6 +76,9 @@ export default async function DiscoverPage({
     kits.forEach(k => k.countries.forEach(c => { counts[c] = (counts[c] ?? 0) + 1 }))
     return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([c]) => c)
   })
+
+  const getAccessReason = (creatorId: string, accessTier: 'FREE' | 'FOLLOWER' | 'PREMIUM') =>
+    getTripKitAccessReasonLabel(accessTier, viewerAccessByCreatorId[creatorId] ?? 'FREE')
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -133,6 +145,13 @@ export default async function DiscoverPage({
                     <p className="text-sm font-medium text-white truncate">{kit.title}</p>
                     <p className="text-xs text-white/40 mt-0.5">{kit.primaryCity ?? kit.countries[0]}</p>
                     <p className="text-xs text-white/30 mt-1">by {kit.creator.displayName}</p>
+                    {getAccessReason(kit.creatorId, kit.accessTier) && (
+                      <AccessBadge
+                        label={getAccessReason(kit.creatorId, kit.accessTier)!}
+                        tone="reason"
+                        className="mt-1 text-[11px]"
+                      />
+                    )}
                   </div>
                 </Link>
               ))}
@@ -164,9 +183,17 @@ export default async function DiscoverPage({
                       <div className="w-full h-full flex items-center justify-center text-4xl">🗺</div>
                     )}
                     {kit.accessTier !== 'FREE' && (
-                      <span className="absolute top-2 right-2 text-xs px-1.5 py-0.5 rounded-full bg-black/60 text-white/60">
-                        {kit.accessTier === 'FOLLOWER' ? 'Follow' : '⭐'}
-                      </span>
+                      <AccessBadge
+                        label={kit.accessTier === 'FOLLOWER' ? 'Follow' : '⭐'}
+                        className="absolute top-2 right-2 px-1.5 text-white/60"
+                      />
+                    )}
+                    {getAccessReason(kit.creatorId, kit.accessTier) && (
+                      <AccessBadge
+                        label={getAccessReason(kit.creatorId, kit.accessTier)!}
+                        tone="reason"
+                        className="absolute top-2 left-2 text-[11px]"
+                      />
                     )}
                   </div>
                   <div className="p-4">

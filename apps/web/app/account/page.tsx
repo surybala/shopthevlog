@@ -2,6 +2,9 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
+import { getTripKitAccessReasonLabel, rankSavedKitsForViewer } from '@/lib/ranking'
+import { buildViewerCreatorAccessMapFromRelationships } from '@/lib/viewerAccess'
+import AccessBadge from '@/components/AccessBadge'
 import UnfollowButton from './UnfollowButton'
 import UnsaveButton from './UnsaveButton'
 
@@ -75,7 +78,7 @@ export default async function AccountPage({
           include: {
             tripKit: {
               select: {
-                id: true, title: true, slug: true, coverImageUrl: true,
+                id: true, creatorId: true, title: true, slug: true, coverImageUrl: true,
                 primaryCity: true, countries: true, durationDays: true,
                 accessTier: true, estimatedBudgetLow: true,
                 creator: { select: { handle: true, displayName: true } },
@@ -85,6 +88,14 @@ export default async function AccountPage({
         })
       : [],
   ])
+
+  const viewerAccessByCreatorId = buildViewerCreatorAccessMapFromRelationships({
+    followedCreatorIds: following.map((follow) => follow.creatorId),
+    premiumCreatorIds: subscriptions
+      .filter((subscription) => subscription.tier.kitAccess === 'PREMIUM')
+      .map((subscription) => subscription.creatorId),
+  })
+  const rankedSavedKits = rankSavedKitsForViewer(savedKits, viewerAccessByCreatorId)
 
   const displayName = subscriber?.displayName ?? user.email?.split('@')[0] ?? 'Traveler'
 
@@ -183,6 +194,9 @@ export default async function AccountPage({
                         <span>·</span>
                         <span>followed {new Date(f.followedAt).toLocaleDateString()}</span>
                       </div>
+                      {viewerAccessByCreatorId[f.creatorId] === 'PREMIUM' && (
+                        <AccessBadge label="Premium access active" tone="status" className="mt-2 text-[11px]" />
+                      )}
                     </div>
                     <UnfollowButton creatorHandle={f.creator.handle} />
                   </div>
@@ -284,7 +298,7 @@ export default async function AccountPage({
         {/* ── Saved Kits ─────────────────────────────────────────────────────── */}
         {tab === 'saved' && (
           <div>
-            {savedKits.length === 0 ? (
+            {rankedSavedKits.length === 0 ? (
               <EmptyState
                 icon="🗺"
                 title="No saved kits yet"
@@ -294,8 +308,12 @@ export default async function AccountPage({
               />
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {savedKits.map(s => {
+                {rankedSavedKits.map(s => {
                   const kit = s.tripKit
+                  const accessReason = getTripKitAccessReasonLabel(
+                    kit.accessTier,
+                    viewerAccessByCreatorId[kit.creatorId] ?? 'FREE',
+                  )
                   return (
                     <div key={kit.id} className="glass-card overflow-hidden group relative">
                       <div className="aspect-video bg-white/5 overflow-hidden">
@@ -310,9 +328,17 @@ export default async function AccountPage({
                           <div className="w-full h-full flex items-center justify-center text-4xl">🗺</div>
                         )}
                         {kit.accessTier !== 'FREE' && (
-                          <span className="absolute top-2 left-2 text-xs px-1.5 py-0.5 rounded-full bg-black/60 text-white/60">
-                            {kit.accessTier === 'FOLLOWER' ? 'Follow' : '⭐'}
-                          </span>
+                          <AccessBadge
+                            label={kit.accessTier === 'FOLLOWER' ? 'Follow' : '⭐'}
+                            className="absolute top-2 left-2 px-1.5 text-white/60"
+                          />
+                        )}
+                        {accessReason && (
+                          <AccessBadge
+                            label={accessReason}
+                            tone="reason"
+                            className="absolute top-2 right-2 text-[11px]"
+                          />
                         )}
                       </div>
                       <div className="p-4">

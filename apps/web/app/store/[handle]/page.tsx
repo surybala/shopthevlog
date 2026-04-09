@@ -1,6 +1,15 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import prisma from '@/lib/prisma/client'
+import {
+  getTripKitAccessReasonLabel,
+  getViewerCreatorAccessLevel,
+  partitionStorefrontTripKits,
+  rankTripKitsForViewer,
+  tripKitRankingOrder,
+} from '@/lib/ranking'
+import { createSupabaseServer } from '@/lib/supabase/server'
+import AccessBadge from '@/components/AccessBadge'
 
 export async function generateMetadata({ params }: { params: { handle: string } }) {
   const creator = await prisma.creator.findUnique({ where: { handle: params.handle }, select: { displayName: true, bio: true, avatarUrl: true } })
@@ -17,12 +26,15 @@ export async function generateMetadata({ params }: { params: { handle: string } 
 }
 
 export default async function StorefrontHomePage({ params }: { params: { handle: string } }) {
+  const supabase = createSupabaseServer()
+  const { data: { user } } = await supabase.auth.getUser()
+
   const creator = await prisma.creator.findUnique({
     where: { handle: params.handle },
     include: {
       tripKits: {
         where: { isPublished: true },
-        orderBy: [{ isFeatured: 'desc' }, { updatedAt: 'desc' }],
+        orderBy: tripKitRankingOrder,
         take: 12,
         select: {
           id: true,
@@ -52,8 +64,52 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
 
   if (!creator || !creator.isPublished) notFound()
 
-  const featuredKits = creator.tripKits.filter(k => k.isFeatured).slice(0, 3)
-  const recentKits = creator.tripKits.filter(k => !k.isFeatured).slice(0, 6)
+  let accessLevel = getViewerCreatorAccessLevel({
+    isFollowing: false,
+    hasPremiumSubscription: false,
+  })
+
+  if (user) {
+    const [viewerCreator, subscriber] = await Promise.all([
+      prisma.creator.findUnique({ where: { userId: user.id }, select: { id: true } }),
+      prisma.subscriber.findUnique({ where: { userId: user.id }, select: { id: true } }),
+    ])
+
+    if (viewerCreator?.id === creator.id) {
+      accessLevel = getViewerCreatorAccessLevel({
+        isFollowing: false,
+        hasPremiumSubscription: false,
+        isOwner: true,
+      })
+    } else if (subscriber) {
+      const [follow, subscription] = await Promise.all([
+        prisma.follow.findUnique({
+          where: {
+            subscriberId_creatorId: {
+              subscriberId: subscriber.id,
+              creatorId: creator.id,
+            },
+          },
+          select: { id: true },
+        }),
+        prisma.subscription.findFirst({
+          where: { subscriberId: subscriber.id, creatorId: creator.id, status: 'ACTIVE' },
+          select: { tier: { select: { kitAccess: true } } },
+        }),
+      ])
+
+      accessLevel = getViewerCreatorAccessLevel({
+        isFollowing: !!follow || !!subscription,
+        hasPremiumSubscription: subscription?.tier.kitAccess === 'PREMIUM',
+      })
+    }
+  }
+
+  const rankedTripKits = rankTripKitsForViewer(
+    creator.tripKits.map((kit) => ({ ...kit, creatorId: creator.id })),
+    { [creator.id]: accessLevel },
+  )
+  const { featuredKits, recentKits } = partitionStorefrontTripKits(rankedTripKits)
 
   return (
     <div>
@@ -98,7 +154,7 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
               <Link href={`/@${creator.handle}/kits`} className="text-sm text-white/40 hover:text-white">View all →</Link>
             </div>
             <div className="grid grid-cols-3 gap-4">
-              {featuredKits.map(kit => <KitCard key={kit.id} kit={kit} handle={creator.handle} />)}
+              {featuredKits.map(kit => <KitCard key={kit.id} kit={kit} handle={creator.handle} accessLevel={accessLevel} />)}
             </div>
           </section>
         )}
@@ -111,7 +167,7 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
               <Link href={`/@${creator.handle}/kits`} className="text-sm text-white/40 hover:text-white">View all →</Link>
             </div>
             <div className="grid grid-cols-3 gap-4">
-              {recentKits.map(kit => <KitCard key={kit.id} kit={kit} handle={creator.handle} />)}
+              {recentKits.map(kit => <KitCard key={kit.id} kit={kit} handle={creator.handle} accessLevel={accessLevel} />)}
             </div>
           </section>
         )}
@@ -164,7 +220,13 @@ function KitCard({ kit, handle }: {
     estimatedBudgetHigh: number | null; travelStyle: string[]
   }
   handle: string
+  accessLevel: 'FREE' | 'FOLLOWER' | 'PREMIUM'
 }) {
+  const accessReason = getTripKitAccessReasonLabel(
+    kit.accessTier as 'FREE' | 'FOLLOWER' | 'PREMIUM',
+    accessLevel,
+  )
+
   return (
     <Link href={`/@${handle}/kits/${kit.slug}`} className="glass-card overflow-hidden group">
       {/* Cover */}
@@ -176,9 +238,17 @@ function KitCard({ kit, handle }: {
           <div className="w-full h-full flex items-center justify-center text-4xl">🗺</div>
         )}
         {kit.accessTier !== 'FREE' && (
-          <span className="absolute top-2 right-2 text-xs px-2 py-0.5 rounded-full bg-black/60 text-white/70">
-            {kit.accessTier === 'FOLLOWER' ? '🔓 Follow' : '⭐ Premium'}
-          </span>
+          <AccessBadge
+            label={kit.accessTier === 'FOLLOWER' ? '🔓 Follow' : '⭐ Premium'}
+            className="absolute top-2 right-2"
+          />
+        )}
+        {accessReason && (
+          <AccessBadge
+            label={accessReason}
+            tone="reason"
+            className="absolute top-2 left-2 text-[11px]"
+          />
         )}
       </div>
       {/* Info */}
