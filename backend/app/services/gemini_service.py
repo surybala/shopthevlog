@@ -108,6 +108,37 @@ No filler activities. No invented places. JSON ONLY."""
 
 DESTINATION_EXTRACTION_PROMPT = """Extract all travel destination names from this text. Return ONLY a JSON array of strings. Example: ["Tokyo", "Japan", "Kyoto"]. No explanation."""
 
+TRANSCRIPT_OPPORTUNITY_SYSTEM_PROMPT = """You convert travel vlog transcripts into evidence-backed structured opportunities.
+
+Return ONE valid JSON object only. No markdown, no prose.
+
+Schema:
+{
+  "opportunities": [
+    {
+      "claim_type": "itinerary_step|stayed_at|visited|ate_at|drank_at|packed|used|recommends|purchased",
+      "entity_type": "experience|place|product|brand",
+      "subtype": "hotel|restaurant|cafe|attraction|activity|travel_product|packing_item|itinerary_step",
+      "title": "short human title",
+      "raw_label": "raw extracted label",
+      "description": "short factual description",
+      "confidence": 0.0,
+      "start_sec": 0,
+      "end_sec": 30,
+      "evidence_summary": "brief evidence summary",
+      "attributes": {}
+    }
+  ]
+}
+
+Rules:
+- Only extract opportunities explicitly supported by the transcript.
+- Prefer travel-relevant opportunities.
+- Include itinerary steps when the transcript clearly describes the sequence of the trip.
+- Use confidence between 0 and 1.
+- If the transcript has no clear opportunities, return {"opportunities":[]}.
+"""
+
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -357,3 +388,50 @@ def extract_destinations(transcript: str, title: str) -> list[str]:
     except Exception as e:
         logger.warning(f"extract_destinations failed: {e}")
         return []
+
+
+def extract_transcript_opportunities(transcript: str, title: str) -> list[dict]:
+    """Extract structured opportunity candidates from a transcript."""
+    try:
+        raw = _call_gemini(
+            TRANSCRIPT_OPPORTUNITY_SYSTEM_PROMPT,
+            f"Vlog title: {title}\n\nTranscript:\n{transcript[:20000]}",
+            max_tokens=4096,
+        )
+        parsed = _parse_response(raw, title, "transcript-opportunities")
+        if not parsed:
+            return []
+        opportunities = parsed.get("opportunities")
+        if not isinstance(opportunities, list):
+            return []
+        return [item for item in opportunities if isinstance(item, dict)]
+    except Exception as e:
+        logger.warning("extract_transcript_opportunities failed: %s", e)
+        return []
+
+
+def extract_itinerary_blueprint(transcript: str, title: str) -> Optional[dict]:
+    """
+    Return a structured itinerary blueprint without writing any DB rows.
+
+    This is the graph-era replacement for letting the model write TripKit tables
+    directly. The publish layer can project this blueprint into storefront data.
+    """
+    user_content = f"Vlog title: {title}\n\nTranscript:\n{transcript[:30000]}"
+    itinerary_data: Optional[dict] = None
+
+    try:
+        raw = _call_gemini(ITINERARY_SYSTEM_PROMPT, user_content, max_tokens=16000)
+        itinerary_data = _parse_response(raw, title, "itinerary-blueprint-primary")
+    except Exception as e:
+        logger.error("Gemini itinerary blueprint error (primary): %s", e)
+
+    if itinerary_data is None:
+        try:
+            compact_content = f"Vlog title: {title}\n\nTranscript:\n{transcript[:8000]}"
+            raw = _call_gemini(ITINERARY_COMPACT_PROMPT, compact_content, max_tokens=4096)
+            itinerary_data = _parse_response(raw, title, "itinerary-blueprint-compact")
+        except Exception as e:
+            logger.error("Gemini itinerary blueprint error (compact): %s", e)
+
+    return itinerary_data

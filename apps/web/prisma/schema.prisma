@@ -36,8 +36,107 @@ enum ProcessingStatus {
   TRANSCRIBING
   EXTRACTING
   EMBEDDING
+  INGESTED
+  PREPROCESSING
+  TRANSCRIPT_DONE
+  VISION_DONE
+  FUSED
+  RESOLVED
+  RANKED
+  REVIEW_PENDING
+  PUBLISHED
   COMPLETE
   FAILED
+}
+
+enum EvidenceSourceType {
+  TRANSCRIPT
+  OCR
+  SCENE_SUMMARY
+  OBJECT_DETECTION
+  LOGO_DETECTION
+  LLM_CLAIM
+  CLIP_SUMMARY
+}
+
+enum ClaimType {
+  STAYED_AT
+  VISITED
+  ATE_AT
+  DRANK_AT
+  PACKED
+  USED
+  RECOMMENDS
+  PURCHASED
+  ITINERARY_STEP
+}
+
+enum CandidateEntityType {
+  PLACE
+  PRODUCT
+  EXPERIENCE
+  BRAND
+}
+
+enum CandidateEntityStatus {
+  NEW
+  RESOLVED
+  APPROVED
+  REJECTED
+}
+
+enum OpportunityType {
+  ITINERARY
+  CITY_GUIDE
+  PACKING_LIST
+  HOTEL
+  RESTAURANT
+  CAFE
+  ATTRACTION
+  ACTIVITY
+  TRAVEL_PRODUCT
+  PACKING_ITEM
+}
+
+enum OpportunityPublishState {
+  DRAFT
+  PUBLISHED
+  SUPPRESSED
+}
+
+enum OpportunityReviewState {
+  UNREVIEWED
+  APPROVED
+  EDITED
+  REJECTED
+  AUTO_APPROVED
+}
+
+enum ResolverType {
+  PLACE_MATCHER
+  PRODUCT_MATCHER
+}
+
+enum ResolutionMatchType {
+  EXACT
+  LIKELY
+  SIMILAR
+  UNRESOLVED
+}
+
+enum CreatorMemoryType {
+  ACCEPTED_PRODUCT
+  REJECTED_PRODUCT
+  ACCEPTED_PLACE
+  NAMING_PREFERENCE
+  DISALLOWED_CATEGORY
+  RECURRING_ITEM
+}
+
+enum FeedbackAction {
+  APPROVED
+  EDITED
+  REJECTED
 }
 
 enum PlaceType {
@@ -222,6 +321,9 @@ model Creator {
   commissions   Commission[]
   channelTokens CreatorChannelToken[]
   clickEvents   ClickEvent[]
+  opportunities Opportunity[]
+  opportunityFeedback OpportunityFeedback[]
+  creatorMemory CreatorMemory[]
 
   plan              CreatorPlan @default(FREE)
   catalogScanStatus ScanStatus  @default(PENDING)
@@ -334,13 +436,23 @@ model Vlog {
   transcriptRaw    String?
   transcriptClean  String?
   processingStatus ProcessingStatus @default(PENDING)
+  pipelineError    String?
   processedAt      DateTime?
+  lastPipelineRunAt DateTime?
+  reviewReadyAt     DateTime?
+  publishedFromGraphAt DateTime?
   embeddingId      String?
 
   extractedPlaces     ExtractedPlace[]
   extractedProducts   ExtractedProduct[]
   extractedActivities ExtractedActivity[]
   tripKits            TripKitsOnVlogs[]
+  transcriptSegments  TranscriptSegment[]
+  sceneSegments       SceneSegment[]
+  frameAssets         FrameAsset[]
+  evidences           Evidence[]
+  candidateEntities   CandidateEntity[]
+  opportunities       Opportunity[]
 
   tags      String[]
   countries String[]
@@ -350,6 +462,192 @@ model Vlog {
   updatedAt DateTime @updatedAt
 
   @@unique([platform, externalId])
+}
+
+model TranscriptSegment {
+  id        String @id @default(cuid())
+  vlogId    String
+  vlog      Vlog   @relation(fields: [vlogId], references: [id], onDelete: Cascade)
+
+  startSec Float
+  endSec   Float
+  text     String
+  speaker  String?
+  source   String
+
+  evidences Evidence[]
+
+  createdAt DateTime @default(now())
+
+  @@index([vlogId, startSec])
+}
+
+model SceneSegment {
+  id        String @id @default(cuid())
+  vlogId    String
+  vlog      Vlog   @relation(fields: [vlogId], references: [id], onDelete: Cascade)
+
+  startSec         Float
+  endSec           Float
+  sceneType        String?
+  summary          String?
+  samplingStrategy String?
+
+  frameAssets FrameAsset[]
+
+  createdAt DateTime @default(now())
+
+  @@index([vlogId, startSec])
+}
+
+model FrameAsset {
+  id             String        @id @default(cuid())
+  vlogId         String
+  vlog           Vlog          @relation(fields: [vlogId], references: [id], onDelete: Cascade)
+  sceneSegmentId String?
+  sceneSegment   SceneSegment? @relation(fields: [sceneSegmentId], references: [id], onDelete: SetNull)
+
+  timestampSec Float
+  imageUri     String
+  width        Int?
+  height       Int?
+
+  evidences Evidence[]
+
+  createdAt DateTime @default(now())
+
+  @@index([vlogId, timestampSec])
+}
+
+model Evidence {
+  id                  String              @id @default(cuid())
+  vlogId              String
+  vlog                Vlog                @relation(fields: [vlogId], references: [id], onDelete: Cascade)
+  sourceType          EvidenceSourceType
+  claimType           ClaimType?
+  startSec            Float
+  endSec              Float
+  transcriptSegmentId String?
+  transcriptSegment   TranscriptSegment?  @relation(fields: [transcriptSegmentId], references: [id], onDelete: SetNull)
+  frameAssetId        String?
+  frameAsset          FrameAsset?         @relation(fields: [frameAssetId], references: [id], onDelete: SetNull)
+  confidence          Float?
+  payloadJson         Json
+
+  opportunityLinks OpportunityEvidence[]
+
+  createdAt DateTime @default(now())
+
+  @@index([vlogId, sourceType])
+  @@index([vlogId, startSec])
+}
+
+model CandidateEntity {
+  id                 String                @id @default(cuid())
+  vlogId             String
+  vlog               Vlog                  @relation(fields: [vlogId], references: [id], onDelete: Cascade)
+  entityType         CandidateEntityType
+  subtype            String?
+  canonicalLabel     String?
+  rawLabel           String
+  startSec           Float
+  endSec             Float
+  confidence         Float
+  status             CandidateEntityStatus @default(NEW)
+  evidenceBundleJson Json
+
+  resolvedEntities ResolvedEntity[]
+  opportunities    Opportunity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vlogId, entityType])
+}
+
+model ResolvedEntity {
+  id                String              @id @default(cuid())
+  candidateEntityId String
+  candidateEntity   CandidateEntity     @relation(fields: [candidateEntityId], references: [id], onDelete: Cascade)
+  resolverType      ResolverType
+  provider          String
+  externalId        String?
+  resolvedName      String
+  matchType         ResolutionMatchType
+  confidence        Float
+  metadataJson      Json
+
+  opportunities Opportunity[]
+
+  createdAt DateTime @default(now())
+}
+
+model Opportunity {
+  id                String                 @id @default(cuid())
+  vlogId            String
+  vlog              Vlog                   @relation(fields: [vlogId], references: [id], onDelete: Cascade)
+  creatorId         String
+  creator           Creator                @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  opportunityType   OpportunityType
+  candidateEntityId String?
+  candidateEntity   CandidateEntity?       @relation(fields: [candidateEntityId], references: [id], onDelete: SetNull)
+  resolvedEntityId  String?
+  resolvedEntity    ResolvedEntity?        @relation(fields: [resolvedEntityId], references: [id], onDelete: SetNull)
+  title             String
+  description       String?
+  rankScore         Float?
+  confidence        Float
+  publishState      OpportunityPublishState @default(DRAFT)
+  reviewState       OpportunityReviewState  @default(UNREVIEWED)
+  storefrontModule  String?
+  metadataJson      Json
+
+  evidences OpportunityEvidence[]
+  feedbacks OpportunityFeedback[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vlogId, opportunityType])
+  @@index([creatorId, reviewState])
+}
+
+model OpportunityEvidence {
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  evidenceId    String
+  evidence      Evidence    @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@id([opportunityId, evidenceId])
+}
+
+model OpportunityFeedback {
+  id               String         @id @default(cuid())
+  creatorId        String
+  creator          Creator        @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  opportunityId    String
+  opportunity      Opportunity    @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  action           FeedbackAction
+  editedFieldsJson Json?
+  reason           String?
+
+  createdAt DateTime @default(now())
+
+  @@index([creatorId, createdAt])
+}
+
+model CreatorMemory {
+  id         String           @id @default(cuid())
+  creatorId  String
+  creator    Creator          @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  memoryType CreatorMemoryType
+  key        String
+  valueJson  Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([creatorId, memoryType, key])
 }
 
 model ExtractedPlace {
