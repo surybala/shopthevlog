@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
+import { buildCreatorMemoryEntries } from '@/lib/creatorMemory'
 
 async function getOwnedOpportunity(opportunityId: string, userId: string) {
   const creator = await prisma.creator.findUnique({ where: { userId } })
@@ -8,7 +9,19 @@ async function getOwnedOpportunity(opportunityId: string, userId: string) {
 
   const opportunity = await prisma.opportunity.findUnique({
     where: { id: opportunityId },
-    select: { id: true, creatorId: true },
+    select: {
+      id: true,
+      creatorId: true,
+      title: true,
+      opportunityType: true,
+      candidateEntity: {
+        select: {
+          canonicalLabel: true,
+          rawLabel: true,
+          entityType: true,
+        },
+      },
+    },
   })
 
   if (!opportunity || opportunity.creatorId !== creator.id) return null
@@ -60,6 +73,33 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       reason: null,
     },
   })
+
+  const memoryEntries = buildCreatorMemoryEntries(owned.opportunity, 'EDITED', {
+    title,
+    description: description || null,
+  })
+  await Promise.all(
+    memoryEntries.map((entry) =>
+      prisma.creatorMemory.upsert({
+        where: {
+          creatorId_memoryType_key: {
+            creatorId: owned.creator.id,
+            memoryType: entry.memoryType,
+            key: entry.key,
+          },
+        },
+        create: {
+          creatorId: owned.creator.id,
+          memoryType: entry.memoryType,
+          key: entry.key,
+          valueJson: entry.valueJson,
+        },
+        update: {
+          valueJson: entry.valueJson,
+        },
+      })
+    )
+  )
 
   return NextResponse.json(updated)
 }

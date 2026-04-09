@@ -86,9 +86,53 @@ def _review_bonus(review_state: str | None) -> float:
     return 0.0
 
 
-def score_opportunity(row: dict) -> float:
+def _normalize_memory_key(value: str | None) -> str:
+    cleaned = "".join(ch.lower() if ch.isalnum() else " " for ch in (value or ""))
+    return " ".join(cleaned.split())
+
+
+def _memory_adjustment(row: dict, creator_memory: dict[str, dict]) -> float:
+    lookup_key = _normalize_memory_key(
+        row.get("candidateCanonicalLabel")
+        or row.get("candidateRawLabel")
+        or row.get("resolvedName")
+        or row.get("title")
+    )
+    if not lookup_key:
+        return 0.0
+
+    entity_type = row.get("candidateEntityType")
+    accepted_types = {"PLACE", "EXPERIENCE"}
+    rejected_memory_type = "REJECTED_PLACE" if entity_type in accepted_types else "REJECTED_PRODUCT"
+    accepted_memory_type = "ACCEPTED_PLACE" if entity_type in accepted_types else "ACCEPTED_PRODUCT"
+
+    adjustment = 0.0
+    if (accepted_memory_type, lookup_key) in creator_memory:
+        adjustment += 0.08
+    if (rejected_memory_type, lookup_key) in creator_memory:
+        adjustment -= 0.12
+    if ("NAMING_PREFERENCE", lookup_key) in creator_memory:
+        adjustment += 0.03
+    if ("RECURRING_ITEM", lookup_key) in creator_memory:
+        adjustment += 0.04
+    return adjustment
+
+
+def _resolution_bonus(row: dict) -> float:
+    match_type = row.get("resolutionMatchType")
+    if match_type == "EXACT":
+        return 0.05
+    if match_type == "LIKELY":
+        return 0.03
+    if match_type == "SIMILAR":
+        return 0.01
+    return 0.0
+
+
+def score_opportunity(row: dict, creator_memory: dict[tuple[str, str], dict] | None = None) -> float:
     confidence = _clamp(float(row.get("confidence") or 0.0))
     opportunity_type = row["opportunityType"]
+    creator_memory = creator_memory or {}
 
     score = (
         confidence * 0.35
@@ -97,6 +141,8 @@ def score_opportunity(row: dict) -> float:
         + _actionability(row) * 0.10
         + DEMAND_PROXY.get(opportunity_type, 0.55) * 0.10
         + _review_bonus(row.get("reviewState"))
+        + _resolution_bonus(row)
+        + _memory_adjustment(row, creator_memory)
     )
     return round(_clamp(score), 4)
 
@@ -104,10 +150,17 @@ def score_opportunity(row: dict) -> float:
 def rank_opportunities(vlog_id: str) -> dict:
     with PgClient() as db:
         db.execute(
-            '''SELECT opp.id, opp."opportunityType", opp.confidence, opp."reviewState",
-                      opp."metadataJson", cand.subtype AS "candidateSubtype"
+            '''SELECT opp.id, opp.title, opp."creatorId", opp."opportunityType", opp.confidence, opp."reviewState",
+                      opp."metadataJson",
+                      cand.subtype AS "candidateSubtype",
+                      cand."entityType" AS "candidateEntityType",
+                      cand."canonicalLabel" AS "candidateCanonicalLabel",
+                      cand."rawLabel" AS "candidateRawLabel",
+                      resolved."resolvedName",
+                      resolved."matchType" AS "resolutionMatchType"
                FROM "Opportunity" opp
                LEFT JOIN "CandidateEntity" cand ON cand.id = opp."candidateEntityId"
+               LEFT JOIN "ResolvedEntity" resolved ON resolved.id = opp."resolvedEntityId"
                WHERE opp."vlogId" = %s''',
             (vlog_id,),
         )
@@ -122,12 +175,25 @@ def rank_opportunities(vlog_id: str) -> dict:
             )
             return {"ranked": 0}
 
+        creator_id = rows[0]["creatorId"]
+        db.execute(
+            '''SELECT "memoryType", key, "valueJson"
+               FROM "CreatorMemory"
+               WHERE "creatorId" = %s''',
+            (creator_id,),
+        )
+        memory_rows = db.fetchall()
+        creator_memory = {
+            (memory_row["memoryType"], memory_row["key"]): memory_row
+            for memory_row in memory_rows
+        }
+
         for row in rows:
             db.execute(
                 '''UPDATE "Opportunity"
                    SET "rankScore" = %s, "updatedAt" = NOW()
                    WHERE id = %s''',
-                (score_opportunity(row), row["id"]),
+                (score_opportunity(row, creator_memory), row["id"]),
             )
 
         db.execute(

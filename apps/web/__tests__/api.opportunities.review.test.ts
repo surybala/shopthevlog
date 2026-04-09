@@ -6,6 +6,7 @@ const mockCreatorFindUnique = vi.fn()
 const mockOpportunityFindUnique = vi.fn()
 const mockOpportunityUpdate = vi.fn()
 const mockFeedbackCreate = vi.fn()
+const mockCreatorMemoryUpsert = vi.fn()
 
 vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServer: () => ({ auth: { getUser: mockGetUser } }),
@@ -20,6 +21,9 @@ vi.mock('@/lib/prisma/client', () => ({
     },
     opportunityFeedback: {
       create: (...args: unknown[]) => mockFeedbackCreate(...args),
+    },
+    creatorMemory: {
+      upsert: (...args: unknown[]) => mockCreatorMemoryUpsert(...args),
     },
   },
 }))
@@ -36,6 +40,7 @@ describe('opportunity review routes', () => {
     mockOpportunityFindUnique.mockResolvedValue({ id: 'opp-1', creatorId: 'creator-1' })
     mockOpportunityUpdate.mockResolvedValue({ id: 'opp-1', reviewState: 'APPROVED', publishState: 'DRAFT' })
     mockFeedbackCreate.mockResolvedValue({ id: 'feedback-1' })
+    mockCreatorMemoryUpsert.mockResolvedValue({ id: 'memory-1' })
   })
 
   it('approve returns 401 when unauthenticated', async () => {
@@ -51,6 +56,17 @@ describe('opportunity review routes', () => {
   })
 
   it('approve updates the review state and records feedback', async () => {
+    mockOpportunityFindUnique.mockResolvedValue({
+      id: 'opp-1',
+      creatorId: 'creator-1',
+      title: 'Park Hyatt Tokyo',
+      opportunityType: 'HOTEL',
+      candidateEntity: {
+        canonicalLabel: 'Park Hyatt Tokyo',
+        rawLabel: 'Park Hyatt',
+        entityType: 'PLACE',
+      },
+    })
     const res = await approveOpportunity(new Request('http://localhost/api/opportunities/opp-1/approve', { method: 'POST' }), { params: { id: 'opp-1' } })
 
     expect(mockOpportunityUpdate).toHaveBeenCalledWith({
@@ -67,10 +83,22 @@ describe('opportunity review routes', () => {
         reason: null,
       },
     })
+    expect(mockCreatorMemoryUpsert).toHaveBeenCalled()
     expect(res.status).toBe(200)
   })
 
   it('reject suppresses publishing and records the rejection reason', async () => {
+    mockOpportunityFindUnique.mockResolvedValue({
+      id: 'opp-1',
+      creatorId: 'creator-1',
+      title: 'Mystery Hotel',
+      opportunityType: 'HOTEL',
+      candidateEntity: {
+        canonicalLabel: 'Mystery Hotel',
+        rawLabel: 'Mystery Hotel',
+        entityType: 'PLACE',
+      },
+    })
     mockOpportunityUpdate.mockResolvedValue({ id: 'opp-1', reviewState: 'REJECTED', publishState: 'SUPPRESSED' })
 
     const res = await rejectOpportunity(
@@ -95,10 +123,22 @@ describe('opportunity review routes', () => {
         reason: 'Not actually featured in the video',
       },
     })
+    expect(mockCreatorMemoryUpsert).toHaveBeenCalled()
     expect(res.status).toBe(200)
   })
 
   it('edit validates title and records edited fields', async () => {
+    mockOpportunityFindUnique.mockResolvedValue({
+      id: 'opp-1',
+      creatorId: 'creator-1',
+      title: 'Peak Design Travel Backpack',
+      opportunityType: 'TRAVEL_PRODUCT',
+      candidateEntity: {
+        canonicalLabel: 'Peak Design Travel Backpack',
+        rawLabel: 'Peak Design bag',
+        entityType: 'PRODUCT',
+      },
+    })
     mockOpportunityUpdate.mockResolvedValue({
       id: 'opp-1',
       title: 'Updated Tokyo Hotel',
@@ -155,6 +195,7 @@ describe('opportunity review routes', () => {
         reason: null,
       },
     })
+    expect(mockCreatorMemoryUpsert).toHaveBeenCalled()
     expect(res.status).toBe(200)
   })
 })
