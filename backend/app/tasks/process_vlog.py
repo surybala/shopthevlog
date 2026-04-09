@@ -5,7 +5,9 @@ Reads/writes to the new Prisma PostgreSQL schema.
 import logging
 
 from app.db.pg_client import PgClient
+from app.services.fusion_service import fuse_candidate_entities
 from app.services.opportunity_publish_service import publish_tripkit_from_graph
+from app.services.opportunity_ranking_service import rank_opportunities
 from app.services.transcript_graph_service import sync_transcript_graph
 from app.services.visual_evidence_service import sync_visual_evidence
 from app.services.transcription_service import transcribe_vlog
@@ -21,6 +23,8 @@ TERMINAL_OR_ACTIVE_STATUSES = {
     "VISION_DONE",
     "FUSED",
     "RESOLVED",
+    "RANKED",
+    "FUSED",
     "RANKED",
     "REVIEW_PENDING",
     "PUBLISHED",
@@ -100,9 +104,17 @@ async def process_vlog_task(vlog_id: str) -> None:
             logger.warning("Visual evidence sync failed for vlog %s: %s", vlog_id, visual_error)
             _update_vlog_pipeline_error(vlog_id, f"visual_evidence_failed: {visual_error}")
 
+        # Step 4: Deterministic fusion across graph candidates.
+        fuse_candidate_entities(vlog_id)
+        _update_vlog_status(vlog_id, "FUSED")
+
+        # Step 5: Deterministic ranking so review/publish ordering is code-owned.
+        rank_opportunities(vlog_id)
+        _update_vlog_status(vlog_id, "RANKED")
+
         _update_vlog_status(vlog_id, "REVIEW_PENDING")
 
-        # Step 4: Publish storefront projection from approved/auto-approved
+        # Step 6: Publish storefront projection from approved/auto-approved
         # graph opportunities.
         success = publish_tripkit_from_graph(vlog_id)
         if not success:
