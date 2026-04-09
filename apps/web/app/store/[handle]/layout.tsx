@@ -3,7 +3,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import prisma from '@/lib/prisma/client'
 import { createSupabaseServer } from '@/lib/supabase/server'
-import FollowButton from '@/components/FollowButton'
+import StorefrontNavActions from '@/components/StorefrontNavActions'
 
 // Helper — derive display name from Supabase user metadata
 function navDisplayName(user: Awaited<ReturnType<ReturnType<typeof createSupabaseServer>['auth']['getUser']>>['data']['user']) {
@@ -98,35 +98,13 @@ export default async function StorefrontLayout({
             </Link>
           </div>
           <div className="flex items-center gap-3">
-            {!isPreview && (
-              <FollowButton
-                creatorHandle={creator.handle}
-                initialFollowing={initialFollowing}
-                isLoggedIn={!!user}
-                size="sm"
-              />
-            )}
-            {/* Auth nav */}
-            {user && displayName ? (
-              <Link
-                href={accountHref}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-white/10 hover:border-white/30 hover:bg-white/5 transition-colors group"
-              >
-                <span className="w-5 h-5 rounded-full bg-white/20 text-white text-[10px] font-semibold flex items-center justify-center leading-none group-hover:bg-white/30 transition-colors">
-                  {displayName[0]?.toUpperCase()}
-                </span>
-                <span className="text-xs text-white/60 group-hover:text-white transition-colors max-w-[100px] truncate hidden sm:inline">
-                  {displayName}
-                </span>
-              </Link>
-            ) : (
-              <Link
-                href="/login"
-                className="text-xs text-white/40 hover:text-white transition-colors"
-              >
-                Sign in
-              </Link>
-            )}
+            <StorefrontNavActions
+              creatorHandle={creator.handle}
+              initialFollowing={!isPreview && initialFollowing}
+              isLoggedIn={!!user}
+              displayName={displayName}
+              accountHref={accountHref}
+            />
           </div>
         </div>
       </nav>

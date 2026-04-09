@@ -212,7 +212,7 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
   )
 }
 
-function KitCard({ kit, handle }: {
+function KitCard({ kit, handle, accessLevel }: {
   kit: {
     id: string; title: string; slug: string; coverImageUrl: string | null
     primaryCity: string | null; countries: string[]; durationDays: number | null
