@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mockGetUser = vi.fn()
 const mockCreatorFindUnique = vi.fn()
 const mockOpportunityFindMany = vi.fn()
+const mockCreatorMemoryFindMany = vi.fn()
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) =>
@@ -33,6 +34,9 @@ vi.mock('@/lib/prisma/client', () => ({
     opportunity: {
       findMany: (...args: unknown[]) => mockOpportunityFindMany(...args),
     },
+    creatorMemory: {
+      findMany: (...args: unknown[]) => mockCreatorMemoryFindMany(...args),
+    },
   },
 }))
 
@@ -48,6 +52,10 @@ describe('DashboardReviewPage', () => {
     vi.clearAllMocks()
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
     mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1', userId: 'user-1' })
+    mockCreatorMemoryFindMany.mockResolvedValue([
+      { key: 'park hyatt tokyo', memoryType: 'REJECTED_PLACE', valueJson: {} },
+      { key: 'park hyatt tokyo', memoryType: 'NAMING_PREFERENCE', valueJson: { preferredTitle: 'Park Hyatt Tokyo' } },
+    ])
     mockOpportunityFindMany.mockResolvedValue([
       {
         id: 'opp-1',
@@ -58,6 +66,10 @@ describe('DashboardReviewPage', () => {
         publishState: 'DRAFT',
         confidence: 0.92,
         rankScore: 0.88,
+        metadataJson: {
+          reviewRecommendation: 'needs_scrutiny',
+          reviewRecommendationReason: 'Creator history shows a similar item was rejected before, so this should be reviewed manually.',
+        },
         candidateEntity: {
           canonicalLabel: 'Park Hyatt Tokyo',
           rawLabel: 'Park Hyatt',
@@ -86,6 +98,10 @@ describe('DashboardReviewPage', () => {
     expect(html).toContain('Park Hyatt Tokyo')
     expect(html).toContain('Needs Review')
     expect(html).toContain('Transcript, Scene Summary')
+    expect(html).toContain('Previously rejected')
+    expect(html).toContain('Preferred naming: Park Hyatt Tokyo')
+    expect(html).toContain('Needs scrutiny')
+    expect(html).toContain('rejected before')
     expect(html).toContain('DecisionButtons')
   })
 })

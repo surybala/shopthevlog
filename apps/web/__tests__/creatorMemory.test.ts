@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCreatorMemoryEntries, normalizeCreatorMemoryKey } from '@/lib/creatorMemory'
+import { buildCreatorMemoryEntries, buildCreatorMemoryHints, normalizeCreatorMemoryKey } from '@/lib/creatorMemory'
 
 describe('creator memory helpers', () => {
   it('normalizes memory keys consistently', () => {
@@ -62,6 +62,20 @@ describe('creator memory helpers', () => {
           title: 'Mystery Hotel',
         },
       },
+    ])
+  })
+
+  it('builds human-readable hints from stored memory', () => {
+    expect(
+      buildCreatorMemoryHints([
+        { memoryType: 'REJECTED_PLACE', valueJson: {} },
+        { memoryType: 'NAMING_PREFERENCE', valueJson: { preferredTitle: 'Park Hyatt Tokyo' } },
+        { memoryType: 'RECURRING_ITEM', valueJson: {} },
+      ])
+    ).toEqual([
+      'Previously rejected',
+      'Preferred naming: Park Hyatt Tokyo',
+      'Recurring item',
     ])
   })
 })

@@ -71,3 +71,43 @@ export function buildCreatorMemoryEntries(
 
   return entries
 }
+
+export function buildCreatorMemoryHints(
+  memoryRows: Array<{ memoryType: string; valueJson?: unknown }> | undefined,
+) {
+  if (!memoryRows || memoryRows.length === 0) return []
+
+  const hints: string[] = []
+
+  for (const memory of memoryRows) {
+    switch (memory.memoryType) {
+      case 'ACCEPTED_PLACE':
+      case 'ACCEPTED_PRODUCT':
+        hints.push('Previously approved')
+        break
+      case 'REJECTED_PLACE':
+      case 'REJECTED_PRODUCT':
+        hints.push('Previously rejected')
+        break
+      case 'NAMING_PREFERENCE': {
+        const preferredTitle = typeof memory.valueJson === 'object'
+          && memory.valueJson
+          && 'preferredTitle' in memory.valueJson
+          && typeof (memory.valueJson as { preferredTitle?: unknown }).preferredTitle === 'string'
+          ? (memory.valueJson as { preferredTitle: string }).preferredTitle
+          : null
+        if (preferredTitle) {
+          hints.push(`Preferred naming: ${preferredTitle}`)
+        }
+        break
+      }
+      case 'RECURRING_ITEM':
+        hints.push('Recurring item')
+        break
+      default:
+        break
+    }
+  }
+
+  return Array.from(new Set(hints))
+}

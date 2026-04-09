@@ -6,6 +6,7 @@ type ReviewableOpportunity = {
   publishState: string
   confidence: number
   rankScore: number | null
+  metadataJson?: unknown
   evidences?: Array<{
     evidence: {
       sourceType: string
@@ -68,8 +69,66 @@ export function rankReviewQueue<T extends ReviewableOpportunity>(opportunities: 
     const rankDelta = (right.rankScore ?? -1) - (left.rankScore ?? -1)
     if (rankDelta !== 0) return rankDelta
 
+    const recommendationDelta = reviewRecommendationPriority(getReviewRecommendation(right))
+      - reviewRecommendationPriority(getReviewRecommendation(left))
+    if (recommendationDelta !== 0) return recommendationDelta
+
     return right.confidence - left.confidence
   })
+}
+
+export function getReviewRecommendation(opportunity: Pick<ReviewableOpportunity, 'metadataJson'>) {
+  if (!opportunity.metadataJson || typeof opportunity.metadataJson !== 'object') {
+    return null
+  }
+
+  const recommendation = (opportunity.metadataJson as { reviewRecommendation?: unknown }).reviewRecommendation
+  return typeof recommendation === 'string' ? recommendation : null
+}
+
+export function getReviewRecommendationReason(opportunity: Pick<ReviewableOpportunity, 'metadataJson'>) {
+  if (!opportunity.metadataJson || typeof opportunity.metadataJson !== 'object') {
+    return null
+  }
+
+  const reason = (opportunity.metadataJson as { reviewRecommendationReason?: unknown }).reviewRecommendationReason
+  return typeof reason === 'string' ? reason : null
+}
+
+export function formatReviewRecommendationLabel(recommendation: string | null) {
+  switch (recommendation) {
+    case 'auto_approved_from_memory':
+      return 'Auto-approved from memory'
+    case 'needs_scrutiny':
+      return 'Needs scrutiny'
+    case 'likely_approve':
+      return 'Likely approve'
+    case 'strong_candidate':
+      return 'Strong candidate'
+    case 'preserved_review_state':
+      return 'Previously reviewed'
+    case 'standard_review':
+      return 'Standard review'
+    default:
+      return null
+  }
+}
+
+export function reviewRecommendationTone(recommendation: string | null) {
+  switch (recommendation) {
+    case 'needs_scrutiny':
+      return 'border-red-500/20 bg-red-500/10 text-red-200'
+    case 'likely_approve':
+      return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
+    case 'strong_candidate':
+      return 'border-sky-500/20 bg-sky-500/10 text-sky-200'
+    case 'auto_approved_from_memory':
+      return 'border-blue-500/20 bg-blue-500/10 text-blue-200'
+    case 'preserved_review_state':
+      return 'border-white/10 bg-white/5 text-white/60'
+    default:
+      return 'border-white/10 bg-white/5 text-white/50'
+  }
 }
 
 function reviewStatePriority(reviewState: string) {
@@ -81,6 +140,21 @@ function reviewStatePriority(reviewState: string) {
     case 'EDITED':
       return 2
     case 'APPROVED':
+      return 1
+    default:
+      return 0
+  }
+}
+
+function reviewRecommendationPriority(recommendation: string | null) {
+  switch (recommendation) {
+    case 'needs_scrutiny':
+      return 4
+    case 'strong_candidate':
+      return 3
+    case 'likely_approve':
+      return 2
+    case 'auto_approved_from_memory':
       return 1
     default:
       return 0

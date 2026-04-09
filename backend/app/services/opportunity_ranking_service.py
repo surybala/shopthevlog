@@ -118,6 +118,36 @@ def _memory_adjustment(row: dict, creator_memory: dict[str, dict]) -> float:
     return adjustment
 
 
+def _memory_signals(row: dict, creator_memory: dict[tuple[str, str], dict]) -> dict[str, bool | str]:
+    lookup_key = _normalize_memory_key(
+        row.get("candidateCanonicalLabel")
+        or row.get("candidateRawLabel")
+        or row.get("resolvedName")
+        or row.get("title")
+    )
+    if not lookup_key:
+        return {
+            "lookupKey": "",
+            "accepted": False,
+            "rejected": False,
+            "naming_preference": False,
+            "recurring_item": False,
+        }
+
+    entity_type = row.get("candidateEntityType")
+    place_like_types = {"PLACE", "EXPERIENCE"}
+    rejected_memory_type = "REJECTED_PLACE" if entity_type in place_like_types else "REJECTED_PRODUCT"
+    accepted_memory_type = "ACCEPTED_PLACE" if entity_type in place_like_types else "ACCEPTED_PRODUCT"
+
+    return {
+        "lookupKey": lookup_key,
+        "accepted": (accepted_memory_type, lookup_key) in creator_memory,
+        "rejected": (rejected_memory_type, lookup_key) in creator_memory,
+        "naming_preference": ("NAMING_PREFERENCE", lookup_key) in creator_memory,
+        "recurring_item": ("RECURRING_ITEM", lookup_key) in creator_memory,
+    }
+
+
 def _resolution_bonus(row: dict) -> float:
     match_type = row.get("resolutionMatchType")
     if match_type == "EXACT":
@@ -127,6 +157,85 @@ def _resolution_bonus(row: dict) -> float:
     if match_type == "SIMILAR":
         return 0.01
     return 0.0
+
+
+def _review_recommendation(
+    row: dict,
+    score: float,
+    creator_memory: dict[tuple[str, str], dict],
+) -> tuple[str, str, str, list[str]]:
+    current_review_state = row.get("reviewState") or "UNREVIEWED"
+    resolution_match_type = row.get("resolutionMatchType")
+    confidence = _clamp(float(row.get("confidence") or 0.0))
+    memory_signals = _memory_signals(row, creator_memory)
+
+    active_signals: list[str] = []
+    if memory_signals["accepted"]:
+        active_signals.append("accepted_memory")
+    if memory_signals["rejected"]:
+        active_signals.append("rejected_memory")
+    if memory_signals["naming_preference"]:
+        active_signals.append("naming_preference")
+    if memory_signals["recurring_item"]:
+        active_signals.append("recurring_item")
+    if resolution_match_type == "EXACT":
+        active_signals.append("exact_resolution")
+    elif resolution_match_type == "LIKELY":
+        active_signals.append("resolved_match")
+
+    if current_review_state in {"APPROVED", "EDITED", "REJECTED", "AUTO_APPROVED"}:
+        return (
+            current_review_state,
+            "preserved_review_state",
+            "A prior review decision already exists for this opportunity.",
+            active_signals,
+        )
+
+    if memory_signals["rejected"]:
+        return (
+            "UNREVIEWED",
+            "needs_scrutiny",
+            "Creator history shows a similar item was rejected before, so this should be reviewed manually.",
+            active_signals,
+        )
+
+    has_positive_memory = bool(
+        memory_signals["accepted"]
+        or memory_signals["naming_preference"]
+        or memory_signals["recurring_item"]
+    )
+    has_resolved_match = resolution_match_type in {"EXACT", "LIKELY"}
+
+    if has_positive_memory and has_resolved_match and score >= 0.86 and confidence >= 0.72:
+        return (
+            "AUTO_APPROVED",
+            "auto_approved_from_memory",
+            "High confidence, successful resolution, and prior creator patterns support auto-approval.",
+            active_signals,
+        )
+
+    if has_positive_memory:
+        return (
+            "UNREVIEWED",
+            "likely_approve",
+            "Creator history suggests this opportunity is likely a good fit, but it still needs a quick review.",
+            active_signals,
+        )
+
+    if has_resolved_match and score >= 0.82:
+        return (
+            "UNREVIEWED",
+            "strong_candidate",
+            "This item has strong evidence and a solid resolution match, so it should be quick to review.",
+            active_signals,
+        )
+
+    return (
+        "UNREVIEWED",
+        "standard_review",
+        "This opportunity should follow the normal creator review flow.",
+        active_signals,
+    )
 
 
 def score_opportunity(row: dict, creator_memory: dict[tuple[str, str], dict] | None = None) -> float:
@@ -145,6 +254,20 @@ def score_opportunity(row: dict, creator_memory: dict[tuple[str, str], dict] | N
         + _memory_adjustment(row, creator_memory)
     )
     return round(_clamp(score), 4)
+
+
+def build_review_metadata(
+    row: dict,
+    score: float,
+    creator_memory: dict[tuple[str, str], dict] | None = None,
+) -> tuple[str, dict]:
+    creator_memory = creator_memory or {}
+    review_state, recommendation, reason, signals = _review_recommendation(row, score, creator_memory)
+    metadata = _metadata_dict(row.get("metadataJson"))
+    metadata["reviewRecommendation"] = recommendation
+    metadata["reviewRecommendationReason"] = reason
+    metadata["reviewSignals"] = signals
+    return review_state, metadata
 
 
 def rank_opportunities(vlog_id: str) -> dict:
@@ -189,11 +312,16 @@ def rank_opportunities(vlog_id: str) -> dict:
         }
 
         for row in rows:
+            score = score_opportunity(row, creator_memory)
+            review_state, metadata = build_review_metadata(row, score, creator_memory)
             db.execute(
                 '''UPDATE "Opportunity"
-                   SET "rankScore" = %s, "updatedAt" = NOW()
+                   SET "rankScore" = %s,
+                       "reviewState" = %s::"OpportunityReviewState",
+                       "metadataJson" = %s::jsonb,
+                       "updatedAt" = NOW()
                    WHERE id = %s''',
-                (score_opportunity(row, creator_memory), row["id"]),
+                (score, review_state, json.dumps(metadata), row["id"]),
             )
 
         db.execute(

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mockGetUser = vi.fn()
 const mockCreatorFindUnique = vi.fn()
 const mockVlogFindFirst = vi.fn()
+const mockCreatorMemoryFindMany = vi.fn()
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) =>
@@ -36,6 +37,9 @@ vi.mock('@/lib/prisma/client', () => ({
     vlog: {
       findFirst: (...args: unknown[]) => mockVlogFindFirst(...args),
     },
+    creatorMemory: {
+      findMany: (...args: unknown[]) => mockCreatorMemoryFindMany(...args),
+    },
   },
 }))
 
@@ -56,6 +60,10 @@ describe('DashboardReviewVideoPage', () => {
     vi.clearAllMocks()
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
     mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1', userId: 'user-1' })
+    mockCreatorMemoryFindMany.mockResolvedValue([
+      { key: 'park hyatt tokyo', memoryType: 'ACCEPTED_PLACE', valueJson: {} },
+      { key: 'park hyatt tokyo', memoryType: 'RECURRING_ITEM', valueJson: {} },
+    ])
     mockVlogFindFirst.mockResolvedValue({
       id: 'vlog-1',
       title: 'Tokyo vlog',
@@ -72,6 +80,10 @@ describe('DashboardReviewVideoPage', () => {
           publishState: 'DRAFT',
           confidence: 0.92,
           rankScore: 0.88,
+          metadataJson: {
+            reviewRecommendation: 'likely_approve',
+            reviewRecommendationReason: 'Creator history suggests this opportunity is likely a good fit, but it still needs a quick review.',
+          },
           candidateEntity: {
             canonicalLabel: 'Park Hyatt Tokyo',
             rawLabel: 'Park Hyatt',
@@ -96,6 +108,10 @@ describe('DashboardReviewVideoPage', () => {
     expect(html).toContain('Tokyo vlog')
     expect(html).toContain('Back to review queue')
     expect(html).toContain('Park Hyatt Tokyo')
+    expect(html).toContain('Previously approved')
+    expect(html).toContain('Recurring item')
+    expect(html).toContain('Likely approve')
+    expect(html).toContain('likely a good fit')
     expect(html).toContain('EditForm')
     expect(html).toContain('DecisionButtons')
   })
