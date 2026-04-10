@@ -59,7 +59,19 @@ describe('creator profile route', () => {
     mockFindUnique
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null);
-    const res = await POST(new NextRequest('http://localhost/api/creator/profile', { method: 'POST', body: JSON.stringify({ handle: 'creator', displayName: 'Creator', websiteUrl: 'https://example.com' }) }));
+    const res = await POST(new NextRequest('http://localhost/api/creator/profile', {
+      method: 'POST',
+      body: JSON.stringify({
+        handle: 'creator',
+        displayName: 'Creator',
+        websiteUrl: 'https://example.com',
+        storefrontTheme: 'BEACH_RETREAT',
+        storefrontTagline: 'Salt, sun, and soft landings',
+        storefrontIntro: 'Come for the beaches, stay for the food.',
+        storefrontMoodImageUrl: 'https://example.com/mood.jpg',
+        storefrontGalleryImages: ['https://example.com/one.jpg', 'https://example.com/two.jpg'],
+      }),
+    }));
     expect(mockCreate).toHaveBeenCalledWith({
       data: {
         userId: 'user-1',
@@ -68,9 +80,27 @@ describe('creator profile route', () => {
         bio: null,
         location: null,
         websiteUrl: 'https://example.com',
+        storefrontTheme: 'BEACH_RETREAT',
+        storefrontTagline: 'Salt, sun, and soft landings',
+        storefrontIntro: 'Come for the beaches, stay for the food.',
+        storefrontMoodImageUrl: 'https://example.com/mood.jpg',
+        storefrontGalleryImages: ['https://example.com/one.jpg', 'https://example.com/two.jpg'],
       },
     });
     expect(res.status).toBe(201);
+  });
+
+  it('PATCH validates storefront theme and gallery images', async () => {
+    mockFindUnique.mockResolvedValue({ id: 'creator-1', handle: 'creator' });
+    const res = await PATCH(new NextRequest('http://localhost/api/creator/profile', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        storefrontTheme: 'NOT_A_THEME',
+        storefrontGalleryImages: ['https://example.com/one.jpg'],
+      }),
+    }));
+
+    expect(res.status).toBe(422);
   });
 
   it('PATCH returns 404 when the creator profile does not exist', async () => {
@@ -96,10 +126,25 @@ describe('creator profile route', () => {
   it('PATCH updates the creator profile', async () => {
     mockFindUnique
       .mockResolvedValueOnce({ id: 'creator-1', handle: 'creator' });
-    const res = await PATCH(new NextRequest('http://localhost/api/creator/profile', { method: 'PATCH', body: JSON.stringify({ displayName: 'Updated', isPublished: true }) }));
+    const res = await PATCH(new NextRequest('http://localhost/api/creator/profile', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        displayName: 'Updated',
+        isPublished: true,
+        storefrontTheme: 'FOOD_TRAIL',
+        storefrontTagline: 'Eat first, plan later',
+        storefrontGalleryImages: ['https://example.com/gallery.jpg'],
+      }),
+    }));
     expect(mockUpdate).toHaveBeenCalledWith({
       where: { id: 'creator-1' },
-      data: { displayName: 'Updated', isPublished: true },
+      data: {
+        displayName: 'Updated',
+        isPublished: true,
+        storefrontTheme: 'FOOD_TRAIL',
+        storefrontTagline: 'Eat first, plan later',
+        storefrontGalleryImages: ['https://example.com/gallery.jpg'],
+      },
     });
     expect(res.status).toBe(200);
   });

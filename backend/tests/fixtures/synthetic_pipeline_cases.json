@@ -1,0 +1,184 @@
+[
+  {
+    "name": "multimodal_tokyo_hotel_fixture",
+    "vlogId": "vlog-synth-001",
+    "creatorId": "creator-synth-001",
+    "title": "Tokyo Hotel Weekend",
+    "durationSeconds": 120,
+    "transcript": "We checked into the Park Hyatt Tokyo and absolutely loved the skyline views. Later we grabbed ramen in Shibuya before heading back to the hotel.",
+    "transcriptGraphPayload": {
+      "itinerary": {
+        "title": "2 Days in Tokyo",
+        "summary": "A quick Tokyo weekend anchored by a luxury stay and ramen stop.",
+        "destinations": ["Tokyo"],
+        "countries": ["Japan"],
+        "days": [
+          {
+            "dayNumber": 1,
+            "title": "Check in and explore",
+            "summary": "Park Hyatt Tokyo and an evening ramen run.",
+            "activities": [
+              {
+                "time": "3:00 PM",
+                "title": "Check into Park Hyatt Tokyo",
+                "description": "Luxury hotel stay with skyline views."
+              }
+            ]
+          }
+        ]
+      },
+      "opportunities": [
+        {
+          "entity_type": "place",
+          "subtype": "hotel",
+          "title": "Park Hyatt Tokyo",
+          "raw_label": "Park Hyatt Tokyo",
+          "description": "Luxury hotel featured during check-in.",
+          "confidence": 0.7,
+          "claim_type": "stayed_at",
+          "evidence_summary": "Creator says they checked into Park Hyatt Tokyo.",
+          "start_sec": 10,
+          "end_sec": 42,
+          "attributes": {
+            "city": "Tokyo"
+          }
+        }
+      ]
+    },
+    "visualSignalsByFrameIndex": [
+      [
+        {
+          "source_type": "ocr",
+          "entity_type": "place",
+          "subtype": "hotel",
+          "title": "Park Hyatt Tokyo",
+          "raw_label": "Park Hyatt Tokyo",
+          "description": "Hotel name is clearly visible on signage.",
+          "confidence": 0.92,
+          "claim_type": "visited",
+          "evidence_summary": "Readable Park Hyatt Tokyo sign in lobby frame.",
+          "attributes": {
+            "text": "Park Hyatt Tokyo"
+          }
+        }
+      ],
+      []
+    ],
+    "creatorMemory": {},
+    "expected": {
+      "sceneSegments": 2,
+      "frameAssets": 2,
+      "minimumOpportunityCount": 3,
+      "titleChecks": [
+        {
+          "title": "2 Days in Tokyo",
+          "reviewState": "AUTO_APPROVED"
+        },
+        {
+          "title": "Park Hyatt Tokyo",
+          "minimumMatches": 2,
+          "minimumScore": 0.76,
+          "reviewRecommendation": "strong_candidate",
+          "requiredSignals": ["multimodal_evidence", "exact_resolution", "source:ocr"]
+        }
+      ]
+    }
+  },
+  {
+    "name": "packing_item_and_weak_logo_fixture",
+    "vlogId": "vlog-synth-002",
+    "creatorId": "creator-synth-002",
+    "title": "Carry-On Packing Test",
+    "durationSeconds": 180,
+    "transcript": "For this trip I packed my Away Carry-On and my Peak Design backpack. The suitcase is the one I bring on almost every flight.",
+    "transcriptGraphPayload": {
+      "itinerary": {
+        "title": "Carry-On Packing Guide",
+        "summary": "A quick rundown of the creator's go-to travel bag setup.",
+        "destinations": [],
+        "countries": [],
+        "days": []
+      },
+      "opportunities": [
+        {
+          "entity_type": "product",
+          "subtype": "packing_item",
+          "title": "Away Carry-On",
+          "raw_label": "Away Carry-On",
+          "description": "Creator's recurring carry-on suitcase.",
+          "confidence": 0.84,
+          "claim_type": "packed",
+          "evidence_summary": "Creator says they packed their Away carry-on.",
+          "start_sec": 8,
+          "end_sec": 36,
+          "attributes": {}
+        }
+      ]
+    },
+    "visualSignalsByFrameIndex": [
+      [
+        {
+          "source_type": "object_detection",
+          "entity_type": "product",
+          "subtype": "packing_item",
+          "title": "Away Carry-On",
+          "raw_label": "Away Carry-On",
+          "description": "Hard-shell carry-on visible in frame.",
+          "confidence": 0.82,
+          "claim_type": "packed",
+          "evidence_summary": "Suitcase shape and branding match the Away Carry-On.",
+          "attributes": {}
+        }
+      ],
+      [
+        {
+          "source_type": "logo_detection",
+          "entity_type": "brand",
+          "subtype": "brand",
+          "title": "Generic Travel Brand",
+          "raw_label": "GTB",
+          "description": "A faint travel logo appears in the corner of the frame.",
+          "confidence": 0.62,
+          "claim_type": "recommends",
+          "evidence_summary": "Weak logo-only signal with no supporting context.",
+          "attributes": {}
+        }
+      ],
+      []
+    ],
+    "creatorMemory": {
+      "ACCEPTED_PRODUCT|away carry on": {
+        "memoryType": "ACCEPTED_PRODUCT"
+      },
+      "RECURRING_ITEM|away carry on": {
+        "memoryType": "RECURRING_ITEM"
+      }
+    },
+    "expected": {
+      "sceneSegments": 3,
+      "frameAssets": 3,
+      "minimumOpportunityCount": 4,
+      "titleChecks": [
+        {
+          "title": "Carry-On Packing Guide",
+          "reviewState": "AUTO_APPROVED"
+        },
+        {
+          "title": "Away Carry-On",
+          "minimumMatches": 2,
+          "minimumScore": 0.84,
+          "reviewState": "AUTO_APPROVED",
+          "reviewRecommendation": "auto_approved_from_memory",
+          "requiredSignals": ["accepted_memory", "recurring_item", "multimodal_evidence", "exact_resolution"]
+        },
+        {
+          "title": "Generic Travel Brand",
+          "minimumMatches": 1,
+          "maximumScore": 0.62,
+          "reviewRecommendation": "needs_scrutiny",
+          "requiredSignals": ["weak_visual_only_signal", "source:logo_detection"]
+        }
+      ]
+    }
+  }
+]

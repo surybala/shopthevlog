@@ -4,8 +4,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ItineraryEditor from './ItineraryEditor'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 type LinkRef = {
   id: string
   targetName: string
@@ -58,8 +56,6 @@ interface Props {
   kit: Kit | null
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
 export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
@@ -74,13 +70,13 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
     durationDays: kit?.durationDays?.toString() ?? '',
     estimatedBudgetLow: kit?.estimatedBudgetLow?.toString() ?? '',
     estimatedBudgetHigh: kit?.estimatedBudgetHigh?.toString() ?? '',
-    accessTier: kit?.accessTier ?? 'FREE' as 'FREE' | 'FOLLOWER' | 'PREMIUM',
+    accessTier: (kit?.accessTier ?? 'FREE') as 'FREE' | 'FOLLOWER' | 'PREMIUM',
     isPublished: kit?.isPublished ?? false,
     isFeatured: kit?.isFeatured ?? false,
   })
 
   function set(key: keyof typeof form, value: string | boolean) {
-    setForm(prev => ({ ...prev, [key]: value }))
+    setForm((prev) => ({ ...prev, [key]: value }))
   }
 
   function handleTitleChange(title: string) {
@@ -101,24 +97,26 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
         description: form.description || null,
         slug: form.slug,
         primaryCity: form.primaryCity || null,
-        countries: form.countries.split(',').map(s => s.trim()).filter(Boolean),
-        cities: form.cities.split(',').map(s => s.trim()).filter(Boolean),
-        durationDays: form.durationDays ? parseInt(form.durationDays) : null,
-        estimatedBudgetLow: form.estimatedBudgetLow ? parseInt(form.estimatedBudgetLow) : null,
-        estimatedBudgetHigh: form.estimatedBudgetHigh ? parseInt(form.estimatedBudgetHigh) : null,
+        countries: form.countries.split(',').map((s) => s.trim()).filter(Boolean),
+        cities: form.cities.split(',').map((s) => s.trim()).filter(Boolean),
+        durationDays: form.durationDays ? parseInt(form.durationDays, 10) : null,
+        estimatedBudgetLow: form.estimatedBudgetLow ? parseInt(form.estimatedBudgetLow, 10) : null,
+        estimatedBudgetHigh: form.estimatedBudgetHigh ? parseInt(form.estimatedBudgetHigh, 10) : null,
         accessTier: form.accessTier,
         isPublished: form.isPublished,
         isFeatured: form.isFeatured,
       }
+
       const res = await fetch(kit ? `/api/kits/${kit.id}` : '/api/kits', {
         method: kit ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        throw new Error(d.error ?? 'Save failed')
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error ?? 'Save failed')
       }
+
       const saved = await res.json()
       if (!kit) {
         router.push(`/dashboard/kits/${saved.id}`)
@@ -146,178 +144,207 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
     }
   }
 
-  const inputCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/30'
-  const labelCls = 'block text-xs font-medium text-white/50 uppercase tracking-wider mb-1.5'
+  const labelCls = 'dashboard-mirror-kicker mb-2 block text-[11px]'
 
   return (
-    <div className="max-w-3xl space-y-6 pb-12">
-      {error && (
-        <div className="glass-card p-4 border border-red-500/30 text-red-400 text-sm">{error}</div>
-      )}
+    <div className="max-w-4xl space-y-6 pb-12">
+      {error ? (
+        <div className="dashboard-mirror-card border border-red-400/25 p-4 text-sm text-red-200">
+          {error}
+        </div>
+      ) : null}
 
-      {/* ── Section 1: Basic Info ──────────────────────────────────────────── */}
-      <div className="glass-card p-6 space-y-4">
-        <h2 className="font-semibold text-white">Basic Info</h2>
-
+      <section className="dashboard-mirror-card space-y-6 p-6 md:p-7">
         <div>
-          <label className={labelCls}>Title *</label>
-          <input
-            className={inputCls}
-            placeholder="10 Days in Japan: Tokyo to Kyoto"
-            value={form.title}
-            onChange={e => handleTitleChange(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label className={labelCls}>URL Slug *</label>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-white/30 shrink-0">/@handle/kits/</span>
-            <input
-              className={inputCls}
-              placeholder="10-days-in-japan"
-              value={form.slug}
-              onChange={e => set('slug', e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className={labelCls}>Description</label>
-          <textarea
-            className={`${inputCls} resize-none`}
-            rows={3}
-            placeholder="A 2–3 sentence hook for your kit…"
-            value={form.description}
-            onChange={e => set('description', e.target.value)}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className={labelCls}>Primary City</label>
-            <input className={inputCls} placeholder="Tokyo" value={form.primaryCity} onChange={e => set('primaryCity', e.target.value)} />
-          </div>
-          <div>
-            <label className={labelCls}>Duration (days)</label>
-            <input className={inputCls} type="number" placeholder="10" value={form.durationDays} onChange={e => set('durationDays', e.target.value)} />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className={labelCls}>Countries (comma-separated)</label>
-            <input className={inputCls} placeholder="Japan" value={form.countries} onChange={e => set('countries', e.target.value)} />
-          </div>
-          <div>
-            <label className={labelCls}>Cities (comma-separated)</label>
-            <input className={inputCls} placeholder="Tokyo, Kyoto, Osaka" value={form.cities} onChange={e => set('cities', e.target.value)} />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className={labelCls}>Budget Low (USD/person)</label>
-            <input className={inputCls} type="number" placeholder="1500" value={form.estimatedBudgetLow} onChange={e => set('estimatedBudgetLow', e.target.value)} />
-          </div>
-          <div>
-            <label className={labelCls}>Budget High (USD/person)</label>
-            <input className={inputCls} type="number" placeholder="3000" value={form.estimatedBudgetHigh} onChange={e => set('estimatedBudgetHigh', e.target.value)} />
-          </div>
-        </div>
-      </div>
-
-      {/* ── Section 2: Itinerary ───────────────────────────────────────────── */}
-      {kit ? (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-white">Itinerary</h2>
-            <span className="text-xs text-white/30">{kit.days.length} day{kit.days.length !== 1 ? 's' : ''}</span>
-          </div>
-          <ItineraryEditor kitId={kit.id} initialDays={kit.days} />
-        </div>
-      ) : (
-        <div className="glass-card p-6 text-center">
-          <p className="text-white/40 text-sm">Save the kit first, then you can build the itinerary.</p>
-        </div>
-      )}
-
-      {/* ── Section 3: Access & Publishing ───────────────────────────────────── */}
-      <div className="glass-card p-6 space-y-4">
-        <h2 className="font-semibold text-white">Access & Publishing</h2>
-
-        <div>
-          <label className={labelCls}>Access Tier</label>
-          <div className="flex gap-3">
-            {(['FREE', 'FOLLOWER', 'PREMIUM'] as const).map(tier => (
-              <button
-                key={tier}
-                type="button"
-                onClick={() => set('accessTier', tier)}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors border ${
-                  form.accessTier === tier
-                    ? 'bg-white text-black border-white'
-                    : 'bg-white/5 text-white/50 border-white/10 hover:border-white/30'
-                }`}
-              >
-                {tier}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-white/30 mt-2">
-            {form.accessTier === 'FREE' && 'Anyone can view — no sign-in required'}
-            {form.accessTier === 'FOLLOWER' && 'Requires free follow or any paid subscription'}
-            {form.accessTier === 'PREMIUM' && 'Requires a paid subscription tier'}
+          <p className="dashboard-mirror-kicker text-xs">Core Story</p>
+          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-[#f7f1e4]">Shape the Trip Kit before it goes live.</h2>
+          <p className="dashboard-mirror-subtle mt-2 max-w-2xl text-sm">
+            Dial in the title, route, budget, and unlock level so subscribers feel like they are stepping into a polished travel editorial.
           </p>
         </div>
 
-        <div className="flex items-center justify-between py-2 border-t border-white/10">
-          <div>
-            <p className="text-sm font-medium text-white">Featured Kit</p>
-            <p className="text-xs text-white/40">Pin to top of your storefront (max 3)</p>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className={labelCls}>Title</label>
+            <input
+              className="dashboard-input"
+              placeholder="10 Days in Japan: Tokyo to Kyoto"
+              value={form.title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+            />
           </div>
+
+          <div className="md:col-span-2">
+            <label className={labelCls}>Storefront Slug</label>
+            <div className="flex items-center gap-3 rounded-[1.35rem] bg-white/[0.05] px-4 py-3 ring-1 ring-white/10">
+              <span className="shrink-0 text-sm text-[#d2d9c7]/55">/@{creatorHandle}/kits/</span>
+              <input
+                className="min-w-0 flex-1 bg-transparent text-sm text-[#f7f1e4] outline-none placeholder:text-[#d2d9c7]/35"
+                placeholder="10-days-in-japan"
+                value={form.slug}
+                onChange={(e) => set('slug', e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className={labelCls}>Description</label>
+            <textarea
+              className="dashboard-input min-h-28 resize-none"
+              rows={4}
+              placeholder="Give subscribers a quick editorial feel for the route, highlights, and who this trip is best for."
+              value={form.description}
+              onChange={(e) => set('description', e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className={labelCls}>Primary City</label>
+            <input className="dashboard-input" placeholder="Tokyo" value={form.primaryCity} onChange={(e) => set('primaryCity', e.target.value)} />
+          </div>
+
+          <div>
+            <label className={labelCls}>Duration</label>
+            <input className="dashboard-input" type="number" placeholder="10" value={form.durationDays} onChange={(e) => set('durationDays', e.target.value)} />
+          </div>
+
+          <div>
+            <label className={labelCls}>Countries</label>
+            <input className="dashboard-input" placeholder="Japan" value={form.countries} onChange={(e) => set('countries', e.target.value)} />
+          </div>
+
+          <div>
+            <label className={labelCls}>Cities</label>
+            <input className="dashboard-input" placeholder="Tokyo, Kyoto, Osaka" value={form.cities} onChange={(e) => set('cities', e.target.value)} />
+          </div>
+
+          <div>
+            <label className={labelCls}>Budget Low (USD)</label>
+            <input className="dashboard-input" type="number" placeholder="1500" value={form.estimatedBudgetLow} onChange={(e) => set('estimatedBudgetLow', e.target.value)} />
+          </div>
+
+          <div>
+            <label className={labelCls}>Budget High (USD)</label>
+            <input className="dashboard-input" type="number" placeholder="3000" value={form.estimatedBudgetHigh} onChange={(e) => set('estimatedBudgetHigh', e.target.value)} />
+          </div>
+        </div>
+      </section>
+
+      <section className="dashboard-mirror-card space-y-5 p-6 md:p-7">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="dashboard-mirror-kicker text-xs">Access</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#f7f1e4]">Choose how this guide unlocks.</h2>
+          </div>
+          <div className="rounded-full bg-white/[0.06] px-4 py-2 text-xs text-[#d2d9c7]/70 ring-1 ring-white/10">
+            {kit ? (kit.isPublished ? 'Published now' : 'Draft mode') : 'Create first draft'}
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          {([
+            { value: 'FREE', label: 'Free', description: 'Anyone can browse it without following.' },
+            { value: 'FOLLOWER', label: 'Follower', description: 'Unlocked once someone follows or subscribes.' },
+            { value: 'PREMIUM', label: 'Premium', description: 'Reserved for your paid supporters.' },
+          ] as const).map((tier) => {
+            const selected = form.accessTier === tier.value
+            return (
+              <button
+                key={tier.value}
+                type="button"
+                onClick={() => set('accessTier', tier.value)}
+                className={`rounded-[1.5rem] p-4 text-left transition-all ${
+                  selected
+                    ? 'bg-[linear-gradient(135deg,rgba(240,152,74,0.32),rgba(232,118,34,0.2))] ring-1 ring-[#f0b16b]/40'
+                    : 'bg-white/[0.04] ring-1 ring-white/10 hover:bg-white/[0.07] hover:ring-white/20'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold text-[#f7f1e4]">{tier.label}</span>
+                  <span className={`h-2.5 w-2.5 rounded-full ${selected ? 'bg-[#f0b16b]' : 'bg-white/25'}`} />
+                </div>
+                <p className="mt-2 text-sm leading-6 text-[#d2d9c7]/75">{tier.description}</p>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
           <button
             type="button"
             onClick={() => set('isFeatured', !form.isFeatured)}
-            className={`relative w-11 h-6 rounded-full transition-colors ${form.isFeatured ? 'bg-white' : 'bg-white/10'}`}
+            className="rounded-[1.5rem] bg-white/[0.04] p-4 text-left ring-1 ring-white/10 transition hover:bg-white/[0.07]"
           >
-            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-black transition-transform ${form.isFeatured ? 'translate-x-5' : ''}`} />
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-[#f7f1e4]">Featured placement</p>
+                <p className="mt-1 text-sm text-[#d2d9c7]/72">Lift this kit toward the top of your storefront collection.</p>
+              </div>
+              <div className={`h-6 w-11 rounded-full transition ${form.isFeatured ? 'bg-[#f0b16b]' : 'bg-white/12'}`}>
+                <div className={`mt-0.5 h-5 w-5 rounded-full bg-[#163328] transition-transform ${form.isFeatured ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </div>
+            </div>
           </button>
-        </div>
-      </div>
 
-      {/* ── Actions ──────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={handleSave}
-          disabled={saving || !form.title || !form.slug}
-          className="btn-primary disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : kit ? 'Save changes' : 'Create Kit'}
+          <div className="rounded-[1.5rem] bg-white/[0.04] p-4 ring-1 ring-white/10">
+            <p className="text-sm font-semibold text-[#f7f1e4]">Storefront visibility</p>
+            <p className="mt-1 text-sm text-[#d2d9c7]/72">
+              {kit?.isPublished
+                ? 'This Trip Kit is live on your storefront right now.'
+                : 'Save your edits first. You can publish once the kit is ready for subscribers.'}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="dashboard-mirror-card space-y-5 p-6 md:p-7">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="dashboard-mirror-kicker text-xs">Itinerary</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#f7f1e4]">Build the experience day by day.</h2>
+          </div>
+          <div className="rounded-full bg-white/[0.06] px-4 py-2 text-xs text-[#d2d9c7]/70 ring-1 ring-white/10">
+            {kit ? `${kit.days.length} day${kit.days.length === 1 ? '' : 's'}` : 'Save to unlock'}
+          </div>
+        </div>
+
+        {kit ? (
+          <ItineraryEditor kitId={kit.id} initialDays={kit.days} />
+        ) : (
+          <div className="rounded-[1.75rem] border border-dashed border-white/12 bg-white/[0.03] px-6 py-12 text-center">
+            <p className="text-sm font-medium text-[#f7f1e4]">Save the Trip Kit first.</p>
+            <p className="mt-2 text-sm text-[#d2d9c7]/68">
+              Once the kit exists, you can add days, activities, and affiliate links in the same editor.
+            </p>
+          </div>
+        )}
+      </section>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button onClick={handleSave} disabled={saving || !form.title || !form.slug} className="btn-primary disabled:opacity-50">
+          {saving ? 'Saving...' : kit ? 'Save changes' : 'Create Trip Kit'}
         </button>
 
-        {kit && (
+        {kit ? (
           <button
             onClick={handlePublishToggle}
             disabled={saving}
-            className={`btn-ghost disabled:opacity-50 ${
-              kit.isPublished ? 'border-red-500/30 text-red-400 hover:border-red-500/60' : ''
-            }`}
+            className={`dashboard-pill-button disabled:opacity-50 ${kit.isPublished ? 'text-[#ffb5a8] ring-red-400/25 hover:bg-red-400/10' : ''}`}
           >
             {kit.isPublished ? 'Unpublish' : 'Publish'}
           </button>
-        )}
+        ) : null}
 
-        {kit?.isPublished && (
+        {kit?.isPublished ? (
           <a
             href={`/@${creatorHandle}/kits/${kit.slug}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-white/30 hover:text-white transition-colors ml-auto"
+            className="ml-auto text-sm text-[#d2d9c7]/62 transition hover:text-[#f7f1e4]"
           >
-            ↗ View on storefront
+            View on storefront
           </a>
-        )}
+        ) : null}
       </div>
     </div>
   )

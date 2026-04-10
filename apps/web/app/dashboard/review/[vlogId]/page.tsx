@@ -157,13 +157,14 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
 
   return (
     <div className="p-8">
-      <div className="mb-8 flex items-start justify-between gap-6">
+      <div className="dashboard-mirror-panel mb-8 flex items-start justify-between gap-6 p-6">
         <div>
-          <Link href="/dashboard/review" className="text-sm text-white/40 hover:text-white/70">
+          <p className="dashboard-mirror-kicker text-xs">Review detail</p>
+          <Link href="/dashboard/review" className="dashboard-mirror-subtle mt-3 inline-block text-sm hover:text-white">
             Back to review queue
           </Link>
-          <h1 className="mt-3 text-2xl font-bold text-white">{vlog.title}</h1>
-          <p className="mt-1 text-sm text-white/40">
+          <h1 className="mt-3 text-3xl font-bold text-white">{vlog.title}</h1>
+          <p className="dashboard-mirror-subtle mt-2 text-sm">
             {opportunities.length} opportunity{opportunities.length !== 1 ? 'ies' : 'y'} extracted from this vlog
           </p>
         </div>
@@ -173,40 +174,40 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
             disabled={!publishSummary.readyToPublish}
             actionLabel={publishSummary.actionLabel}
           />
-          <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/60">
+          <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/82">
             {vlog.processingStatus}
           </span>
           <a
             href={vlog.externalUrl}
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg border border-white/10 px-3 py-2 text-sm text-white/60 transition-colors hover:border-white/30 hover:text-white"
+            className="rounded-full bg-white/10 px-3 py-2 text-sm text-white transition-colors hover:bg-white/16"
           >
             Open source vlog
           </a>
         </div>
       </div>
 
-      <div className="mb-6 glass-card p-5">
+      <div className="dashboard-mirror-card mb-6 p-5">
         <div className="flex items-start justify-between gap-6">
           <div>
-            <p className="text-xs uppercase tracking-wider text-white/30">Publish Preview</p>
+            <p className="dashboard-mirror-kicker text-xs">Publish Preview</p>
             <h2 className="mt-2 text-lg font-semibold text-white">
               {publishSummary.readyToPublish
                 ? publishSummary.itinerary?.title
                 : 'No approved itinerary is ready to publish'}
             </h2>
-            <p className="mt-2 max-w-3xl text-sm text-white/50">
+            <p className="dashboard-mirror-subtle mt-2 max-w-3xl text-sm">
               {publishSummary.readyToPublish
                 ? 'Publishing will project the selected itinerary opportunity into the storefront Trip Kit.'
                 : 'Approve or edit an itinerary opportunity first, then publish it here.'}
             </p>
           </div>
           {publishSummary.tripKit ? (
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/60">
-              <p className="text-xs uppercase tracking-wider text-white/35">Current Trip Kit</p>
+            <div className="rounded-2xl bg-white/8 px-4 py-3 text-sm text-white/80">
+              <p className="dashboard-mirror-kicker text-xs">Current Trip Kit</p>
               <p className="mt-1 font-medium text-white">{publishSummary.tripKit.title}</p>
-              <p className="mt-1 text-xs text-white/40">/{publishSummary.tripKit.slug}</p>
+              <p className="dashboard-mirror-muted mt-1 text-xs">/{publishSummary.tripKit.slug}</p>
             </div>
           ) : null}
         </div>
@@ -214,19 +215,19 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
         {publishSummary.readyToPublish ? (
           <div className="mt-4 grid gap-3 md:grid-cols-4">
             <div>
-              <p className="text-xs uppercase tracking-wider text-white/30">Source Opportunity</p>
+              <p className="dashboard-mirror-kicker text-xs">Source Opportunity</p>
               <p className="mt-1 text-sm text-white">{publishSummary.opportunity?.title}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wider text-white/30">Days</p>
+              <p className="dashboard-mirror-kicker text-xs">Days</p>
               <p className="mt-1 text-sm text-white">{publishSummary.totalDays}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wider text-white/30">Activities</p>
+              <p className="dashboard-mirror-kicker text-xs">Activities</p>
               <p className="mt-1 text-sm text-white">{publishSummary.totalActivities}</p>
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wider text-white/30">Destination</p>
+              <p className="dashboard-mirror-kicker text-xs">Destination</p>
               <p className="mt-1 text-sm text-white">
                 {publishSummary.itinerary?.primaryCity ?? publishSummary.itinerary?.destinations?.[0] ?? 'Not set'}
               </p>
@@ -252,13 +253,13 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
       </div>
 
       {opportunities.length === 0 ? (
-        <div className="glass-card p-10 text-center">
-          <p className="text-sm text-white/40">No reviewable opportunities are attached to this vlog yet.</p>
+        <div className="dashboard-mirror-card p-10 text-center">
+          <p className="dashboard-mirror-subtle text-sm">No reviewable opportunities are attached to this vlog yet.</p>
         </div>
       ) : (
         <div className="space-y-5">
           {opportunities.map((opportunity) => (
-            <div key={opportunity.id} className="glass-card p-5">
+            <div key={opportunity.id} className="dashboard-mirror-card p-5">
               {(() => {
                 const memoryKey = normalizeCreatorMemoryKey(
                   opportunity.candidateEntity?.canonicalLabel
@@ -276,22 +277,22 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
               <div className="mb-4 flex items-start justify-between gap-6">
                 <div>
                   <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/60">
+                    <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/78">
                       {formatOpportunityTypeLabel(opportunity.opportunityType)}
                     </span>
-                    <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/60">
+                    <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/78">
                       Confidence {formatPercent(opportunity.confidence)}
                     </span>
-                    <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/60">
+                    <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/78">
                       Rank {(opportunity.rankScore ?? 0).toFixed(2)}
                     </span>
-                    <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/60">
+                    <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/78">
                       {opportunity.reviewState}
                     </span>
                   </div>
                   <h2 className="text-lg font-semibold text-white">{opportunity.title}</h2>
                   {opportunity.description ? (
-                    <p className="mt-2 max-w-3xl text-sm text-white/60">{opportunity.description}</p>
+                    <p className="dashboard-mirror-subtle mt-2 max-w-3xl text-sm">{opportunity.description}</p>
                   ) : null}
                 </div>
                 <ReviewDecisionButtons opportunityId={opportunity.id} reviewState={opportunity.reviewState} />
@@ -299,7 +300,7 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
 
               <div className="mb-4 grid gap-3 md:grid-cols-3">
                 <div>
-                  <p className="text-xs uppercase tracking-wider text-white/30">Entity</p>
+                  <p className="dashboard-mirror-kicker text-xs">Entity</p>
                   <p className="mt-1 text-sm text-white">
                     {opportunity.candidateEntity?.canonicalLabel
                       ?? opportunity.candidateEntity?.rawLabel
@@ -307,11 +308,11 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wider text-white/30">Evidence Sources</p>
+                  <p className="dashboard-mirror-kicker text-xs">Evidence Sources</p>
                   <p className="mt-1 text-sm text-white">{summarizeEvidenceSources(opportunity)}</p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wider text-white/30">Temporal Anchor</p>
+                  <p className="dashboard-mirror-kicker text-xs">Temporal Anchor</p>
                   <p className="mt-1 text-sm text-white">
                     {opportunity.candidateEntity
                       ? `${Math.round(opportunity.candidateEntity.startSec)}s - ${Math.round(opportunity.candidateEntity.endSec)}s`
@@ -336,7 +337,7 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
                     {reviewRecommendationLabel}
                   </span>
                   {reviewRecommendationReason ? (
-                    <p className="mt-2 max-w-3xl text-xs text-white/40">{reviewRecommendationReason}</p>
+                    <p className="dashboard-mirror-subtle mt-2 max-w-3xl text-xs">{reviewRecommendationReason}</p>
                   ) : null}
                 </div>
               ) : null}

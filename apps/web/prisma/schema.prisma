@@ -16,6 +16,21 @@ enum CreatorPlan {
   STUDIO
 }
 
+enum StorefrontTheme {
+  BEACH_RETREAT
+  ADVENTURE_TRAIL
+  BACKPACKER_NOTEBOOK
+  MOUNTAIN_ESCAPE
+  CITY_EDITORIAL
+  FOREST_CAMP
+  DESERT_SUNSET
+  ISLAND_HOPPING
+  ROAD_TRIP
+  WELLNESS_HIDEAWAY
+  FOOD_TRAIL
+  LUXURY_ATLAS
+}
+
 enum ScanStatus {
   PENDING
   QUEUED
@@ -293,6 +308,11 @@ model Creator {
   bio           String?
   avatarUrl     String?
   coverImageUrl String?
+  storefrontTheme         StorefrontTheme @default(CITY_EDITORIAL)
+  storefrontTagline       String?
+  storefrontIntro         String?
+  storefrontMoodImageUrl  String?
+  storefrontGalleryImages String[]
   location      String?
   websiteUrl    String?
   country       String?

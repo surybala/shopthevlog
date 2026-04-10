@@ -232,7 +232,8 @@ def enrich_visual_graph(vlog_id: str, creator_id: str, title: str) -> dict:
                                 "evidenceIds": [evidence_id],
                                 "source": "VISUAL_ENRICHMENT_V1",
                                 "frameAssetId": frame["id"],
-                            }
+                                "sourceTypes": [source_type],
+                                }
                         ),
                     ),
                 )

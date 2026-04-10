@@ -8,14 +8,14 @@ import AccessBadge from '@/components/AccessBadge'
 import UnfollowButton from './UnfollowButton'
 import UnsaveButton from './UnsaveButton'
 
-export const metadata = { title: 'My Account — VlogShopper' }
+export const metadata = { title: 'My Account - VlogShopper' }
 
 type Tab = 'following' | 'subscriptions' | 'saved'
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'following',     label: 'Following'      },
-  { key: 'subscriptions', label: 'Subscriptions'  },
-  { key: 'saved',         label: 'Saved Kits'     },
+  { key: 'following', label: 'Following' },
+  { key: 'subscriptions', label: 'Subscriptions' },
+  { key: 'saved', label: 'Saved Kits' },
 ]
 
 export default async function AccountPage({
@@ -29,8 +29,8 @@ export default async function AccountPage({
 
   const tab: Tab =
     searchParams.tab === 'subscriptions' ? 'subscriptions'
-    : searchParams.tab === 'saved'       ? 'saved'
-    : 'following'
+      : searchParams.tab === 'saved' ? 'saved'
+        : 'following'
 
   const [subscriber, creator] = await Promise.all([
     prisma.subscriber.findUnique({
@@ -43,7 +43,6 @@ export default async function AccountPage({
     }),
   ])
 
-  // Run all three queries in parallel — they're all cheap and always needed for counts
   const [following, subscriptions, savedKits] = await Promise.all([
     subscriber
       ? prisma.follow.findMany({
@@ -52,8 +51,12 @@ export default async function AccountPage({
           include: {
             creator: {
               select: {
-                handle: true, displayName: true, avatarUrl: true,
-                bio: true, subscriberCount: true, isPublished: true,
+                handle: true,
+                displayName: true,
+                avatarUrl: true,
+                bio: true,
+                subscriberCount: true,
+                isPublished: true,
                 _count: { select: { tripKits: { where: { isPublished: true } } } },
               },
             },
@@ -65,7 +68,7 @@ export default async function AccountPage({
           where: { subscriberId: subscriber.id },
           orderBy: { createdAt: 'desc' },
           include: {
-            tier:    { select: { name: true, monthlyPrice: true, perks: true, kitAccess: true } },
+            tier: { select: { name: true, monthlyPrice: true, perks: true, kitAccess: true } },
             creator: { select: { handle: true, displayName: true, avatarUrl: true } },
           },
         })
@@ -78,9 +81,16 @@ export default async function AccountPage({
           include: {
             tripKit: {
               select: {
-                id: true, creatorId: true, title: true, slug: true, coverImageUrl: true,
-                primaryCity: true, countries: true, durationDays: true,
-                accessTier: true, estimatedBudgetLow: true,
+                id: true,
+                creatorId: true,
+                title: true,
+                slug: true,
+                coverImageUrl: true,
+                primaryCity: true,
+                countries: true,
+                durationDays: true,
+                accessTier: true,
+                estimatedBudgetLow: true,
                 creator: { select: { handle: true, displayName: true } },
               },
             },
@@ -100,63 +110,60 @@ export default async function AccountPage({
   const displayName = subscriber?.displayName ?? user.email?.split('@')[0] ?? 'Traveler'
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Nav */}
-      <nav className="border-b border-white/10 bg-black/80 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="text-lg font-bold text-white">VlogShopper</Link>
+    <div className="editorial-shell min-h-screen text-[#17332d]">
+      <nav className="sticky top-0 z-50 border-b border-[#17332d]/10 bg-[rgba(255,248,240,0.82)] backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
+          <Link href="/" className="text-lg font-bold text-[#17332d]">VlogShopper</Link>
           <div className="flex items-center gap-4">
-            <Link href="/discover" className="text-sm text-white/50 hover:text-white">Discover</Link>
-            {creator && (
-              <Link href="/dashboard" className="text-sm px-3 py-1.5 rounded-lg border border-white/20 text-white/70 hover:text-white hover:border-white/40 transition-colors">
-                Creator Dashboard ↗
+            <Link href="/discover" className="dashboard-mirror-subtle text-sm hover:text-[#17332d]">Discover</Link>
+            {creator ? (
+              <Link href="/dashboard" className="rounded-full bg-[#17332d]/8 px-3 py-1.5 text-sm text-[#17332d] transition-colors hover:bg-[#17332d]/12">
+                Creator Dashboard {'->'}
               </Link>
-            )}
+            ) : null}
           </div>
         </div>
       </nav>
 
-      <div className="max-w-5xl mx-auto px-6 py-10">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white">{displayName}</h1>
-          <p className="text-sm text-white/40 mt-1">{user.email}</p>
+      <div className="mx-auto max-w-5xl px-6 py-10">
+        <div className="dashboard-mirror-panel mb-8 p-6">
+          <p className="dashboard-mirror-kicker text-xs">Subscriber account</p>
+          <h1 className="mt-3 text-3xl font-bold text-[#17332d]">{displayName}</h1>
+          <p className="dashboard-mirror-subtle mt-2 text-sm">{user.email}</p>
         </div>
 
-        {/* Tab bar */}
-        <div className="flex gap-1 border-b border-white/10 mb-8">
-          {TABS.map(t => {
+        <div className="mb-8 flex gap-2 border-b border-[rgba(214,205,184,0.08)]">
+          {TABS.map((entry) => {
             const count =
-              t.key === 'following'     ? following.length
-              : t.key === 'subscriptions' ? subscriptions.length
-              : savedKits.length
+              entry.key === 'following' ? following.length
+                : entry.key === 'subscriptions' ? subscriptions.length
+                  : savedKits.length
+
             return (
               <Link
-                key={t.key}
-                href={`/account?tab=${t.key}`}
-                className={`px-4 py-2.5 text-sm font-medium transition-colors flex items-center gap-2 ${
-                  tab === t.key
-                    ? 'text-white border-b-2 border-white -mb-px'
-                    : 'text-white/40 hover:text-white'
+                key={entry.key}
+                href={`/account?tab=${entry.key}`}
+                className={`-mb-px flex items-center gap-2 rounded-t-2xl px-4 py-3 text-sm font-medium transition-colors ${
+                  tab === entry.key
+                    ? 'border-b-2 border-[#17332d] text-[#17332d]'
+                    : 'dashboard-mirror-subtle hover:text-[#17332d]'
                 }`}
               >
-                {t.label}
-                {count > 0 && (
-                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-white/10 text-white/50">
+                {entry.label}
+                {count > 0 ? (
+                  <span className="rounded-full bg-[#17332d]/8 px-1.5 py-0.5 text-xs text-[#17332d]/78">
                     {count}
                   </span>
-                )}
+                ) : null}
               </Link>
             )
           })}
         </div>
 
-        {/* ── Following ──────────────────────────────────────────────────────── */}
-        {tab === 'following' && (
+        {tab === 'following' ? (
           <div>
             {following.length === 0 ? (
               <EmptyState
-                icon="👥"
                 title="Not following anyone yet"
                 body="Follow creators to see their latest Trip Kits here."
                 cta="Discover creators"
@@ -164,54 +171,45 @@ export default async function AccountPage({
               />
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {following.map(f => (
-                  <div key={f.id} className="glass-card p-5 flex items-start gap-4">
-                    {f.creator.avatarUrl ? (
+                {following.map((follow) => (
+                  <div key={follow.id} className="dashboard-mirror-card flex items-start gap-4 p-5">
+                    {follow.creator.avatarUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={f.creator.avatarUrl}
-                        alt=""
-                        className="w-12 h-12 rounded-full object-cover shrink-0"
-                      />
+                      <img src={follow.creator.avatarUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
                     ) : (
-                      <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-lg shrink-0">
-                        {f.creator.displayName[0]}
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#17332d]/10 text-lg text-[#17332d]/85">
+                        {follow.creator.displayName[0]}
                       </div>
                     )}
-                    <div className="flex-1 min-w-0">
-                      <Link
-                        href={`/@${f.creator.handle}`}
-                        className="font-semibold text-white hover:text-white/70 transition-colors"
-                      >
-                        {f.creator.displayName}
+                    <div className="min-w-0 flex-1">
+                      <Link href={`/@${follow.creator.handle}`} className="font-semibold text-[#17332d] hover:text-[#17332d]/80">
+                        {follow.creator.displayName}
                       </Link>
-                      <p className="text-xs text-white/40 mt-0.5">@{f.creator.handle}</p>
-                      {f.creator.bio && (
-                        <p className="text-xs text-white/50 mt-1.5 line-clamp-2">{f.creator.bio}</p>
-                      )}
-                      <div className="flex items-center gap-3 mt-2 text-xs text-white/30">
-                        <span>{f.creator._count.tripKits} kits</span>
+                      <p className="dashboard-mirror-muted mt-0.5 text-xs">@{follow.creator.handle}</p>
+                      {follow.creator.bio ? (
+                        <p className="dashboard-mirror-subtle mt-1.5 line-clamp-2 text-xs">{follow.creator.bio}</p>
+                      ) : null}
+                      <div className="dashboard-mirror-muted mt-2 flex items-center gap-3 text-xs">
+                        <span>{follow.creator._count.tripKits} kits</span>
                         <span>·</span>
-                        <span>followed {new Date(f.followedAt).toLocaleDateString()}</span>
+                        <span>followed {new Date(follow.followedAt).toLocaleDateString()}</span>
                       </div>
-                      {viewerAccessByCreatorId[f.creatorId] === 'PREMIUM' && (
+                      {viewerAccessByCreatorId[follow.creatorId] === 'PREMIUM' ? (
                         <AccessBadge label="Premium access active" tone="status" className="mt-2 text-[11px]" />
-                      )}
+                      ) : null}
                     </div>
-                    <UnfollowButton creatorHandle={f.creator.handle} />
+                    <UnfollowButton creatorHandle={follow.creator.handle} />
                   </div>
                 ))}
               </div>
             )}
           </div>
-        )}
+        ) : null}
 
-        {/* ── Subscriptions ──────────────────────────────────────────────────── */}
-        {tab === 'subscriptions' && (
+        {tab === 'subscriptions' ? (
           <div>
             {subscriptions.length === 0 ? (
               <EmptyState
-                icon="⭐"
                 title="No active subscriptions"
                 body="Subscribe to creators to unlock premium Trip Kits and exclusive content."
                 cta="Discover creators"
@@ -219,73 +217,63 @@ export default async function AccountPage({
               />
             ) : (
               <div className="space-y-4">
-                {subscriptions.map(sub => (
-                  <div key={sub.id} className="glass-card p-6">
+                {subscriptions.map((subscription) => (
+                  <div key={subscription.id} className="dashboard-mirror-card p-6">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-center gap-3">
-                        {sub.creator.avatarUrl ? (
+                        {subscription.creator.avatarUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={sub.creator.avatarUrl}
-                            alt=""
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
+                          <img src={subscription.creator.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
                         ) : (
-                          <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-sm">
-                            {sub.creator.displayName[0]}
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#17332d]/10 text-sm text-[#17332d]/85">
+                            {subscription.creator.displayName[0]}
                           </div>
                         )}
                         <div>
-                          <Link
-                            href={`/@${sub.creator.handle}`}
-                            className="font-semibold text-white hover:text-white/70"
-                          >
-                            {sub.creator.displayName}
+                          <Link href={`/@${subscription.creator.handle}`} className="font-semibold text-[#17332d] hover:text-[#17332d]/80">
+                            {subscription.creator.displayName}
                           </Link>
-                          <p className="text-xs text-white/40 mt-0.5">{sub.tier.name}</p>
+                          <p className="dashboard-mirror-muted mt-0.5 text-xs">{subscription.tier.name}</p>
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-sm font-semibold text-white">
-                          ${(sub.tier.monthlyPrice / 100).toFixed(2)}/mo
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-semibold text-[#17332d]">
+                          ${(subscription.tier.monthlyPrice / 100).toFixed(2)}/mo
                         </p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${
-                          sub.status === 'ACTIVE'   ? 'bg-green-500/20 text-green-400'
-                          : sub.status === 'TRIALING' ? 'bg-blue-500/20 text-blue-400'
-                          : sub.status === 'PAST_DUE' ? 'bg-yellow-500/20 text-yellow-400'
-                          : 'bg-white/10 text-white/40'
+                        <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs ${
+                          subscription.status === 'ACTIVE' ? 'bg-green-500/20 text-green-200'
+                            : subscription.status === 'TRIALING' ? 'bg-blue-500/20 text-blue-200'
+                              : subscription.status === 'PAST_DUE' ? 'bg-yellow-500/20 text-yellow-100'
+                                : 'bg-[#17332d]/8 text-[#17332d]/76'
                         }`}>
-                          {sub.status === 'ACTIVE'    ? 'Active'
-                           : sub.status === 'TRIALING'  ? 'Trial'
-                           : sub.status === 'PAST_DUE'  ? 'Past due'
-                           : sub.status === 'CANCELED'  ? 'Canceled'
-                           : sub.status}
+                          {subscription.status === 'ACTIVE' ? 'Active'
+                            : subscription.status === 'TRIALING' ? 'Trial'
+                              : subscription.status === 'PAST_DUE' ? 'Past due'
+                                : subscription.status === 'CANCELED' ? 'Canceled'
+                                  : subscription.status}
                         </span>
                       </div>
                     </div>
 
-                    {sub.tier.perks.length > 0 && (
+                    {subscription.tier.perks.length > 0 ? (
                       <ul className="mt-4 space-y-1">
-                        {sub.tier.perks.slice(0, 3).map((perk, i) => (
-                          <li key={i} className="text-xs text-white/50">✓ {perk}</li>
+                        {subscription.tier.perks.slice(0, 3).map((perk, index) => (
+                          <li key={index} className="dashboard-mirror-subtle text-xs">• {perk}</li>
                         ))}
-                        {sub.tier.perks.length > 3 && (
-                          <li className="text-xs text-white/30">+{sub.tier.perks.length - 3} more</li>
-                        )}
+                        {subscription.tier.perks.length > 3 ? (
+                          <li className="dashboard-mirror-muted text-xs">+{subscription.tier.perks.length - 3} more</li>
+                        ) : null}
                       </ul>
-                    )}
+                    ) : null}
 
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/10">
-                      <p className="text-xs text-white/30">
-                        {sub.cancelAtPeriodEnd
-                          ? `Cancels ${new Date(sub.currentPeriodEnd).toLocaleDateString()}`
-                          : `Renews ${new Date(sub.currentPeriodEnd).toLocaleDateString()}`}
+                    <div className="mt-4 flex items-center justify-between border-t border-[rgba(214,205,184,0.08)] pt-4">
+                      <p className="dashboard-mirror-muted text-xs">
+                        {subscription.cancelAtPeriodEnd
+                          ? `Cancels ${new Date(subscription.currentPeriodEnd).toLocaleDateString()}`
+                          : `Renews ${new Date(subscription.currentPeriodEnd).toLocaleDateString()}`}
                       </p>
-                      <Link
-                        href={`/@${sub.creator.handle}`}
-                        className="text-xs text-white/50 hover:text-white transition-colors"
-                      >
-                        Browse kits →
+                      <Link href={`/@${subscription.creator.handle}`} className="dashboard-mirror-subtle text-xs hover:text-[#17332d]">
+                        Browse kits {'->'}
                       </Link>
                     </div>
                   </div>
@@ -293,14 +281,12 @@ export default async function AccountPage({
               </div>
             )}
           </div>
-        )}
+        ) : null}
 
-        {/* ── Saved Kits ─────────────────────────────────────────────────────── */}
-        {tab === 'saved' && (
+        {tab === 'saved' ? (
           <div>
             {rankedSavedKits.length === 0 ? (
               <EmptyState
-                icon="🗺"
                 title="No saved kits yet"
                 body="Save Trip Kits to build your travel wishlist."
                 cta="Browse kits"
@@ -308,51 +294,54 @@ export default async function AccountPage({
               />
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {rankedSavedKits.map(s => {
-                  const kit = s.tripKit
+                {rankedSavedKits.map((savedKit) => {
+                  const kit = savedKit.tripKit
                   const accessReason = getTripKitAccessReasonLabel(
                     kit.accessTier,
                     viewerAccessByCreatorId[kit.creatorId] ?? 'FREE',
                   )
+
                   return (
-                    <div key={kit.id} className="glass-card overflow-hidden group relative">
-                      <div className="aspect-video bg-white/5 overflow-hidden">
+                    <div key={kit.id} className="dashboard-mirror-card group relative overflow-hidden">
+                      <div className="aspect-video overflow-hidden bg-white/8">
                         {kit.coverImageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={kit.coverImageUrl}
                             alt={kit.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-4xl">🗺</div>
+                          <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-[#17332d]/85">
+                            KIT
+                          </div>
                         )}
-                        {kit.accessTier !== 'FREE' && (
+                        {kit.accessTier !== 'FREE' ? (
                           <AccessBadge
-                            label={kit.accessTier === 'FOLLOWER' ? 'Follow' : '⭐'}
-                            className="absolute top-2 left-2 px-1.5 text-white/60"
+                            label={kit.accessTier === 'FOLLOWER' ? 'Follow' : 'Premium'}
+                            className="absolute left-2 top-2 px-1.5 text-white/80"
                           />
-                        )}
-                        {accessReason && (
+                        ) : null}
+                        {accessReason ? (
                           <AccessBadge
                             label={accessReason}
                             tone="reason"
-                            className="absolute top-2 right-2 text-[11px]"
+                            className="absolute right-2 top-2 text-[11px]"
                           />
-                        )}
+                        ) : null}
                       </div>
                       <div className="p-4">
                         <Link
                           href={`/@${kit.creator.handle}/kits/${kit.slug}`}
-                          className="font-semibold text-sm text-white line-clamp-2 leading-snug hover:text-white/70"
+                          className="line-clamp-2 text-sm font-semibold leading-snug text-[#17332d] hover:text-[#17332d]/80"
                         >
                           {kit.title}
                         </Link>
-                        <p className="text-xs text-white/40 mt-1">{kit.creator.displayName}</p>
-                        <div className="flex items-center justify-between mt-3">
-                          <div className="flex items-center gap-2 text-xs text-white/30">
-                            {kit.primaryCity && <span>{kit.primaryCity}</span>}
-                            {kit.durationDays && <span>· {kit.durationDays}d</span>}
+                        <p className="dashboard-mirror-muted mt-1 text-xs">{kit.creator.displayName}</p>
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="dashboard-mirror-muted flex items-center gap-2 text-xs">
+                            {kit.primaryCity ? <span>{kit.primaryCity}</span> : null}
+                            {kit.durationDays ? <span>· {kit.durationDays}d</span> : null}
                           </div>
                           <UnsaveButton kitId={kit.id} />
                         </div>
@@ -363,22 +352,27 @@ export default async function AccountPage({
               </div>
             )}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   )
 }
 
 function EmptyState({
-  icon, title, body, cta, href,
+  title,
+  body,
+  cta,
+  href,
 }: {
-  icon: string; title: string; body: string; cta: string; href: string
+  title: string
+  body: string
+  cta: string
+  href: string
 }) {
   return (
-    <div className="text-center py-20">
-      <p className="text-5xl mb-4">{icon}</p>
-      <h2 className="text-lg font-semibold text-white mb-2">{title}</h2>
-      <p className="text-sm text-white/40 mb-6 max-w-sm mx-auto">{body}</p>
+    <div className="dashboard-mirror-card py-20 text-center">
+      <h2 className="mb-2 text-lg font-semibold text-[#17332d]">{title}</h2>
+      <p className="dashboard-mirror-subtle mx-auto mb-6 max-w-sm text-sm">{body}</p>
       <Link href={href} className="btn-primary text-sm">{cta}</Link>
     </div>
   )

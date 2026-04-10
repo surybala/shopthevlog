@@ -44,6 +44,12 @@ describe('StorefrontHomePage', () => {
       displayName: 'Alex Wanders',
       bio: 'Travel creator',
       avatarUrl: null,
+      coverImageUrl: 'https://images.example.com/cover.jpg',
+      storefrontTheme: 'BEACH_RETREAT',
+      storefrontTagline: 'Sunset itineraries and sea air',
+      storefrontIntro: 'A storefront shaped by swims, ferries, and long beach dinners.',
+      storefrontMoodImageUrl: 'https://images.example.com/mood.jpg',
+      storefrontGalleryImages: ['https://images.example.com/gallery-1.jpg'],
       isPublished: true,
       location: 'Los Angeles',
       youtubeHandle: 'alexwanders',
@@ -80,5 +86,10 @@ describe('StorefrontHomePage', () => {
     expect(html).toContain('Alex Wanders');
     expect(html).toContain('10 Days in Japan');
     expect(html).toContain('Featured Trip Kits');
+    expect(html).toContain('Sunset itineraries and sea air');
+    expect(html).not.toContain('What subscribers get');
+    expect(html).not.toContain('Moodboard');
+    expect(html).toContain('background-image:linear-gradient');
+    expect(html).toContain('data:image/svg+xml');
   });
 });

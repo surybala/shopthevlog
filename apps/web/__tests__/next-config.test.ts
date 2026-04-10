@@ -17,4 +17,8 @@ describe('next config', async () => {
   it('does not use the unsupported top-level external packages key', () => {
     expect(nextConfig).not.toHaveProperty('serverExternalPackages');
   });
+
+  it('builds as a standalone server bundle for container deployment', () => {
+    expect(nextConfig.output).toBe('standalone');
+  });
 });

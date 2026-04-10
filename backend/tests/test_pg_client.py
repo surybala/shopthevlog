@@ -116,7 +116,8 @@ class TestPgClientContextManager:
         call_kwargs = mock_connect.call_args.kwargs
         # cursor_factory should be RealDictCursor
         assert "cursor_factory" in call_kwargs
-        assert call_kwargs["cursor_factory"] is psycopg2.extras.RealDictCursor
+        from app.db.pg_client import RealDictCursor
+        assert call_kwargs["cursor_factory"] is RealDictCursor
 
     def test_rollback_still_closes_connection(self):
         """Even on exception, connection and cursor are closed."""
@@ -147,7 +148,8 @@ class TestGetPgConn:
             mock_settings.DATABASE_URL = "postgresql://test:pass@localhost/mydb"
             from app.db.pg_client import get_pg_conn
             get_pg_conn()
+        from app.db.pg_client import RealDictCursor
         mock_connect.assert_called_once_with(
             "postgresql://test:pass@localhost/mydb",
-            cursor_factory=psycopg2.extras.RealDictCursor,
+            cursor_factory=RealDictCursor,
         )

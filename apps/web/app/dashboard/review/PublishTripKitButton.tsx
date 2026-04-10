@@ -43,7 +43,7 @@ export default function PublishTripKitButton({
         type="button"
         onClick={publish}
         disabled={disabled || isPending}
-        className="rounded-lg border border-sky-500/30 px-3 py-2 text-sm text-sky-200 transition-colors hover:border-sky-400/60 hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+        className="dashboard-pill-button bg-[linear-gradient(135deg,rgba(90,146,255,0.18),rgba(66,116,212,0.08))] text-sky-100 ring-sky-400/20 hover:bg-[linear-gradient(135deg,rgba(90,146,255,0.28),rgba(66,116,212,0.14))] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isPending ? `${actionLabel}...` : actionLabel}
       </button>

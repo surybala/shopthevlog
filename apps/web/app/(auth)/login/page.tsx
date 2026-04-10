@@ -37,17 +37,17 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-4">
+    <div className="editorial-shell min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <Link href="/" className="text-2xl font-bold text-white">VlogShopper</Link>
-          <p className="text-white/40 mt-2 text-sm">Sign in to your account</p>
+          <Link href="/" className="text-2xl font-bold text-[#17332d]">VlogShopper</Link>
+          <p className="editorial-subtle mt-2 text-sm">Sign in to your account</p>
         </div>
 
-        <div className="glass-card p-8 space-y-4">
+        <div className="editorial-card p-8 space-y-4">
           <button
             onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center gap-3 border border-white/20 rounded-xl py-3 text-sm text-white/80 hover:border-white/40 hover:text-white transition-all"
+            className="w-full flex items-center justify-center gap-3 rounded-xl border border-[#17332d]/12 py-3 text-sm text-[#17332d]/78 transition-all hover:border-[#17332d]/24 hover:text-[#17332d]"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -63,7 +63,7 @@ function LoginForm() {
               <div className="w-full border-t border-white/10" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="bg-black px-3 text-white/30">or</span>
+              <span className="bg-[#f7efe3] px-3 text-[#17332d]/35">or</span>
             </div>
           </div>
 
@@ -74,7 +74,7 @@ function LoginForm() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/30"
+              className="editorial-input"
             />
             <input
               type="password"
@@ -82,7 +82,7 @@ function LoginForm() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/30"
+              className="editorial-input"
             />
             {error && <p className="text-red-400 text-xs">{error}</p>}
             <button
@@ -94,9 +94,9 @@ function LoginForm() {
             </button>
           </form>
 
-          <p className="text-center text-white/40 text-xs">
+          <p className="editorial-muted text-center text-xs">
             No account?{' '}
-            <Link href="/signup" className="text-white hover:underline">
+            <Link href="/signup" className="text-[#17332d] hover:underline">
               Create one free
             </Link>
           </p>
@@ -109,9 +109,9 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-full max-w-sm glass-card p-8 animate-pulse space-y-4">
-          {[1,2,3].map(i => <div key={i} className="h-11 bg-white/5 rounded-xl" />)}
+      <div className="editorial-shell min-h-screen flex items-center justify-center">
+        <div className="editorial-card w-full max-w-sm animate-pulse space-y-4 p-8">
+          {[1,2,3].map(i => <div key={i} className="h-11 rounded-xl bg-[#17332d]/8" />)}
         </div>
       </div>
     }>

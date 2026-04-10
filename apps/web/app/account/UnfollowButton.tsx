@@ -23,9 +23,9 @@ export default function UnfollowButton({ creatorHandle }: { creatorHandle: strin
     <button
       onClick={handleUnfollow}
       disabled={loading}
-      className="shrink-0 text-xs px-3 py-1.5 rounded-lg border border-white/10 text-white/40 hover:border-red-500/40 hover:text-red-400 transition-colors disabled:opacity-50"
+      className="dashboard-pill-button shrink-0 text-xs text-[#d2d9c7]/72 hover:border-red-400/35 hover:bg-red-400/10 hover:text-[#ffb5a8] disabled:opacity-50"
     >
-      {loading ? '…' : 'Unfollow'}
+      {loading ? 'Removing...' : 'Unfollow'}
     </button>
   )
 }

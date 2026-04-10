@@ -1,0 +1,21 @@
+CREATE TYPE "StorefrontTheme" AS ENUM (
+  'BEACH_RETREAT',
+  'ADVENTURE_TRAIL',
+  'BACKPACKER_NOTEBOOK',
+  'MOUNTAIN_ESCAPE',
+  'CITY_EDITORIAL',
+  'FOREST_CAMP',
+  'DESERT_SUNSET',
+  'ISLAND_HOPPING',
+  'ROAD_TRIP',
+  'WELLNESS_HIDEAWAY',
+  'FOOD_TRAIL',
+  'LUXURY_ATLAS'
+);
+
+ALTER TABLE "Creator"
+ADD COLUMN "storefrontTheme" "StorefrontTheme" NOT NULL DEFAULT 'CITY_EDITORIAL',
+ADD COLUMN "storefrontTagline" TEXT,
+ADD COLUMN "storefrontIntro" TEXT,
+ADD COLUMN "storefrontMoodImageUrl" TEXT,
+ADD COLUMN "storefrontGalleryImages" TEXT[] DEFAULT ARRAY[]::TEXT[];

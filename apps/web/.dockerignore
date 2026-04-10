@@ -1,0 +1,10 @@
+.git
+.next
+coverage
+node_modules
+playwright-report
+test-results
+vitest.config.*
+*.log
+.env*
+!.env.example

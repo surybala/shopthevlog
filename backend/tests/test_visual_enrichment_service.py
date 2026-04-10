@@ -79,6 +79,11 @@ def test_enrich_visual_graph_persists_visual_evidence_candidates_and_opportuniti
     assert any('INSERT INTO "Opportunity"' in sql for sql in sql_statements)
     assert any('INSERT INTO "OpportunityEvidence"' in sql for sql in sql_statements)
 
+    candidate_insert_params = next(
+        params for sql, params in fake_pg.cursor.queries if 'INSERT INTO "CandidateEntity"' in sql
+    )
+    assert '"sourceTypes": ["OCR"]' in candidate_insert_params[10]
+
 
 def test_enrich_visual_graph_handles_empty_frame_set():
     fake_pg = FakePgClient(rows=[])

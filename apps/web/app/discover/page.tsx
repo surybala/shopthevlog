@@ -22,7 +22,6 @@ export default async function DiscoverPage({
 }) {
   const { q, country, style } = searchParams
 
-  // Auth — determine what to show in the nav
   const supabase = createSupabaseServer()
   const { data: { user } } = await supabase.auth.getUser()
   const isCreator = user
@@ -48,9 +47,21 @@ export default async function DiscoverPage({
     orderBy: tripKitRankingOrder,
     take: 96,
     select: {
-      id: true, title: true, slug: true, coverImageUrl: true, primaryCity: true, countries: true,
-      creatorId: true, durationDays: true, accessTier: true, viewCount: true, saveCount: true,
-      estimatedBudgetLow: true, estimatedBudgetHigh: true, travelStyle: true, description: true,
+      id: true,
+      title: true,
+      slug: true,
+      coverImageUrl: true,
+      primaryCity: true,
+      countries: true,
+      creatorId: true,
+      durationDays: true,
+      accessTier: true,
+      viewCount: true,
+      saveCount: true,
+      estimatedBudgetLow: true,
+      estimatedBudgetHigh: true,
+      travelStyle: true,
+      description: true,
       creator: { select: { handle: true, displayName: true, avatarUrl: true } },
     },
   }), viewerAccessByCreatorId)
@@ -61,8 +72,16 @@ export default async function DiscoverPage({
     orderBy: tripKitRankingOrder,
     take: 24,
     select: {
-      id: true, title: true, slug: true, coverImageUrl: true, primaryCity: true, countries: true,
-      creatorId: true, durationDays: true, accessTier: true, viewCount: true,
+      id: true,
+      title: true,
+      slug: true,
+      coverImageUrl: true,
+      primaryCity: true,
+      countries: true,
+      creatorId: true,
+      durationDays: true,
+      accessTier: true,
+      viewCount: true,
       creator: { select: { handle: true, displayName: true } },
     },
   }), viewerAccessByCreatorId).slice(0, 6)
@@ -71,9 +90,11 @@ export default async function DiscoverPage({
     where: { isPublished: true, creator: { isPublished: true } },
     select: { countries: true },
     take: 200,
-  }).then(kits => {
+  }).then((allKits) => {
     const counts: Record<string, number> = {}
-    kits.forEach(k => k.countries.forEach(c => { counts[c] = (counts[c] ?? 0) + 1 }))
+    allKits.forEach((kit) => kit.countries.forEach((c) => {
+      counts[c] = (counts[c] ?? 0) + 1
+    }))
     return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([c]) => c)
   })
 
@@ -81,43 +102,43 @@ export default async function DiscoverPage({
     getTripKitAccessReasonLabel(accessTier, viewerAccessByCreatorId[creatorId] ?? 'FREE')
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-transparent text-[#17332d]">
       <PublicNav user={user} isCreator={isCreator} />
 
-      <div className="max-w-7xl mx-auto px-6 py-12">
-        {/* Header + search */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-white mb-3">Discover Trip Kits</h1>
-          <p className="text-white/50 max-w-lg mx-auto mb-8">Shoppable travel itineraries from your favorite creators</p>
+      <div className="mx-auto max-w-7xl px-6 py-12">
+        <div className="mb-12 text-center">
+          <h1 className="mb-3 text-4xl font-bold text-[#17332d]">Discover Trip Kits</h1>
+          <p className="mx-auto mb-8 max-w-lg text-[#17332d]/58">
+            Shoppable travel itineraries from your favorite creators
+          </p>
 
-          <form className="max-w-lg mx-auto flex gap-2" method="GET">
+          <form className="mx-auto flex max-w-lg gap-2" method="GET">
             <input
               name="q"
               defaultValue={q}
               placeholder="Search destinations, kits, creators…"
-              className="flex-1 bg-white/5 border border-white/10 rounded-full px-5 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/30"
+              className="flex-1 rounded-full border border-[#17332d]/12 bg-white/70 px-5 py-2.5 text-sm text-[#17332d] placeholder-[#17332d]/32 focus:outline-none focus:border-[#17332d]/30"
             />
             <button type="submit" className="btn-primary text-sm">Search</button>
           </form>
         </div>
 
-        {/* Country filters */}
         {popularCountries.length > 0 && !q && (
-          <div className="flex flex-wrap gap-2 mb-10 justify-center">
+          <div className="mb-10 flex flex-wrap justify-center gap-2">
             <Link
               href="/discover"
-              className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                !country ? 'bg-white text-black border-white' : 'border-white/10 text-white/50 hover:border-white/30 hover:text-white'
+              className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                !country ? 'border-[#17332d] bg-[#17332d] text-[#fff7ef]' : 'border-[#17332d]/10 text-[#17332d]/58 hover:border-[#17332d]/30 hover:text-[#17332d]'
               }`}
             >
               All
             </Link>
-            {popularCountries.map(c => (
+            {popularCountries.map((c) => (
               <Link
                 key={c}
                 href={`/discover?country=${encodeURIComponent(c)}`}
-                className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                  country === c ? 'bg-white text-black border-white' : 'border-white/10 text-white/50 hover:border-white/30 hover:text-white'
+                className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                  country === c ? 'border-[#17332d] bg-[#17332d] text-[#fff7ef]' : 'border-[#17332d]/10 text-[#17332d]/58 hover:border-[#17332d]/30 hover:text-[#17332d]'
                 }`}
               >
                 {c}
@@ -126,25 +147,24 @@ export default async function DiscoverPage({
           </div>
         )}
 
-        {/* Trending (shown when no search) */}
         {!q && !country && trending.length > 0 && (
           <section className="mb-14">
-            <h2 className="text-xl font-bold text-white mb-5">🔥 Trending This Week</h2>
+            <h2 className="mb-5 text-xl font-bold text-[#17332d]">Trending This Week</h2>
             <div className="grid grid-cols-3 gap-4">
-              {trending.map(kit => (
-                <Link key={kit.id} href={`/@${kit.creator.handle}/kits/${kit.slug}`} className="glass-card overflow-hidden group flex gap-4 p-4">
-                  <div className="w-16 h-16 rounded-xl bg-white/5 shrink-0 overflow-hidden">
+              {trending.map((kit) => (
+                <Link key={kit.id} href={`/@${kit.creator.handle}/kits/${kit.slug}`} className="glass-card group flex gap-4 overflow-hidden p-4">
+                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-white/30">
                     {kit.coverImageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={kit.coverImageUrl} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                      <img src={kit.coverImageUrl} alt="" className="h-full w-full object-cover transition-transform group-hover:scale-110" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-2xl">🗺</div>
+                      <div className="flex h-full w-full items-center justify-center text-2xl">🗺</div>
                     )}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{kit.title}</p>
-                    <p className="text-xs text-white/40 mt-0.5">{kit.primaryCity ?? kit.countries[0]}</p>
-                    <p className="text-xs text-white/30 mt-1">by {kit.creator.displayName}</p>
+                    <p className="truncate text-sm font-medium text-[#17332d]">{kit.title}</p>
+                    <p className="mt-0.5 text-xs text-[#17332d]/48">{kit.primaryCity ?? kit.countries[0]}</p>
+                    <p className="mt-1 text-xs text-[#17332d]/34">by {kit.creator.displayName}</p>
                     {getAccessReason(kit.creatorId, kit.accessTier) && (
                       <AccessBadge
                         label={getAccessReason(kit.creatorId, kit.accessTier)!}
@@ -159,33 +179,36 @@ export default async function DiscoverPage({
           </section>
         )}
 
-        {/* Search results / all kits */}
         <section>
-          <h2 className="text-xl font-bold text-white mb-5">
+          <h2 className="mb-5 text-xl font-bold text-[#17332d]">
             {q ? `Results for "${q}"` : country ? country : 'All Trip Kits'}
-            <span className="text-sm font-normal text-white/30 ml-3">{kits.length} kits</span>
+            <span className="ml-3 text-sm font-normal text-[#17332d]/35">{kits.length} kits</span>
           </h2>
 
           {kits.length === 0 ? (
-            <div className="text-center py-16">
-              <p className="text-white/40">No kits found{q ? ` for "${q}"` : ''}.</p>
-              {q && <Link href="/discover" className="text-sm text-white/60 hover:text-white mt-2 inline-block">Clear search</Link>}
+            <div className="py-16 text-center">
+              <p className="text-[#17332d]/45">No kits found{q ? ` for "${q}"` : ''}.</p>
+              {q && (
+                <Link href="/discover" className="mt-2 inline-block text-sm text-[#17332d]/62 hover:text-[#17332d]">
+                  Clear search
+                </Link>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-4 gap-4">
-              {kits.map(kit => (
-                <Link key={kit.id} href={`/@${kit.creator.handle}/kits/${kit.slug}`} className="glass-card overflow-hidden group">
-                  <div className="aspect-video bg-white/5 relative overflow-hidden">
+              {kits.map((kit) => (
+                <Link key={kit.id} href={`/@${kit.creator.handle}/kits/${kit.slug}`} className="glass-card group overflow-hidden">
+                  <div className="relative aspect-video overflow-hidden bg-white/30">
                     {kit.coverImageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={kit.coverImageUrl} alt={kit.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      <img src={kit.coverImageUrl} alt={kit.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-4xl">🗺</div>
+                      <div className="flex h-full w-full items-center justify-center text-4xl">🗺</div>
                     )}
                     {kit.accessTier !== 'FREE' && (
                       <AccessBadge
                         label={kit.accessTier === 'FOLLOWER' ? 'Follow' : '⭐'}
-                        className="absolute top-2 right-2 px-1.5 text-white/60"
+                        className="absolute top-2 right-2 px-1.5 text-white/70"
                       />
                     )}
                     {getAccessReason(kit.creatorId, kit.accessTier) && (
@@ -197,15 +220,15 @@ export default async function DiscoverPage({
                     )}
                   </div>
                   <div className="p-4">
-                    <p className="text-sm font-semibold text-white line-clamp-2 leading-snug">{kit.title}</p>
-                    <div className="flex items-center gap-2 mt-1.5">
+                    <p className="line-clamp-2 text-sm font-semibold leading-snug text-[#17332d]">{kit.title}</p>
+                    <div className="mt-1.5 flex items-center gap-2">
                       {kit.creator.avatarUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={kit.creator.avatarUrl} alt="" className="w-4 h-4 rounded-full" />
+                        <img src={kit.creator.avatarUrl} alt="" className="h-4 w-4 rounded-full" />
                       ) : null}
-                      <p className="text-xs text-white/40 truncate">{kit.creator.displayName}</p>
+                      <p className="truncate text-xs text-[#17332d]/48">{kit.creator.displayName}</p>
                     </div>
-                    <div className="flex items-center gap-2 mt-2 text-xs text-white/30">
+                    <div className="mt-2 flex items-center gap-2 text-xs text-[#17332d]/35">
                       {kit.primaryCity && <span>{kit.primaryCity}</span>}
                       {kit.durationDays && <span>{kit.durationDays}d</span>}
                     </div>

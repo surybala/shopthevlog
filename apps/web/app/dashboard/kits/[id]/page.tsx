@@ -32,9 +32,10 @@ export default async function EditKitPage({ params }: { params: { id: string } }
 
   return (
     <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Edit Trip Kit</h1>
-        <p className="text-white/40 mt-1 text-sm">{kit.title}</p>
+      <div className="dashboard-mirror-panel mb-8 max-w-5xl p-6">
+        <p className="dashboard-mirror-kicker text-xs">Trip Kit Studio</p>
+        <h1 className="mt-3 text-3xl font-bold text-white">Refine this guide before it goes live.</h1>
+        <p className="dashboard-mirror-subtle mt-2 text-sm">{kit.title}</p>
       </div>
       <KitEditor
         creatorId={creator.id}

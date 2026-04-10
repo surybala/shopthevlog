@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
 
 function NavIcon({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex h-4 w-4 items-center justify-center text-white/70" aria-hidden="true">
+    <span className="inline-flex h-4 w-4 items-center justify-center text-[#17332d]/76" aria-hidden="true">
       <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4 stroke-current" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
         {children}
       </svg>
@@ -85,8 +85,8 @@ export default function DashboardNav({ handle, isAdmin = false }: { handle: stri
             href={item.href}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
               active
-                ? 'bg-white/10 text-white font-medium'
-                : 'text-white/50 hover:text-white hover:bg-white/5'
+                ? 'bg-[#17332d]/10 text-[#17332d] font-semibold shadow-[inset_0_0_0_1px_rgba(23,51,45,0.08)]'
+                : 'text-[#17332d]/76 hover:text-[#17332d] hover:bg-[#17332d]/6'
             }`}
           >
             {item.icon}
@@ -95,10 +95,10 @@ export default function DashboardNav({ handle, isAdmin = false }: { handle: stri
         )
       })}
 
-      <div className="pt-3 mt-3 border-t border-white/10 space-y-0.5">
+      <div className="mt-3 space-y-0.5 border-t border-[#17332d]/10 pt-3">
         <Link
           href="/account"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/50 hover:text-white hover:bg-white/5 transition-colors"
+          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[#17332d]/76 transition-colors hover:bg-[#17332d]/6 hover:text-[#17332d]"
         >
           <NavIcon><path d="M10 10.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" /><path d="M5.5 15.5a4.5 4.5 0 0 1 9 0" /></NavIcon>
           My Account
@@ -106,7 +106,7 @@ export default function DashboardNav({ handle, isAdmin = false }: { handle: stri
         {handle && (
           <Link
             href={`/@${handle}`}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/50 hover:text-white hover:bg-white/5 transition-colors"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[#17332d]/76 transition-colors hover:bg-[#17332d]/6 hover:text-[#17332d]"
           >
             <NavIcon><path d="M4.5 10h9" /><path d="m10.5 6 4 4-4 4" /></NavIcon>
             View Storefront
@@ -115,7 +115,7 @@ export default function DashboardNav({ handle, isAdmin = false }: { handle: stri
         <form action="/auth/signout" method="POST">
           <button
             type="submit"
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/50 hover:text-white hover:bg-white/5 transition-colors text-left"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-[#17332d]/76 transition-colors hover:bg-[#17332d]/6 hover:text-[#17332d]"
           >
             <NavIcon><path d="M7 6.5 13.5 13" /><path d="M13.5 6.5 7 13" /><path d="M4.5 4.5h11v11h-11z" /></NavIcon>
             Sign out

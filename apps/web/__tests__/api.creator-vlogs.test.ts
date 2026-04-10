@@ -40,7 +40,7 @@ describe('creator vlog routes', () => {
     mockGetSession.mockResolvedValue({ data: { session: { access_token: 'session-token' } } });
     mockRateLimit.mockReturnValue(false);
     mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1', plan: 'PRO', catalogScanStatus: 'COMPLETE', lastCatalogScan: '2025-01-01', _count: { vlogs: 2 } });
-    mockVlogFindMany.mockResolvedValue([{ id: 'vlog-1' }]);
+    mockVlogFindMany.mockResolvedValue([{ id: 'vlog-1', pipelineError: null }]);
     mockVlogFindFirst.mockResolvedValue({ id: 'vlog-1', creatorId: 'creator-1', processingStatus: 'PENDING' });
     process.env.AI_PIPELINE_URL = 'http://ai.example.com';
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 })));
@@ -85,11 +85,19 @@ describe('creator vlog routes', () => {
 
   it('vlogs list returns the creator vlogs ordered by publish date', async () => {
     const res = await getVlogs();
-    await expect(res.json()).resolves.toEqual({ vlogs: [{ id: 'vlog-1' }] });
+    await expect(res.json()).resolves.toEqual({ vlogs: [{ id: 'vlog-1', pipelineError: null }] });
     expect(mockVlogFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { creatorId: 'creator-1' },
       orderBy: { publishedAt: 'desc' },
     }));
+  });
+
+  it('vlogs list includes pipeline errors for failed rows', async () => {
+    mockVlogFindMany.mockResolvedValue([{ id: 'vlog-1', processingStatus: 'FAILED', pipelineError: 'no_opportunities_extracted' }]);
+    const res = await getVlogs();
+    await expect(res.json()).resolves.toEqual({
+      vlogs: [{ id: 'vlog-1', processingStatus: 'FAILED', pipelineError: 'no_opportunities_extracted' }],
+    });
   });
 
   it('process route returns 429 when rate limited', async () => {
@@ -120,6 +128,22 @@ describe('creator vlog routes', () => {
     delete process.env.AI_PIPELINE_URL;
     const res = await processVlog(new NextRequest('http://localhost/api/vlogs/vlog-1/process', { method: 'POST' }), { params: { id: 'vlog-1' } });
     expect(res.status).toBe(503);
+  });
+
+  it('process route sanitizes backend error details', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: 'visual_evidence_failed: Invalid API key' }), { status: 500 }),
+      ),
+    );
+
+    const res = await processVlog(new NextRequest('http://localhost/api/vlogs/vlog-1/process', { method: 'POST' }), { params: { id: 'vlog-1' } });
+
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toEqual({
+      error: 'Video processing is temporarily unavailable. Please try again shortly.',
+    });
   });
 
   it('process route forwards the request to the AI pipeline with the session token', async () => {

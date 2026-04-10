@@ -128,41 +128,41 @@ export default async function DashboardReviewPage() {
 
   return (
     <div className="p-8">
-      <div className="mb-8 flex items-start justify-between gap-6">
+      <div className="dashboard-mirror-panel mb-8 flex items-start justify-between gap-6 p-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Review Queue</h1>
-          <p className="mt-1 text-sm text-white/40">
+          <p className="dashboard-mirror-subtle mt-1 text-sm">
             Review extracted opportunities before they shape the storefront.
           </p>
         </div>
         <div className="grid grid-cols-4 gap-3">
-          <div className="glass-card flex min-h-28 min-w-28 flex-col justify-between p-4">
-            <p className="min-h-[2.5rem] text-xs uppercase tracking-wider text-white/40">Total</p>
-            <p className="text-xl font-semibold text-white">{summary.total}</p>
+          <div className="dashboard-mirror-card flex min-h-28 min-w-28 flex-col justify-between p-4">
+            <p className="dashboard-mirror-kicker min-h-[2.5rem] text-xs">Total</p>
+            <p className="text-3xl font-semibold tracking-tight text-[#f7f1e4]">{summary.total}</p>
           </div>
-          <div className="glass-card flex min-h-28 min-w-28 flex-col justify-between p-4">
-            <p className="min-h-[2.5rem] text-xs uppercase tracking-wider text-white/40">Needs Review</p>
-            <p className="text-xl font-semibold text-amber-300">{summary.pending}</p>
+          <div className="dashboard-mirror-card flex min-h-28 min-w-28 flex-col justify-between p-4">
+            <p className="dashboard-mirror-kicker min-h-[2.5rem] text-xs">Needs Review</p>
+            <p className="text-3xl font-semibold tracking-tight text-amber-200">{summary.pending}</p>
           </div>
-          <div className="glass-card flex min-h-28 min-w-28 flex-col justify-between p-4">
-            <p className="min-h-[2.5rem] text-xs uppercase tracking-wider text-white/40">Auto Approved</p>
-            <p className="text-xl font-semibold text-blue-300">{summary.autoApproved}</p>
+          <div className="dashboard-mirror-card flex min-h-28 min-w-28 flex-col justify-between p-4">
+            <p className="dashboard-mirror-kicker min-h-[2.5rem] text-xs">Auto Approved</p>
+            <p className="text-3xl font-semibold tracking-tight text-sky-200">{summary.autoApproved}</p>
           </div>
-          <div className="glass-card flex min-h-28 min-w-28 flex-col justify-between p-4">
-            <p className="min-h-[2.5rem] text-xs uppercase tracking-wider text-white/40">Approved</p>
-            <p className="text-xl font-semibold text-emerald-300">{summary.approved}</p>
+          <div className="dashboard-mirror-card flex min-h-28 min-w-28 flex-col justify-between p-4">
+            <p className="dashboard-mirror-kicker min-h-[2.5rem] text-xs">Approved</p>
+            <p className="text-3xl font-semibold tracking-tight text-emerald-200">{summary.approved}</p>
           </div>
         </div>
       </div>
 
       {queue.length === 0 ? (
-        <div className="glass-card p-10 text-center">
-          <p className="text-sm text-white/40">No opportunities are waiting for review yet.</p>
+        <div className="dashboard-mirror-card p-10 text-center">
+          <p className="dashboard-mirror-subtle text-sm">No opportunities are waiting for review yet.</p>
         </div>
       ) : (
         <div className="space-y-4">
           {queue.map((opportunity) => (
-            <div key={opportunity.id} className="glass-card p-5">
+            <div key={opportunity.id} className="dashboard-mirror-card p-5">
               {(() => {
                 const memoryKey = normalizeCreatorMemoryKey(
                   opportunity.candidateEntity?.canonicalLabel
@@ -182,29 +182,29 @@ export default async function DashboardReviewPage() {
                     <span className={`rounded-full px-2 py-1 text-xs font-medium ${reviewTone(opportunity.reviewState)}`}>
                       {opportunity.reviewState}
                     </span>
-                    <span className="rounded-full bg-white/5 px-2 py-1 text-xs text-white/60">
+                    <span className="rounded-full bg-white/8 px-2 py-1 text-xs text-white/78">
                       {formatOpportunityTypeLabel(opportunity.opportunityType)}
                     </span>
-                    <span className="rounded-full bg-white/5 px-2 py-1 text-xs text-white/60">
+                    <span className="rounded-full bg-white/8 px-2 py-1 text-xs text-white/78">
                       Confidence {formatPercent(opportunity.confidence)}
                     </span>
-                    <span className="rounded-full bg-white/5 px-2 py-1 text-xs text-white/60">
+                    <span className="rounded-full bg-white/8 px-2 py-1 text-xs text-white/78">
                       Rank {(opportunity.rankScore ?? 0).toFixed(2)}
                     </span>
                   </div>
 
                   <h2 className="text-lg font-semibold text-white">{opportunity.title}</h2>
                   {opportunity.description ? (
-                    <p className="mt-2 max-w-3xl text-sm text-white/60">{opportunity.description}</p>
+                    <p className="dashboard-mirror-subtle mt-2 max-w-3xl text-sm">{opportunity.description}</p>
                   ) : null}
 
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
                     <div>
-                      <p className="text-xs uppercase tracking-wider text-white/30">Source Vlog</p>
+                      <p className="dashboard-mirror-kicker text-xs">Source Vlog</p>
                       <p className="mt-1 text-sm text-white">{opportunity.vlog.title}</p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-wider text-white/30">Entity</p>
+                      <p className="dashboard-mirror-kicker text-xs">Entity</p>
                       <p className="mt-1 text-sm text-white">
                         {opportunity.candidateEntity?.canonicalLabel
                           ?? opportunity.candidateEntity?.rawLabel
@@ -212,7 +212,7 @@ export default async function DashboardReviewPage() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-wider text-white/30">Evidence</p>
+                      <p className="dashboard-mirror-kicker text-xs">Evidence</p>
                       <p className="mt-1 text-sm text-white">{summarizeEvidenceSources(opportunity)}</p>
                     </div>
                   </div>
@@ -233,12 +233,12 @@ export default async function DashboardReviewPage() {
                         {reviewRecommendationLabel}
                       </span>
                       {reviewRecommendationReason ? (
-                        <p className="mt-2 max-w-3xl text-xs text-white/40">{reviewRecommendationReason}</p>
+                        <p className="dashboard-mirror-subtle mt-2 max-w-3xl text-xs">{reviewRecommendationReason}</p>
                       ) : null}
                     </div>
                   ) : null}
 
-                  <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-white/35">
+                  <div className="dashboard-mirror-muted mt-4 flex flex-wrap items-center gap-4 text-xs">
                     <span>{opportunity.evidences.length} linked evidence item{opportunity.evidences.length !== 1 ? 's' : ''}</span>
                     {opportunity.candidateEntity ? (
                       <span>

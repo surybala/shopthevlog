@@ -53,6 +53,26 @@ export function optionalUrl(value: unknown, field: string): string | null {
   }
 }
 
+export function optionalUrlArray(
+  value: unknown,
+  field: string,
+  { maxItems = 12 }: { maxItems?: number } = {}
+): string[] {
+  if (value === undefined || value === null) return []
+  if (!Array.isArray(value)) throw new ValidationError(field, `${field} must be an array`)
+  if (value.length > maxItems) throw new ValidationError(field, `${field} must have at most ${maxItems} items`)
+  return value.map((entry, index) => {
+    try {
+      const url = optionalUrl(entry, `${field}[${index}]`)
+      if (!url) throw new ValidationError(field, `${field}[${index}] is required`)
+      return url
+    } catch (error) {
+      if (error instanceof ValidationError) throw error
+      throw new ValidationError(field, `${field}[${index}] must be a valid URL`)
+    }
+  })
+}
+
 export function requireUrl(value: unknown, field: string): string {
   const s = requireString(value, field, { max: 2048 })
   try {

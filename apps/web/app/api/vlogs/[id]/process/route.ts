@@ -3,6 +3,7 @@ import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 import { rateLimit } from '@/lib/rateLimit'
 import { recordApiObservation } from '@/lib/observability'
+import { formatVlogPipelineErrorMessage } from '@/lib/vlogProcessing'
 
 export async function POST(
   _req: NextRequest,
@@ -74,7 +75,7 @@ export async function POST(
     const body = await res.json().catch(() => ({}))
     record(res.status, 'trigger_failed')
     return NextResponse.json(
-      { error: body.detail ?? 'Processing trigger failed' },
+      { error: formatVlogPipelineErrorMessage(body.detail) ?? 'Could not start processing right now.' },
       { status: res.status }
     )
   }

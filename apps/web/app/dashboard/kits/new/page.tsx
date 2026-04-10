@@ -13,9 +13,12 @@ export default async function NewKitPage() {
 
   return (
     <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">New Trip Kit</h1>
-        <p className="text-white/40 mt-1 text-sm">Build a shoppable travel itinerary for your audience</p>
+      <div className="dashboard-mirror-panel mb-8 max-w-5xl p-6">
+        <p className="dashboard-mirror-kicker text-xs">Trip Kit Studio</p>
+        <h1 className="mt-3 text-3xl font-bold text-white">Create a new Trip Kit.</h1>
+        <p className="dashboard-mirror-subtle mt-2 text-sm">
+          Turn a route, a vibe, and a few memorable stops into a polished guide your audience will want to save.
+        </p>
       </div>
       <KitEditor creatorId={creator.id} creatorHandle={creator.handle} kit={null} />
     </div>

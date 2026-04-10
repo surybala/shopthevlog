@@ -179,6 +179,7 @@ def _multimodal_bonus(row: dict) -> float:
 def _weak_signal_penalty(row: dict) -> float:
     confidence = _clamp(float(row.get("confidence") or 0.0))
     resolution_match_type = row.get("resolutionMatchType")
+    entity_type = row.get("candidateEntityType")
     _is_multimodal, source_types = _multimodal_signal_metadata(row)
     if not source_types:
         return 0.0
@@ -192,7 +193,8 @@ def _weak_signal_penalty(row: dict) -> float:
         "VISUAL",
     }
     is_visual_only = set(source_types).issubset(visual_only_source_types)
-    if not is_visual_only or resolution_match_type in {"EXACT", "LIKELY", "SIMILAR"}:
+    is_weak_visual_brand = entity_type == "BRAND" and confidence < 0.7 and resolution_match_type != "EXACT"
+    if not is_visual_only or (resolution_match_type in {"EXACT", "LIKELY", "SIMILAR"} and not is_weak_visual_brand):
         return 0.0
 
     penalty = 0.0
@@ -202,6 +204,8 @@ def _weak_signal_penalty(row: dict) -> float:
         penalty -= 0.05
     if source_types == ["LOGO_DETECTION"]:
         penalty -= 0.06
+    if is_weak_visual_brand:
+        penalty -= 0.12
     return penalty
 
 
@@ -242,7 +246,14 @@ def _review_recommendation(
         "VISUAL",
     }
     is_visual_only = bool(source_types) and set(source_types).issubset(visual_only_source_types)
-    if is_visual_only and resolution_match_type not in {"EXACT", "LIKELY", "SIMILAR"} and confidence < 0.72:
+    if (
+        is_visual_only
+        and confidence < 0.72
+        and (
+            resolution_match_type not in {"EXACT", "LIKELY", "SIMILAR"}
+            or (row.get("candidateEntityType") == "BRAND" and resolution_match_type != "EXACT")
+        )
+    ):
         active_signals.append("weak_visual_only_signal")
 
     if current_review_state in {"APPROVED", "EDITED", "REJECTED", "AUTO_APPROVED"}:

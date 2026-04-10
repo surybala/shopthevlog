@@ -74,8 +74,8 @@ export default async function DashboardOverviewPage() {
     return (
       <div className="p-8">
         <div className="max-w-lg">
-          <h1 className="text-2xl font-bold text-white mb-2">Welcome to VlogShopper</h1>
-          <p className="text-white/50 mb-6">You don&apos;t have a creator profile yet. Set one up to start building your storefront.</p>
+          <h1 className="mb-2 text-2xl font-bold text-white">Welcome to VlogShopper</h1>
+          <p className="dashboard-mirror-subtle mb-6">You do not have a creator profile yet. Set one up to start building your storefront.</p>
           <Link href="/dashboard/settings" className="btn-primary">Set up your profile</Link>
         </div>
       </div>
@@ -89,156 +89,137 @@ export default async function DashboardOverviewPage() {
   })
 
   const scanBadgeColor: Record<string, string> = {
-    COMPLETE: 'bg-green-500/20 text-green-400',
-    SCANNING: 'bg-yellow-500/20 text-yellow-400',
-    QUEUED: 'bg-blue-500/20 text-blue-400',
-    FAILED: 'bg-red-500/20 text-red-400',
-    PENDING: 'bg-white/10 text-white/40',
+    COMPLETE: 'bg-green-500/20 text-green-200',
+    SCANNING: 'bg-yellow-500/20 text-yellow-100',
+    QUEUED: 'bg-blue-500/20 text-blue-100',
+    FAILED: 'bg-red-500/20 text-red-100',
+    PENDING: 'bg-white/10 text-white/78',
   }
 
   return (
     <div className="p-8">
-      <div className="flex items-start justify-between mb-8">
+      <div className="dashboard-mirror-panel mb-8 flex items-start justify-between p-7">
         <div>
-          <h1 className="text-2xl font-bold text-white">Good morning, {creator.displayName.split(' ')[0]} 👋</h1>
-          <p className="text-white/40 mt-1 text-sm">Your storefront is {creator.isPublished ? 'live' : 'not yet published'}</p>
+          <p className="dashboard-mirror-kicker text-xs">Creator command center</p>
+          <h1 className="mt-3 text-4xl font-bold text-white">Good morning, {creator.displayName.split(' ')[0]}</h1>
+          <p className="dashboard-mirror-subtle mt-2 text-sm">Your storefront is {creator.isPublished ? 'live' : 'not yet published'}</p>
         </div>
         <div className="flex items-center gap-3">
-          <Link href={`/@${creator.handle}`} className="btn-ghost text-sm">{creator.isPublished ? 'View Storefront ↗' : 'Preview Storefront ↗'}</Link>
+          <Link href={`/@${creator.handle}`} className="btn-ghost text-sm">
+            {creator.isPublished ? 'View Storefront ' : 'Preview Storefront '}
+            {'->'}
+          </Link>
           <Link href="/dashboard/kits" className="btn-primary text-sm">+ New Kit</Link>
         </div>
       </div>
 
-      {!creator.isPublished && (
-        <div className="glass-card p-4 mb-6 flex items-center justify-between border border-yellow-500/20 bg-yellow-500/5">
+      {!creator.isPublished ? (
+        <div className="dashboard-mirror-card mb-6 flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
-            <span className="text-yellow-400 text-lg">○</span>
+            <span className="text-lg text-amber-200">*</span>
             <div>
               <p className="text-sm font-medium text-white">Your storefront is unpublished</p>
-              <p className="text-xs text-white/40 mt-0.5">Publish it so your audience can find and follow you.</p>
+              <p className="dashboard-mirror-subtle mt-0.5 text-xs">Publish it so your audience can find and follow you.</p>
             </div>
           </div>
-          <Link href="/dashboard/settings" className="text-xs text-yellow-400 hover:text-yellow-300 border border-yellow-500/30 px-3 py-1.5 rounded-lg hover:border-yellow-500/60 transition-colors">
-            Publish storefront →
+          <Link href="/dashboard/settings" className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white transition-colors hover:bg-white/16">
+            Publish storefront {'->'}
           </Link>
         </div>
-      )}
+      ) : null}
 
-      {creator.catalogScanStatus !== 'COMPLETE' && (
-        <div className="glass-card p-4 mb-6 flex items-center justify-between">
+      {creator.catalogScanStatus !== 'COMPLETE' ? (
+        <div className="dashboard-mirror-card mb-6 flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
-            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${scanBadgeColor[creator.catalogScanStatus]}`}>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${scanBadgeColor[creator.catalogScanStatus]}`}>
               {creator.catalogScanStatus}
             </span>
-            <p className="text-sm text-white/70">
+            <p className="dashboard-mirror-subtle text-sm">
               {creator.catalogScanStatus === 'PENDING'
                 ? 'Your vlog catalog scan is pending. Connect a YouTube channel to start.'
                 : creator.catalogScanStatus === 'SCANNING'
-                ? 'AI is scanning your vlog catalog and generating Trip Kits...'
-                : creator.catalogScanStatus === 'QUEUED'
-                ? 'Your catalog scan is queued and will start shortly.'
-                : 'Catalog scan failed. You can re-trigger from Settings.'}
+                  ? 'AI is scanning your vlog catalog and generating Trip Kits.'
+                  : creator.catalogScanStatus === 'QUEUED'
+                    ? 'Your catalog scan is queued and will start shortly.'
+                    : 'Catalog scan failed. You can re-trigger from Settings.'}
             </p>
           </div>
-          {creator.catalogScanStatus === 'PENDING' && (
-            <Link href="/dashboard/settings" className="text-xs text-white/50 hover:text-white">
-              Connect YouTube →
+          {creator.catalogScanStatus === 'PENDING' ? (
+            <Link href="/dashboard/settings" className="dashboard-mirror-subtle text-xs hover:text-white">
+              Connect YouTube {'->'}
             </Link>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
 
-      <div className="grid grid-cols-4 gap-4 mb-4">
-        <div className="glass-card p-5">
-          <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Total Earnings</p>
-          <p className="text-2xl font-bold text-white">
-            ${((totalEarnings?._sum?.creatorEarnings ?? 0) / 100).toFixed(2)}
-          </p>
-          <p className="text-xs text-white/30 mt-1">
-            ${((pendingEarnings?._sum?.creatorEarnings ?? 0) / 100).toFixed(2)} pending
-          </p>
-        </div>
-        <div className="glass-card p-5">
-          <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Published Kits</p>
-          <p className="text-2xl font-bold text-white">{creator._count.tripKits}</p>
-          <Link href="/dashboard/kits" className="text-xs text-white/30 hover:text-white/60 mt-1 inline-block">
-            Manage kits →
-          </Link>
-        </div>
-        <div className="glass-card p-5">
-          <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Subscribers</p>
-          <p className="text-2xl font-bold text-white">{creator._count.subscribers}</p>
-          <Link href="/dashboard/subscribers" className="text-xs text-white/30 hover:text-white/60 mt-1 inline-block">
-            View subscribers →
-          </Link>
-        </div>
-        <div className="glass-card p-5">
-          <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Active Links</p>
-          <p className="text-2xl font-bold text-white">{creator._count.affiliateLinks}</p>
-          <Link href="/dashboard/affiliates" className="text-xs text-white/30 hover:text-white/60 mt-1 inline-block">
-            View links →
-          </Link>
-        </div>
+      <div className="mb-4 grid grid-cols-4 gap-4">
+        <MetricCard
+          label="Total Earnings"
+          value={`$${((totalEarnings?._sum?.creatorEarnings ?? 0) / 100).toFixed(2)}`}
+          detail={`$${((pendingEarnings?._sum?.creatorEarnings ?? 0) / 100).toFixed(2)} pending`}
+        />
+        <MetricCard
+          label="Published Kits"
+          value={String(creator._count.tripKits)}
+          detailLink={{ href: '/dashboard/kits', label: 'Manage kits ->' }}
+        />
+        <MetricCard
+          label="Subscribers"
+          value={String(creator._count.subscribers)}
+          detailLink={{ href: '/dashboard/subscribers', label: 'View subscribers ->' }}
+        />
+        <MetricCard
+          label="Active Links"
+          value={String(creator._count.affiliateLinks)}
+          detailLink={{ href: '/dashboard/affiliates', label: 'View links ->' }}
+        />
       </div>
 
-      <div className="glass-card p-5 mb-8">
+      <div className="dashboard-mirror-card mb-8 p-5">
         <div className="flex items-center justify-between gap-6">
           <div>
-            <p className="text-xs text-white/40 uppercase tracking-wider mb-1">Last 7 Days</p>
-            <p className="text-lg font-semibold text-white">${formatCurrencyFromCents(recentPerformance.earningsLast7dCents)} earned</p>
+            <p className="dashboard-mirror-kicker mb-1 text-xs">Last 7 Days</p>
+            <p className="text-2xl font-semibold text-white">${formatCurrencyFromCents(recentPerformance.earningsLast7dCents)} earned</p>
           </div>
-          <div className="text-right">
-            <p className="text-sm font-medium text-white">{recentPerformance.clicksLast7d.toLocaleString()}</p>
-            <p className="text-xs text-white/30">clicks</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm font-medium text-white">{recentPerformance.conversionsLast7d.toLocaleString()}</p>
-            <p className="text-xs text-white/30">conversions</p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm font-medium text-white">{recentPerformance.conversionRate.toFixed(1)}%</p>
-            <p className="text-xs text-white/30">CVR</p>
-          </div>
+          <DashboardStat value={recentPerformance.clicksLast7d.toLocaleString()} label="clicks" />
+          <DashboardStat value={recentPerformance.conversionsLast7d.toLocaleString()} label="conversions" />
+          <DashboardStat value={`${recentPerformance.conversionRate.toFixed(1)}%`} label="CVR" />
         </div>
       </div>
 
-      <div className="glass-card">
-        <div className="p-5 border-b border-white/10 flex items-center justify-between">
+      <div className="dashboard-mirror-card overflow-hidden">
+        <div className="flex items-center justify-between border-b border-[rgba(214,205,184,0.08)] p-5">
           <h2 className="font-semibold text-white">Recent Trip Kits</h2>
-          <Link href="/dashboard/kits" className="text-xs text-white/40 hover:text-white">View all →</Link>
+          <Link href="/dashboard/kits" className="dashboard-mirror-subtle text-xs hover:text-white">View all {'->'}</Link>
         </div>
         {recentKits.length === 0 ? (
           <div className="p-8 text-center">
-            <p className="text-white/40 text-sm mb-4">No Trip Kits yet.</p>
+            <p className="dashboard-mirror-subtle mb-4 text-sm">No Trip Kits yet.</p>
             <Link href="/dashboard/kits" className="btn-primary text-sm">Create your first kit</Link>
           </div>
         ) : (
-          <div className="divide-y divide-white/10">
+          <div className="divide-y divide-[rgba(214,205,184,0.08)]">
             {recentKits.map((kit) => (
               <div key={kit.id} className="flex items-center justify-between px-5 py-4">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{kit.title}</p>
-                  <div className="flex items-center gap-3 mt-0.5">
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${
-                      kit.isPublished ? 'bg-green-500/20 text-green-400' : 'bg-white/10 text-white/40'
+                  <p className="truncate text-sm font-medium text-white">{kit.title}</p>
+                  <div className="mt-0.5 flex items-center gap-3">
+                    <span className={`rounded px-1.5 py-0.5 text-xs ${
+                      kit.isPublished ? 'bg-green-500/20 text-green-200' : 'bg-white/10 text-white/78'
                     }`}>
                       {kit.isPublished ? 'Published' : 'Draft'}
                     </span>
-                    <span className="text-xs text-white/30">{kit.accessTier}</span>
+                    <span className="dashboard-mirror-muted text-xs">{kit.accessTier}</span>
+                    <span className="text-xs text-white/30">·</span>
+                    <span className="dashboard-mirror-muted text-xs">{kit.createdAt.toLocaleDateString()}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-6 shrink-0 ml-4">
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-white">{kit.viewCount.toLocaleString()}</p>
-                    <p className="text-xs text-white/30">views</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-white">{kit.clickCount.toLocaleString()}</p>
-                    <p className="text-xs text-white/30">clicks</p>
-                  </div>
+                <div className="ml-4 flex shrink-0 items-center gap-6">
+                  <DashboardStat value={kit.viewCount.toLocaleString()} label="views" align="right" />
+                  <DashboardStat value={kit.clickCount.toLocaleString()} label="clicks" align="right" />
                   <Link
                     href={`/dashboard/kits/${kit.id}`}
-                    className="text-xs text-white/40 hover:text-white border border-white/10 px-3 py-1.5 rounded-lg hover:border-white/30 transition-colors"
+                    className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white transition-colors hover:bg-white/16"
                   >
                     Edit
                   </Link>
@@ -248,6 +229,48 @@ export default async function DashboardOverviewPage() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function MetricCard({
+  label,
+  value,
+  detail,
+  detailLink,
+}: {
+  label: string
+  value: string
+  detail?: string
+  detailLink?: { href: string; label: string }
+}) {
+  return (
+    <div className="dashboard-mirror-card p-5">
+      <p className="dashboard-mirror-kicker mb-2 text-xs">{label}</p>
+      <p className="text-4xl font-semibold tracking-tight text-[#f7f1e4]">{value}</p>
+      {detail ? <p className="dashboard-mirror-subtle mt-2 text-xs">{detail}</p> : null}
+      {detailLink ? (
+        <Link href={detailLink.href} className="dashboard-mirror-subtle mt-2 inline-block text-xs hover:text-white">
+          {detailLink.label}
+        </Link>
+      ) : null}
+    </div>
+  )
+}
+
+function DashboardStat({
+  value,
+  label,
+  align = 'left',
+}: {
+  value: string
+  label: string
+  align?: 'left' | 'right'
+}) {
+  return (
+    <div className={align === 'right' ? 'text-right' : undefined}>
+      <p className="text-3xl font-semibold tracking-tight text-[#f7f1e4]">{value}</p>
+      <p className="dashboard-mirror-subtle text-xs">{label}</p>
     </div>
   )
 }

@@ -143,6 +143,9 @@ describe('DashboardReviewVideoPage', () => {
     const html = renderToStaticMarkup(page)
 
     expect(html).toContain('Tokyo vlog')
+    expect(html).toContain('Review detail')
+    expect(html).toContain('dashboard-mirror-panel')
+    expect(html).toContain('dashboard-mirror-card')
     expect(html).toContain('Back to review queue')
     expect(html).toContain('Publish Preview')
     expect(html).toContain('Republish Trip Kit')

@@ -5,6 +5,7 @@ Uses psycopg2 with RealDictCursor so rows are returned as dicts.
 import logging
 
 import psycopg2
+from psycopg2.extras import RealDictCursor
 
 from app.core.config import settings
 
@@ -15,7 +16,7 @@ def get_pg_conn():
     """Return a new psycopg2 connection. Caller must close it."""
     return psycopg2.connect(
         settings.DATABASE_URL,
-        cursor_factory=psycopg2.extras.RealDictCursor,
+        cursor_factory=RealDictCursor,
     )
 
 

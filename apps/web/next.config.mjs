@@ -2,6 +2,7 @@ import { withSentryConfig } from '@sentry/nextjs';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   experimental: {
     // Prevent webpack from bundling these server-only packages.
     // Prisma's generated client embeds large schema strings (215 kiB+) that

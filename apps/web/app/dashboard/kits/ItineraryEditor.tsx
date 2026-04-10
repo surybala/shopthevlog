@@ -2,8 +2,6 @@
 
 import { useState } from 'react'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 type LinkRef = {
   id: string
   targetName: string
@@ -37,53 +35,51 @@ interface Props {
   initialDays: Day[]
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const ACTIVITY_TYPES = [
-  { value: 'ACCOMMODATION', label: 'Stay',       emoji: '🏨' },
-  { value: 'FOOD',          label: 'Food',       emoji: '🍜' },
-  { value: 'ATTRACTION',    label: 'Attraction', emoji: '🏛️' },
-  { value: 'TOUR',          label: 'Tour',       emoji: '🗺️' },
-  { value: 'ADVENTURE',     label: 'Adventure',  emoji: '🧗' },
-  { value: 'CULTURAL',      label: 'Cultural',   emoji: '🎭' },
-  { value: 'TRANSPORT',     label: 'Transport',  emoji: '🚆' },
-  { value: 'WELLNESS',      label: 'Wellness',   emoji: '🧘' },
-  { value: 'NIGHTLIFE',     label: 'Nightlife',  emoji: '🌙' },
-  { value: 'OTHER',         label: 'Other',      emoji: '⭐' },
-]
+  { value: 'ACCOMMODATION', label: 'Stay', icon: 'Stay' },
+  { value: 'FOOD', label: 'Food', icon: 'Food' },
+  { value: 'ATTRACTION', label: 'Attraction', icon: 'Spot' },
+  { value: 'TOUR', label: 'Tour', icon: 'Tour' },
+  { value: 'ADVENTURE', label: 'Adventure', icon: 'Trail' },
+  { value: 'CULTURAL', label: 'Cultural', icon: 'Culture' },
+  { value: 'TRANSPORT', label: 'Transport', icon: 'Transit' },
+  { value: 'WELLNESS', label: 'Wellness', icon: 'Rest' },
+  { value: 'NIGHTLIFE', label: 'Nightlife', icon: 'After' },
+  { value: 'OTHER', label: 'Other', icon: 'Note' },
+] as const
 
 const PROVIDER_LABELS: Record<string, string> = {
-  BOOKING_COM:  'Booking.com',
+  BOOKING_COM: 'Booking.com',
   GETYOURGUIDE: 'GetYourGuide',
-  VIATOR:       'Viator',
-  AMAZON:       'Amazon',
-  SKYSCANNER:   'Skyscanner',
-  KLOOK:        'Klook',
-  AIRBNB:       'Airbnb',
-  EXPEDIA:      'Expedia',
-  STAY22:       'Stay22',
-  GOOGLE_FLIGHTS:'Google Flights',
-  CUSTOM:       'Custom',
+  VIATOR: 'Viator',
+  AMAZON: 'Amazon',
+  SKYSCANNER: 'Skyscanner',
+  KLOOK: 'Klook',
+  AIRBNB: 'Airbnb',
+  EXPEDIA: 'Expedia',
+  STAY22: 'Stay22',
+  GOOGLE_FLIGHTS: 'Google Flights',
+  CUSTOM: 'Custom',
 }
 
-function typeEmoji(type: string) {
-  return ACTIVITY_TYPES.find(t => t.value === type)?.emoji ?? '⭐'
+function typeLabel(type: string) {
+  return ACTIVITY_TYPES.find((entry) => entry.value === type)?.label ?? type
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+function typeBadge(type: string) {
+  return ACTIVITY_TYPES.find((entry) => entry.value === type)?.icon ?? 'Note'
+}
 
 function ActivityRow({
   activity,
   dayId,
   kitId,
-  activityType: _actType,
   onUpdate,
   onDelete,
 }: {
   activity: Activity
   dayId: string
   kitId: string
-  activityType?: string
   onUpdate: (updated: Activity) => void
   onDelete: () => void
 }) {
@@ -102,25 +98,20 @@ function ActivityRow({
   const [linkSaving, setLinkSaving] = useState(false)
   const [linkError, setLinkError] = useState('')
 
-  const inputCls = 'bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/30 w-full'
-
   async function saveActivity() {
     setSaving(true)
     setError('')
     try {
-      const res = await fetch(
-        `/api/kits/${kitId}/days/${dayId}/activities/${activity.id}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            time: form.time || null,
-            title: form.title,
-            description: form.description || null,
-            type: form.type,
-          }),
-        }
-      )
+      const res = await fetch(`/api/kits/${kitId}/days/${dayId}/activities/${activity.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          time: form.time || null,
+          title: form.title,
+          description: form.description || null,
+          type: form.type,
+        }),
+      })
       if (!res.ok) throw new Error((await res.json()).error ?? 'Save failed')
       const updated = await res.json()
       onUpdate(updated)
@@ -144,12 +135,20 @@ function ActivityRow({
   }
 
   async function attachLink() {
-    if (!linkUrl || !linkName) { setLinkError('URL and name are required'); return }
-    try { new URL(linkUrl) } catch { setLinkError('Invalid URL'); return }
+    if (!linkUrl || !linkName) {
+      setLinkError('URL and name are required')
+      return
+    }
+    try {
+      new URL(linkUrl)
+    } catch {
+      setLinkError('Invalid URL')
+      return
+    }
+
     setLinkSaving(true)
     setLinkError('')
     try {
-      // 1. Create the affiliate link
       const linkRes = await fetch('/api/affiliate-links', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -158,15 +157,11 @@ function ActivityRow({
       if (!linkRes.ok) throw new Error((await linkRes.json()).error ?? 'Failed to create link')
       const newLink = await linkRes.json()
 
-      // 2. Attach to activity
-      const actRes = await fetch(
-        `/api/kits/${kitId}/days/${dayId}/activities/${activity.id}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ affiliateLinkId: newLink.id }),
-        }
-      )
+      const actRes = await fetch(`/api/kits/${kitId}/days/${dayId}/activities/${activity.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ affiliateLinkId: newLink.id }),
+      })
       if (!actRes.ok) throw new Error('Failed to attach link')
       const updated = await actRes.json()
       onUpdate(updated)
@@ -183,14 +178,11 @@ function ActivityRow({
   async function detachLink() {
     setSaving(true)
     try {
-      const res = await fetch(
-        `/api/kits/${kitId}/days/${dayId}/activities/${activity.id}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ affiliateLinkId: null }),
-        }
-      )
+      const res = await fetch(`/api/kits/${kitId}/days/${dayId}/activities/${activity.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ affiliateLinkId: null }),
+      })
       if (!res.ok) throw new Error('Failed')
       const updated = await res.json()
       onUpdate(updated)
@@ -201,171 +193,131 @@ function ActivityRow({
 
   if (!editing) {
     return (
-      <div className="flex items-start gap-3 py-2.5 px-3 rounded-lg hover:bg-white/5 group">
-        <span className="text-base mt-0.5 shrink-0">{typeEmoji(activity.type)}</span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            {activity.time && (
-              <span className="text-xs text-white/30 font-mono">{activity.time}</span>
-            )}
-            <span className="text-sm text-white font-medium">{activity.title}</span>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-white/40">
-              {ACTIVITY_TYPES.find(t => t.value === activity.type)?.label ?? activity.type}
-            </span>
+      <div className="rounded-[1.4rem] bg-white/[0.035] px-4 py-4 ring-1 ring-white/8 transition hover:bg-white/[0.06]">
+        <div className="flex items-start gap-4">
+          <div className="rounded-full bg-white/[0.08] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#f0b16b]">
+            {typeBadge(activity.type)}
           </div>
-          {activity.description && (
-            <p className="text-xs text-white/40 mt-0.5 line-clamp-1">{activity.description}</p>
-          )}
-          {activity.affiliateLink && (
-            <div className="mt-1 flex items-center gap-1.5">
-              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/20">
-                🔗 {PROVIDER_LABELS[activity.affiliateLink.provider] ?? activity.affiliateLink.provider}
-                {' — '}{activity.affiliateLink.targetName}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              {activity.time ? <span className="text-xs text-[#d2d9c7]/55">{activity.time}</span> : null}
+              <span className="text-sm font-medium text-[#f7f1e4]">{activity.title}</span>
+              <span className="rounded-full bg-white/[0.08] px-2.5 py-1 text-[11px] text-[#d2d9c7]/72 ring-1 ring-white/10">
+                {typeLabel(activity.type)}
               </span>
             </div>
-          )}
-        </div>
-        <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => setEditing(true)}
-            className="text-xs px-2 py-1 rounded text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            Edit
-          </button>
-          <button
-            onClick={deleteActivity}
-            disabled={saving}
-            className="text-xs px-2 py-1 rounded text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-          >
-            ✕
-          </button>
+            {activity.description ? <p className="mt-1 text-sm leading-6 text-[#d2d9c7]/68">{activity.description}</p> : null}
+            {activity.affiliateLink ? (
+              <div className="mt-3">
+                <span className="rounded-full bg-[#5f84ff]/14 px-3 py-1 text-xs text-[#c7d5ff] ring-1 ring-[#7c98ff]/20">
+                  {PROVIDER_LABELS[activity.affiliateLink.provider] ?? activity.affiliateLink.provider} · {activity.affiliateLink.targetName}
+                </span>
+              </div>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button onClick={() => setEditing(true)} className="dashboard-pill-button text-xs">
+              Edit
+            </button>
+            <button onClick={deleteActivity} disabled={saving} className="dashboard-pill-button text-xs text-[#ffb5a8] hover:bg-red-400/10">
+              Remove
+            </button>
+          </div>
         </div>
       </div>
     )
   }
 
-  // Edit mode
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
-      {error && <p className="text-xs text-red-400">{error}</p>}
+    <div className="rounded-[1.5rem] bg-white/[0.05] p-4 ring-1 ring-white/10">
+      {error ? <p className="mb-3 text-xs text-red-200">{error}</p> : null}
 
-      <div className="grid grid-cols-[120px_1fr] gap-3">
+      <div className="grid gap-3 md:grid-cols-[120px_1fr]">
         <div>
-          <label className="block text-xs text-white/40 mb-1">Time</label>
-          <input
-            className={inputCls}
-            placeholder="09:00"
-            value={form.time}
-            onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
-          />
+          <label className="dashboard-mirror-kicker mb-2 block text-[11px]">Time</label>
+          <input className="dashboard-input" placeholder="09:00" value={form.time} onChange={(e) => setForm((prev) => ({ ...prev, time: e.target.value }))} />
         </div>
         <div>
-          <label className="block text-xs text-white/40 mb-1">Title *</label>
-          <input
-            className={inputCls}
-            placeholder="Ramen at Fuunji"
-            value={form.title}
-            onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-          />
+          <label className="dashboard-mirror-kicker mb-2 block text-[11px]">Title</label>
+          <input className="dashboard-input" placeholder="Ramen at Fuunji" value={form.title} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} />
         </div>
       </div>
 
-      <div>
-        <label className="block text-xs text-white/40 mb-1">Description</label>
-        <input
-          className={inputCls}
-          placeholder="Brief description (optional)"
-          value={form.description}
-          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-        />
+      <div className="mt-3">
+        <label className="dashboard-mirror-kicker mb-2 block text-[11px]">Description</label>
+        <input className="dashboard-input" placeholder="Brief description" value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} />
       </div>
 
-      <div>
-        <label className="block text-xs text-white/40 mb-1.5">Type</label>
-        <div className="flex flex-wrap gap-1.5">
-          {ACTIVITY_TYPES.map(t => (
-            <button
-              key={t.value}
-              type="button"
-              onClick={() => setForm(f => ({ ...f, type: t.value }))}
-              className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
-                form.type === t.value
-                  ? 'bg-white text-black border-white'
-                  : 'border-white/10 text-white/50 hover:border-white/30'
-              }`}
-            >
-              {t.emoji} {t.label}
-            </button>
-          ))}
+      <div className="mt-4">
+        <label className="dashboard-mirror-kicker mb-2 block text-[11px]">Type</label>
+        <div className="flex flex-wrap gap-2">
+          {ACTIVITY_TYPES.map((entry) => {
+            const selected = form.type === entry.value
+            return (
+              <button
+                key={entry.value}
+                type="button"
+                onClick={() => setForm((prev) => ({ ...prev, type: entry.value }))}
+                className={`rounded-full px-3 py-1.5 text-xs transition ${
+                  selected
+                    ? 'bg-[linear-gradient(135deg,rgba(240,152,74,0.32),rgba(232,118,34,0.2))] text-[#f7f1e4] ring-1 ring-[#f0b16b]/35'
+                    : 'bg-white/[0.05] text-[#d2d9c7]/72 ring-1 ring-white/10 hover:bg-white/[0.08]'
+                }`}
+              >
+                {entry.icon} · {entry.label}
+              </button>
+            )
+          })}
         </div>
       </div>
 
-      {/* Affiliate link section */}
-      <div className="pt-2 border-t border-white/10">
-        <p className="text-xs text-white/40 mb-2">Affiliate link</p>
+      <div className="mt-4 border-t border-white/8 pt-4">
+        <p className="dashboard-mirror-kicker text-[11px]">Affiliate Link</p>
         {activity.affiliateLink ? (
-          <div className="flex items-center gap-2">
-            <span className="text-xs px-2 py-1 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 flex-1 truncate">
-              🔗 {activity.affiliateLink.targetName} ({PROVIDER_LABELS[activity.affiliateLink.provider]})
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-[#5f84ff]/14 px-3 py-1 text-xs text-[#c7d5ff] ring-1 ring-[#7c98ff]/20">
+              {activity.affiliateLink.targetName} ({PROVIDER_LABELS[activity.affiliateLink.provider]})
             </span>
-            <button
-              onClick={detachLink}
-              disabled={saving}
-              className="text-xs px-2 py-1 rounded border border-white/10 text-white/40 hover:text-red-400 hover:border-red-500/30 transition-colors"
-            >
+            <button onClick={detachLink} disabled={saving} className="dashboard-pill-button text-xs text-[#ffb5a8] hover:bg-red-400/10">
               Remove
             </button>
           </div>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={() => setLinkOpen(o => !o)}
-              className="text-xs px-3 py-1.5 rounded-lg border border-dashed border-white/20 text-white/40 hover:text-white hover:border-white/40 transition-colors"
-            >
-              + Attach link
+            <button type="button" onClick={() => setLinkOpen((open) => !open)} className="dashboard-pill-button mt-3 text-xs">
+              {linkOpen ? 'Hide link form' : 'Attach affiliate link'}
             </button>
-            {linkOpen && (
-              <div className="mt-2 space-y-2">
-                {linkError && <p className="text-xs text-red-400">{linkError}</p>}
-                <input
-                  className={inputCls}
-                  placeholder="Paste affiliate URL (Booking.com, Amazon, GYG, etc.)"
-                  value={linkUrl}
-                  onChange={e => setLinkUrl(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <input
-                    className={inputCls}
-                    placeholder="Link label (e.g. Shinjuku Hotel)"
-                    value={linkName}
-                    onChange={e => setLinkName(e.target.value)}
-                  />
-                  <button
-                    onClick={attachLink}
-                    disabled={linkSaving || !linkUrl || !linkName}
-                    className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-white text-black font-medium disabled:opacity-50 hover:bg-white/90 transition-colors"
-                  >
-                    {linkSaving ? '…' : 'Save'}
+            {linkOpen ? (
+              <div className="mt-3 space-y-3">
+                {linkError ? <p className="text-xs text-red-200">{linkError}</p> : null}
+                <input className="dashboard-input" placeholder="Paste affiliate URL" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} />
+                <div className="flex flex-col gap-3 md:flex-row">
+                  <input className="dashboard-input" placeholder="Link label" value={linkName} onChange={(e) => setLinkName(e.target.value)} />
+                  <button onClick={attachLink} disabled={linkSaving || !linkUrl || !linkName} className="btn-primary shrink-0 disabled:opacity-50">
+                    {linkSaving ? 'Saving...' : 'Save link'}
                   </button>
                 </div>
               </div>
-            )}
+            ) : null}
           </>
         )}
       </div>
 
-      <div className="flex gap-2 pt-1">
-        <button
-          onClick={saveActivity}
-          disabled={saving || !form.title}
-          className="text-xs px-4 py-1.5 rounded-lg bg-white text-black font-medium disabled:opacity-50 hover:bg-white/90 transition-colors"
-        >
-          {saving ? 'Saving…' : 'Done'}
+      <div className="mt-4 flex items-center gap-3">
+        <button onClick={saveActivity} disabled={saving || !form.title} className="btn-primary disabled:opacity-50">
+          {saving ? 'Saving...' : 'Done'}
         </button>
         <button
-          onClick={() => { setEditing(false); setForm({ time: activity.time ?? '', title: activity.title, description: activity.description ?? '', type: activity.type }) }}
-          className="text-xs px-3 py-1.5 rounded-lg border border-white/10 text-white/40 hover:text-white transition-colors"
+          onClick={() => {
+            setEditing(false)
+            setForm({
+              time: activity.time ?? '',
+              title: activity.title,
+              description: activity.description ?? '',
+              type: activity.type,
+            })
+          }}
+          className="dashboard-pill-button"
         >
           Cancel
         </button>
@@ -373,8 +325,6 @@ function ActivityRow({
     </div>
   )
 }
-
-// ─── DayCard ─────────────────────────────────────────────────────────────────
 
 function DayCard({
   day,
@@ -400,12 +350,15 @@ function DayCard({
   function updateActivity(updated: Activity) {
     onUpdate({
       ...day,
-      activities: day.activities.map(a => a.id === updated.id ? updated : a),
+      activities: day.activities.map((activity) => (activity.id === updated.id ? updated : activity)),
     })
   }
 
-  function deleteActivity(actId: string) {
-    onUpdate({ ...day, activities: day.activities.filter(a => a.id !== actId) })
+  function deleteActivity(activityId: string) {
+    onUpdate({
+      ...day,
+      activities: day.activities.filter((activity) => activity.id !== activityId),
+    })
   }
 
   async function saveHeader() {
@@ -437,9 +390,9 @@ function DayCard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: 'New Activity', type: 'OTHER' }),
       })
-      if (!res.ok) throw new Error('Failed')
-      const newAct = await res.json()
-      onUpdate({ ...day, activities: [...day.activities, newAct] })
+      if (!res.ok) throw new Error('Failed to add activity')
+      const newActivity = await res.json()
+      onUpdate({ ...day, activities: [...day.activities, newActivity] })
     } finally {
       setAddingActivity(false)
     }
@@ -452,126 +405,87 @@ function DayCard({
   }
 
   return (
-    <div className="glass-card overflow-hidden">
-      {/* Day header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10">
-        <button
-          onClick={() => setCollapsed(c => !c)}
-          className="text-white/30 hover:text-white transition-colors text-sm w-4"
-        >
-          {collapsed ? '▶' : '▼'}
+    <div className="dashboard-mirror-card overflow-hidden">
+      <div className="flex items-center gap-3 border-b border-white/8 px-5 py-4">
+        <button onClick={() => setCollapsed((value) => !value)} className="text-sm text-[#d2d9c7]/58 transition hover:text-[#f7f1e4]">
+          {collapsed ? 'Expand' : 'Collapse'}
         </button>
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           {editingHeader ? (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-mono text-white/30 shrink-0">Day {day.dayNumber}</span>
-              <input
-                className="bg-white/10 border border-white/20 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-white/40 flex-1 min-w-0"
-                value={header.title}
-                onChange={e => setHeader(h => ({ ...h, title: e.target.value }))}
-                placeholder="Day title"
-              />
-              <input
-                className="bg-white/10 border border-white/20 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-white/40 w-28"
-                value={header.city}
-                onChange={e => setHeader(h => ({ ...h, city: e.target.value }))}
-                placeholder="City"
-              />
-              <input
-                className="bg-white/10 border border-white/20 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-white/40 w-24"
-                value={header.country}
-                onChange={e => setHeader(h => ({ ...h, country: e.target.value }))}
-                placeholder="Country"
-              />
-              <button
-                onClick={saveHeader}
-                disabled={headerSaving}
-                className="text-xs px-2.5 py-1 rounded bg-white text-black font-medium disabled:opacity-50"
-              >
-                {headerSaving ? '…' : 'Save'}
+            <div className="grid gap-3 md:grid-cols-[1fr_160px_160px_auto_auto]">
+              <input className="dashboard-input" value={header.title} onChange={(e) => setHeader((prev) => ({ ...prev, title: e.target.value }))} placeholder="Day title" />
+              <input className="dashboard-input" value={header.city} onChange={(e) => setHeader((prev) => ({ ...prev, city: e.target.value }))} placeholder="City" />
+              <input className="dashboard-input" value={header.country} onChange={(e) => setHeader((prev) => ({ ...prev, country: e.target.value }))} placeholder="Country" />
+              <button onClick={saveHeader} disabled={headerSaving} className="btn-primary disabled:opacity-50">
+                {headerSaving ? 'Saving...' : 'Save'}
               </button>
-              <button
-                onClick={() => setEditingHeader(false)}
-                className="text-xs text-white/30 hover:text-white"
-              >
+              <button onClick={() => setEditingHeader(false)} className="dashboard-pill-button">
                 Cancel
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono text-white/30">Day {day.dayNumber}</span>
-              <span className="text-sm font-semibold text-white">{day.title}</span>
-              {(day.city || day.country) && (
-                <span className="text-xs text-white/40">
-                  {[day.city, day.country].filter(Boolean).join(', ')}
-                </span>
-              )}
-              <span className="text-xs text-white/30">· {day.activities.length} activities</span>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="rounded-full bg-white/[0.06] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#f0b16b] ring-1 ring-white/10">
+                Day {day.dayNumber}
+              </span>
+              <span className="text-base font-semibold text-[#f7f1e4]">{day.title}</span>
+              {day.city || day.country ? <span className="text-sm text-[#d2d9c7]/64">{[day.city, day.country].filter(Boolean).join(', ')}</span> : null}
+              <span className="text-sm text-[#d2d9c7]/52">{day.activities.length} activities</span>
             </div>
           )}
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {!editingHeader && (
-            <button
-              onClick={() => setEditingHeader(true)}
-              className="text-xs px-2 py-1 rounded text-white/40 hover:text-white hover:bg-white/10 transition-colors"
-            >
-              Edit
+        {!editingHeader ? (
+          <div className="flex items-center gap-2">
+            <button onClick={() => setEditingHeader(true)} className="dashboard-pill-button text-xs">
+              Edit Day
             </button>
-          )}
-          <button
-            onClick={deleteDay}
-            className="text-xs px-2 py-1 rounded text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-          >
-            ✕
-          </button>
-        </div>
+            <button onClick={deleteDay} className="dashboard-pill-button text-xs text-[#ffb5a8] hover:bg-red-400/10">
+              Delete
+            </button>
+          </div>
+        ) : null}
       </div>
 
-      {/* Activities */}
-      {!collapsed && (
-        <div className="px-2 py-2 space-y-1">
-          {day.activities.length === 0 && (
-            <p className="text-xs text-white/20 px-3 py-2">No activities yet — add one below.</p>
-          )}
-          {day.activities.map(act => (
+      {!collapsed ? (
+        <div className="space-y-3 px-4 py-4">
+          {day.activities.length === 0 ? (
+            <div className="rounded-[1.35rem] border border-dashed border-white/12 bg-white/[0.03] px-5 py-6 text-sm text-[#d2d9c7]/62">
+              No activities yet. Add the first stop for this day below.
+            </div>
+          ) : null}
+
+          {day.activities.map((activity) => (
             <ActivityRow
-              key={act.id}
-              activity={act}
+              key={activity.id}
+              activity={activity}
               dayId={day.id}
               kitId={kitId}
               onUpdate={updateActivity}
-              onDelete={() => deleteActivity(act.id)}
+              onDelete={() => deleteActivity(activity.id)}
             />
           ))}
-          <button
-            onClick={addActivity}
-            disabled={addingActivity}
-            className="w-full text-left text-xs px-3 py-2 rounded-lg text-white/30 hover:text-white hover:bg-white/5 transition-colors border border-dashed border-white/10 hover:border-white/20 mt-1"
-          >
-            {addingActivity ? 'Adding…' : '+ Add activity'}
+
+          <button onClick={addActivity} disabled={addingActivity} className="dashboard-pill-button w-full justify-center py-3 text-sm disabled:opacity-50">
+            {addingActivity ? 'Adding activity...' : 'Add activity'}
           </button>
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
-
-// ─── ItineraryEditor ─────────────────────────────────────────────────────────
 
 export default function ItineraryEditor({ kitId, initialDays }: Props) {
   const [days, setDays] = useState<Day[]>(initialDays)
   const [addingDay, setAddingDay] = useState(false)
 
   function updateDay(updated: Day) {
-    setDays(prev => prev.map(d => d.id === updated.id ? updated : d))
+    setDays((prev) => prev.map((day) => (day.id === updated.id ? updated : day)))
   }
 
   function deleteDay(dayId: string) {
-    setDays(prev => {
-      const filtered = prev.filter(d => d.id !== dayId)
-      // Re-number locally
-      return filtered.map((d, i) => ({ ...d, dayNumber: i + 1 }))
+    setDays((prev) => {
+      const remaining = prev.filter((day) => day.id !== dayId)
+      return remaining.map((day, index) => ({ ...day, dayNumber: index + 1 }))
     })
   }
 
@@ -585,36 +499,26 @@ export default function ItineraryEditor({ kitId, initialDays }: Props) {
       })
       if (!res.ok) throw new Error('Failed to add day')
       const newDay = await res.json()
-      setDays(prev => [...prev, newDay])
+      setDays((prev) => [...prev, newDay])
     } finally {
       setAddingDay(false)
     }
   }
 
   return (
-    <div className="space-y-3">
-      {days.length === 0 && (
-        <div className="text-center py-10 text-white/30 text-sm border border-dashed border-white/10 rounded-xl">
+    <div className="space-y-4">
+      {days.length === 0 ? (
+        <div className="rounded-[1.75rem] border border-dashed border-white/12 bg-white/[0.03] py-10 text-center text-sm text-[#d2d9c7]/62">
           No itinerary yet. Add your first day below.
         </div>
-      )}
+      ) : null}
 
-      {days.map(day => (
-        <DayCard
-          key={day.id}
-          day={day}
-          kitId={kitId}
-          onUpdate={updateDay}
-          onDelete={() => deleteDay(day.id)}
-        />
+      {days.map((day) => (
+        <DayCard key={day.id} day={day} kitId={kitId} onUpdate={updateDay} onDelete={() => deleteDay(day.id)} />
       ))}
 
-      <button
-        onClick={addDay}
-        disabled={addingDay}
-        className="w-full py-3 rounded-xl border border-dashed border-white/20 text-sm text-white/40 hover:text-white hover:border-white/40 disabled:opacity-50 transition-colors"
-      >
-        {addingDay ? 'Adding day…' : `+ Add Day ${days.length + 1}`}
+      <button onClick={addDay} disabled={addingDay} className="dashboard-pill-button w-full justify-center py-4 text-sm disabled:opacity-50">
+        {addingDay ? 'Adding day...' : `Add Day ${days.length + 1}`}
       </button>
     </div>
   )

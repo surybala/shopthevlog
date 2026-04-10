@@ -9,7 +9,7 @@ export default defineConfig({
     timeout: 10_000,
   },
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://localhost:3001',
     trace: 'on-first-retry',
   },
   projects: [
@@ -19,13 +19,13 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
+    command: 'npm run dev -- --port 3001',
     cwd: __dirname,
-    url: 'http://localhost:3000',
-    reuseExistingServer: true,
+    url: 'http://localhost:3001',
+    reuseExistingServer: false,
     env: {
       ENABLE_E2E_AUTH: 'true',
-      NEXT_PUBLIC_BASE_URL: 'http://localhost:3000',
+      NEXT_PUBLIC_BASE_URL: 'http://localhost:3001',
     },
   },
 })

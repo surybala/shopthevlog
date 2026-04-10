@@ -30,10 +30,11 @@ export default async function VlogsPage() {
   return (
     <div className="p-8">
       <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+        <div className="dashboard-mirror-panel mb-8 flex items-center justify-between p-6">
           <div>
-            <h1 className="text-2xl font-bold text-white">Vlogs</h1>
-            <p className="text-white/40 text-sm mt-1">
+            <p className="dashboard-mirror-kicker text-xs">Video library</p>
+            <h1 className="mt-3 text-3xl font-bold text-[#17332d]">Source videos powering your storefront.</h1>
+            <p className="dashboard-mirror-subtle mt-2 text-sm">
               {vlogs.length}/{planConfig.maxImportedVlogs} video{planConfig.maxImportedVlogs !== 1 ? 's' : ''} imported
             </p>
           </div>

@@ -126,5 +126,7 @@ describe('AccountPage', () => {
     })
     expect(html).toContain('Subscriber QA Creator')
     expect(html).toContain('Premium access active')
+    expect(html).toContain('dashboard-mirror-panel')
+    expect(html).toContain('dashboard-mirror-card')
   })
 })

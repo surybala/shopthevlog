@@ -100,9 +100,11 @@ async def process_vlog_task(vlog_id: str) -> None:
             logger.error("Transcription failed for vlog %s", vlog_id)
             return
 
-        sync_transcript_graph(vlog_id, creator_id, title, transcript)
+        transcript_summary = sync_transcript_graph(vlog_id, creator_id, title, transcript)
         _update_vlog_status(vlog_id, "TRANSCRIPT_DONE")
 
+        visual_opportunity_count = 0
+        visual_error_message: str | None = None
         try:
             sync_visual_evidence(
                 vlog_id,
@@ -112,11 +114,30 @@ async def process_vlog_task(vlog_id: str) -> None:
                 external_video_url=external_video_url,
                 thumbnail_url=thumbnail_url,
             )
-            enrich_visual_graph(vlog_id, creator_id, title)
+            visual_summary = enrich_visual_graph(vlog_id, creator_id, title) or {}
+            visual_opportunity_count = int(visual_summary.get("opportunities") or 0)
             _update_vlog_status(vlog_id, "VISION_DONE")
         except Exception as visual_error:
             logger.warning("Visual evidence sync failed for vlog %s: %s", vlog_id, visual_error)
-            _update_vlog_pipeline_error(vlog_id, f"visual_evidence_failed: {visual_error}")
+            visual_error_message = f"visual_evidence_failed: {visual_error}"
+            _update_vlog_pipeline_error(vlog_id, visual_error_message)
+
+        total_opportunities = int(transcript_summary.get("opportunities") or 0) + visual_opportunity_count
+        if total_opportunities <= 0:
+            failure_reason = "no_opportunities_extracted"
+            if visual_error_message:
+                failure_reason = f"{failure_reason}; {visual_error_message}"
+            logger.warning("No reviewable opportunities created for vlog %s (%s)", vlog_id, failure_reason)
+            _update_vlog_pipeline_error(vlog_id, failure_reason)
+            _mark_vlog_failed(vlog_id)
+            observability_store.record(
+                kind="pipeline",
+                name="process_vlog",
+                status="failed",
+                duration_ms=(time.perf_counter() - started_at) * 1000,
+                detail="no_opportunities",
+            )
+            return
 
         fuse_candidate_entities(vlog_id)
         _update_vlog_status(vlog_id, "FUSED")

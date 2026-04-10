@@ -26,68 +26,72 @@ export default function WaitlistTable({
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   async function doAction(id: string, action: 'approve' | 'reject') {
-    setBusy(prev => ({ ...prev, [id]: action === 'approve' ? 'approving' : 'rejecting' }))
-    setErrors(prev => ({ ...prev, [id]: '' }))
+    setBusy((prev) => ({ ...prev, [id]: action === 'approve' ? 'approving' : 'rejecting' }))
+    setErrors((prev) => ({ ...prev, [id]: '' }))
 
     const res = await fetch(`/api/admin/waitlist/${id}/${action}`, { method: 'POST' })
     if (!res.ok) {
       const json = await res.json().catch(() => ({}))
-      setErrors(prev => ({ ...prev, [id]: json.error ?? `Failed to ${action}` }))
+      setErrors((prev) => ({ ...prev, [id]: json.error ?? `Failed to ${action}` }))
     } else {
       router.refresh()
     }
-    setBusy(prev => { const next = { ...prev }; delete next[id]; return next })
+    setBusy((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
   }
 
   return (
     <div className="space-y-3">
-      {requests.map(r => (
-        <div key={r.id} className="glass-card p-5 flex flex-col sm:flex-row sm:items-start gap-4">
-          {/* Details */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-white text-sm">{r.name}</span>
-              <span className={`text-xs px-2 py-0.5 rounded-full ${
-                r.status === 'APPROVED' ? 'bg-green-500/20 text-green-400'
-                : r.status === 'REJECTED' ? 'bg-red-500/20 text-red-400'
-                : 'bg-yellow-500/20 text-yellow-400'
-              }`}>
-                {r.status}
+      {requests.map((request) => (
+        <div key={request.id} className="dashboard-mirror-card flex flex-col gap-4 p-5 sm:flex-row sm:items-start">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-[#f7f1e4]">{request.name}</span>
+              <span
+                className={`rounded-full px-2.5 py-1 text-[11px] ring-1 ${
+                  request.status === 'APPROVED'
+                    ? 'bg-green-500/16 text-green-100 ring-green-400/20'
+                    : request.status === 'REJECTED'
+                      ? 'bg-red-500/16 text-red-100 ring-red-400/20'
+                      : 'bg-yellow-500/16 text-yellow-100 ring-yellow-300/20'
+                }`}
+              >
+                {request.status}
               </span>
             </div>
-            <p className="text-white/50 text-xs mt-0.5">{r.email}</p>
-            {r.reason && (
-              <p className="text-white/40 text-xs mt-2 leading-relaxed italic">"{r.reason}"</p>
-            )}
-            <p className="text-white/20 text-xs mt-2">
-              Requested {new Date(r.createdAt).toLocaleDateString()}
-              {r.approvedAt && ` · Approved ${new Date(r.approvedAt).toLocaleDateString()}`}
-              {r.rejectedAt && ` · Rejected ${new Date(r.rejectedAt).toLocaleDateString()}`}
+
+            <p className="mt-0.5 text-xs text-[#d2d9c7]/64">{request.email}</p>
+
+            {request.reason ? (
+              <p className="mt-2 text-sm italic leading-relaxed text-[#d2d9c7]/68">"{request.reason}"</p>
+            ) : null}
+
+            <p className="mt-2 text-xs text-[#d2d9c7]/46">
+              Requested {new Date(request.createdAt).toLocaleDateString()}
+              {request.approvedAt ? ` · Approved ${new Date(request.approvedAt).toLocaleDateString()}` : ''}
+              {request.rejectedAt ? ` · Rejected ${new Date(request.rejectedAt).toLocaleDateString()}` : ''}
             </p>
-            {errors[r.id] && (
-              <p className="text-red-400 text-xs mt-1">{errors[r.id]}</p>
-            )}
+
+            {errors[request.id] ? <p className="mt-1 text-xs text-red-200">{errors[request.id]}</p> : null}
           </div>
 
-          {/* Actions — only shown for PENDING rows */}
-          {showApprove && r.status === 'PENDING' && (
-            <div className="flex gap-2 shrink-0">
-              <button
-                onClick={() => doAction(r.id, 'approve')}
-                disabled={!!busy[r.id]}
-                className="btn-primary text-xs px-4 py-2 disabled:opacity-50"
-              >
-                {busy[r.id] === 'approving' ? 'Approving…' : 'Approve ✓'}
+          {showApprove && request.status === 'PENDING' ? (
+            <div className="flex shrink-0 gap-2">
+              <button onClick={() => doAction(request.id, 'approve')} disabled={!!busy[request.id]} className="btn-primary text-xs disabled:opacity-50">
+                {busy[request.id] === 'approving' ? 'Approving...' : 'Approve'}
               </button>
               <button
-                onClick={() => doAction(r.id, 'reject')}
-                disabled={!!busy[r.id]}
-                className="text-xs px-4 py-2 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                onClick={() => doAction(request.id, 'reject')}
+                disabled={!!busy[request.id]}
+                className="dashboard-pill-button text-xs text-[#ffb5a8] hover:bg-red-400/10 disabled:opacity-50"
               >
-                {busy[r.id] === 'rejecting' ? 'Rejecting…' : 'Reject ✕'}
+                {busy[request.id] === 'rejecting' ? 'Rejecting...' : 'Reject'}
               </button>
             </div>
-          )}
+          ) : null}
         </div>
       ))}
     </div>

@@ -266,6 +266,34 @@ def test_score_opportunity_penalizes_weak_logo_only_visual_candidates():
     assert review_state == "UNREVIEWED"
     assert metadata["reviewRecommendation"] == "needs_scrutiny"
     assert "weak_visual_only_signal" in metadata["reviewSignals"]
+
+
+def test_score_opportunity_penalizes_weak_visual_only_brand_even_with_likely_resolution():
+    from app.services.opportunity_ranking_service import build_review_metadata, score_opportunity
+
+    row = {
+        "id": "opp-005",
+        "title": "Generic Travel Brand",
+        "opportunityType": "TRAVEL_PRODUCT",
+        "confidence": 0.62,
+        "reviewState": "UNREVIEWED",
+        "metadataJson": {},
+        "candidateSubtype": "brand",
+        "candidateEntityType": "BRAND",
+        "candidateCanonicalLabel": "Generic Travel Brand",
+        "candidateRawLabel": "GTB",
+        "candidateEvidenceBundleJson": {"sourceTypes": ["LOGO_DETECTION"]},
+        "resolvedName": "Generic Travel Brand",
+        "resolutionMatchType": "LIKELY",
+    }
+
+    score = score_opportunity(row)
+    review_state, metadata = build_review_metadata(row, score)
+
+    assert score <= 0.62
+    assert review_state == "UNREVIEWED"
+    assert metadata["reviewRecommendation"] == "needs_scrutiny"
+    assert "weak_visual_only_signal" in metadata["reviewSignals"]
     assert "source:logo_detection" in metadata["reviewSignals"]
 
 

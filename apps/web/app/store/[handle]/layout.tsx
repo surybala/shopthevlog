@@ -69,31 +69,31 @@ export default async function StorefrontLayout({
   const accountHref = viewerIsCreator ? '/dashboard' : '/account'
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen text-[#17332d]">
       {/* Preview banner */}
       {isPreview && (
-        <div className="bg-yellow-500/10 border-b border-yellow-500/20 px-6 py-2.5 flex items-center justify-between">
+        <div className="border-b border-yellow-600/20 bg-yellow-500/10 px-6 py-2.5 flex items-center justify-between">
           <p className="text-xs text-yellow-400">
             Preview mode — this storefront is not yet published. Only you can see it.
           </p>
           <Link
             href="/dashboard/settings"
-            className="text-xs text-yellow-400 hover:text-yellow-300 underline underline-offset-2"
+            className="text-xs text-yellow-800 hover:text-yellow-900 underline underline-offset-2"
           >
             Publish in Settings →
           </Link>
         </div>
       )}
       {/* Top nav */}
-      <nav className="fixed top-0 inset-x-0 z-50 border-b border-white/10 bg-black/80 backdrop-blur" style={isPreview ? { top: '41px' } : undefined}>
+      <nav className="fixed top-0 inset-x-0 z-50 border-b border-[#17332d]/10 bg-[rgba(255,248,240,0.84)] backdrop-blur" style={isPreview ? { top: '41px' } : undefined}>
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-1.5 group">
             <Image src="/logo.png" alt="VlogShopper" width={24} height={24} className="rounded-md opacity-60 group-hover:opacity-100 transition-opacity" />
-            <span className="text-sm font-semibold text-white/50 group-hover:text-white transition-colors">VlogShopper</span>
+            <span className="text-sm font-semibold text-[#17332d]/55 group-hover:text-[#17332d] transition-colors">VlogShopper</span>
           </Link>
-          <div className="flex items-center gap-2 text-sm text-white/50">
+          <div className="flex items-center gap-2 text-sm text-[#17332d]/55">
             <span>by</span>
-            <Link href={`/@${creator.handle}`} className="font-medium text-white">
+            <Link href={`/@${creator.handle}`} className="font-medium text-[#17332d]">
               {creator.displayName}
             </Link>
           </div>

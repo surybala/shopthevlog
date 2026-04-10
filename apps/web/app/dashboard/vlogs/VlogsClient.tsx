@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { formatVlogPipelineErrorMessage } from '@/lib/vlogProcessing'
 
 type TripKitRef = {
   id: string
@@ -18,6 +19,7 @@ type Vlog = {
   publishedAt: string | null
   platform: string
   processingStatus: string
+  pipelineError?: string | null
   processedAt: string | null
   tripKits: { tripKit: TripKitRef }[]
 }
@@ -27,23 +29,24 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  PENDING:     'bg-white/10 text-white/40',
-  QUEUED:      'bg-blue-500/20 text-blue-400',
-  TRANSCRIBING:'bg-yellow-500/20 text-yellow-400 animate-pulse',
-  EXTRACTING:  'bg-purple-500/20 text-purple-400 animate-pulse',
-  EMBEDDING:   'bg-orange-500/20 text-orange-400 animate-pulse',
-  COMPLETE:    'bg-green-500/20 text-green-400',
-  FAILED:      'bg-red-500/20 text-red-400',
+  PENDING: 'bg-[#17332d]/8 text-[#17332d]/76',
+  QUEUED: 'bg-blue-500/14 text-blue-900',
+  TRANSCRIBING: 'bg-yellow-500/16 text-yellow-900 animate-pulse',
+  EXTRACTING: 'bg-purple-500/16 text-purple-900 animate-pulse',
+  EMBEDDING: 'bg-orange-500/18 text-orange-900 animate-pulse',
+  COMPLETE: 'bg-green-500/18 text-green-900',
+  FAILED: 'bg-red-500/18 text-red-900',
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  PENDING:     'Pending',
-  QUEUED:      'Queued',
-  TRANSCRIBING:'Transcribing…',
-  EXTRACTING:  'Generating Kit…',
-  EMBEDDING:   'Embedding…',
-  COMPLETE:    'Complete',
-  FAILED:      'Failed',
+  PENDING: 'Pending',
+  QUEUED: 'Queued',
+  TRANSCRIBING: 'Transcribing...',
+  EXTRACTING: 'Generating Kit...',
+  EMBEDDING: 'Embedding...',
+  COMPLETE: 'Complete',
+  REVIEW_PENDING: 'Ready for Review',
+  FAILED: 'Failed',
 }
 
 const IN_PROGRESS = new Set(['QUEUED', 'TRANSCRIBING', 'EXTRACTING', 'EMBEDDING'])
@@ -53,8 +56,7 @@ export default function VlogsClient({ initialVlogs }: Props) {
   const [processing, setProcessing] = useState<Record<string, boolean>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Poll for status updates on any vlog that's in-progress
-  const anyInProgress = vlogs.some(v => IN_PROGRESS.has(v.processingStatus))
+  const anyInProgress = vlogs.some((vlog) => IN_PROGRESS.has(vlog.processingStatus))
 
   const refreshVlogs = useCallback(async () => {
     const res = await fetch('/api/vlogs')
@@ -71,36 +73,40 @@ export default function VlogsClient({ initialVlogs }: Props) {
   }, [anyInProgress, refreshVlogs])
 
   async function triggerProcess(vlogId: string) {
-    setProcessing(p => ({ ...p, [vlogId]: true }))
-    setErrors(e => ({ ...e, [vlogId]: '' }))
+    setProcessing((prev) => ({ ...prev, [vlogId]: true }))
+    setErrors((prev) => ({ ...prev, [vlogId]: '' }))
     try {
       const res = await fetch(`/api/vlogs/${vlogId}/process`, { method: 'POST' })
       const data = await res.json()
       if (!res.ok) {
-        setErrors(e => ({ ...e, [vlogId]: data.error ?? 'Failed to start processing' }))
+        setErrors((prev) => ({
+          ...prev,
+          [vlogId]: formatVlogPipelineErrorMessage(data.error) ?? 'Could not start processing right now.',
+        }))
       } else {
-        // Optimistically update status
-        setVlogs(prev => prev.map(v =>
-          v.id === vlogId ? { ...v, processingStatus: data.status ?? 'QUEUED' } : v
-        ))
+        setVlogs((prev) =>
+          prev.map((vlog) =>
+            vlog.id === vlogId ? { ...vlog, processingStatus: data.status ?? 'QUEUED' } : vlog,
+          ),
+        )
       }
     } catch {
-      setErrors(e => ({ ...e, [vlogId]: 'Network error' }))
+      setErrors((prev) => ({ ...prev, [vlogId]: 'Network error' }))
     } finally {
-      setProcessing(p => ({ ...p, [vlogId]: false }))
+      setProcessing((prev) => ({ ...prev, [vlogId]: false }))
     }
   }
 
   if (vlogs.length === 0) {
     return (
-      <div className="glass-card p-12 text-center">
-        <p className="text-4xl mb-4">🎬</p>
-        <p className="text-white font-medium mb-2">No vlogs imported yet</p>
-        <p className="text-white/40 text-sm mb-6">
+      <div className="dashboard-mirror-card p-12 text-center">
+        <p className="mb-4 text-sm font-semibold tracking-[0.3em] text-[#17332d]/58">VIDEO</p>
+        <p className="mb-2 font-medium text-[#17332d]">No vlogs imported yet</p>
+        <p className="dashboard-mirror-subtle mb-6 text-sm">
           Connect your YouTube channel and run a catalog scan to import your videos.
         </p>
         <a href="/dashboard/settings?tab=channels" className="btn-primary text-sm">
-          Go to Settings → Channels
+          Go to Settings -> Channels
         </a>
       </div>
     )
@@ -108,77 +114,79 @@ export default function VlogsClient({ initialVlogs }: Props) {
 
   return (
     <div className="space-y-3">
-      {vlogs.map(vlog => {
+      {vlogs.map((vlog) => {
         const tripKit = vlog.tripKits[0]?.tripKit ?? null
         const inProgress = IN_PROGRESS.has(vlog.processingStatus)
         const canProcess = vlog.processingStatus === 'PENDING' || vlog.processingStatus === 'FAILED'
 
         return (
-          <div key={vlog.id} className="glass-card p-4">
+          <div key={vlog.id} className="dashboard-mirror-card p-4">
             <div className="flex items-center gap-4">
-              {/* Thumbnail */}
-              <div className="shrink-0 w-32 h-[72px] rounded-lg overflow-hidden bg-white/5">
+              <div className="h-[72px] w-32 shrink-0 overflow-hidden rounded-2xl bg-[#17332d]/8">
                 {vlog.thumbnailUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={vlog.thumbnailUrl}
                     alt=""
-                    className="w-full h-full object-cover"
+                    className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-white/20 text-2xl">▶</div>
+                  <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-[#17332d]/42">VIDEO</div>
                 )}
               </div>
 
-              {/* Info */}
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-start gap-2">
                   <a
                     href={vlog.externalUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm font-medium text-white hover:text-white/80 line-clamp-2 flex-1"
+                    className="line-clamp-2 flex-1 text-sm font-medium text-[#17332d] hover:text-[#17332d]/76"
                   >
                     {vlog.title}
                   </a>
-                  <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[vlog.processingStatus] ?? 'bg-white/10 text-white/40'}`}>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[vlog.processingStatus] ?? 'bg-[#17332d]/8 text-[#17332d]/76'}`}>
                     {STATUS_LABELS[vlog.processingStatus] ?? vlog.processingStatus}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-3 mt-2">
-                  {vlog.publishedAt && (
-                    <span className="text-xs text-white/30">
+                <div className="mt-2 flex items-center gap-3">
+                  {vlog.publishedAt ? (
+                    <span className="dashboard-mirror-muted text-xs">
                       {new Date(vlog.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
-                  )}
-                  <span className="text-xs text-white/30 uppercase">{vlog.platform}</span>
+                  ) : null}
+                  <span className="dashboard-mirror-muted text-xs uppercase">{vlog.platform}</span>
                 </div>
 
-                {errors[vlog.id] && (
-                  <p className="text-xs text-red-400 mt-1">{errors[vlog.id]}</p>
-                )}
+                {errors[vlog.id] ? <p className="mt-1 text-xs text-red-700">{errors[vlog.id]}</p> : null}
+                {!errors[vlog.id] && vlog.processingStatus === 'FAILED' && vlog.pipelineError ? (
+                  <p className="mt-1 text-xs text-red-700">{formatVlogPipelineErrorMessage(vlog.pipelineError)}</p>
+                ) : null}
               </div>
 
-              {/* Actions */}
               <div className="shrink-0 flex items-center gap-2">
                 {tripKit ? (
                   <Link
                     href={`/dashboard/kits/${tripKit.id}`}
-                    className="text-sm px-3 py-1.5 rounded-lg border border-white/20 text-white/70 hover:text-white hover:border-white/40 transition-colors"
+                    className="dashboard-pill-button text-sm"
                   >
-                    {tripKit.isPublished ? '🗺 View Kit' : '✏️ Edit Draft'}
+                    {tripKit.isPublished ? 'View Kit' : 'Edit Draft'}
+                  </Link>
+                ) : vlog.processingStatus === 'REVIEW_PENDING' ? (
+                  <Link href={`/dashboard/review/${vlog.id}`} className="dashboard-pill-button text-sm">
+                    Review Queue
                   </Link>
                 ) : canProcess ? (
                   <button
                     onClick={() => triggerProcess(vlog.id)}
                     disabled={processing[vlog.id]}
-                    className="text-sm px-3 py-1.5 rounded-lg bg-white text-black font-medium hover:bg-white/90 disabled:opacity-50 transition-colors"
+                    className="btn-primary text-sm disabled:opacity-50"
                   >
-                    {processing[vlog.id] ? 'Starting…' : '✨ Generate Kit'}
+                    {processing[vlog.id] ? 'Starting...' : 'Generate Kit'}
                   </button>
                 ) : inProgress ? (
-                  <span className="text-xs text-white/30">Processing…</span>
+                  <span className="dashboard-mirror-muted text-xs">Processing...</span>
                 ) : null}
               </div>
             </div>

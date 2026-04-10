@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getCreatorPlanConfig } from '@/lib/creatorPlans'
+import { getStorefrontTheme, parseStorefrontGalleryImages, STOREFRONT_THEMES, type StorefrontThemeId } from '@/lib/storefrontThemes'
 
 interface Tier {
   id: string
@@ -20,9 +21,15 @@ interface Creator {
   handle: string
   displayName: string
   bio: string | null
+  coverImageUrl: string | null
   location: string | null
   websiteUrl: string | null
   avatarUrl: string | null
+  storefrontTheme: StorefrontThemeId
+  storefrontTagline: string | null
+  storefrontIntro: string | null
+  storefrontMoodImageUrl: string | null
+  storefrontGalleryImages: string[]
   youtubeChannelId: string | null
   youtubeHandle: string | null
   tiktokUserId: string | null
@@ -51,9 +58,10 @@ const emptyTierForm = {
 
 export default function SettingsForm({ userId, email, creator }: Props) {
   const router = useRouter()
-  const tabs = ['profile', 'channels', 'tiers', 'billing'] as const
-  const [tab, setTab] = useState<'profile' | 'channels' | 'tiers' | 'billing'>('profile')
+  const tabs = ['profile', 'storefront', 'channels', 'tiers', 'billing'] as const
+  const [tab, setTab] = useState<'profile' | 'storefront' | 'channels' | 'tiers' | 'billing'>('profile')
   const [saving, setSaving] = useState(false)
+  const [showThemePicker, setShowThemePicker] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [scanStatus, setScanStatus] = useState(creator?.catalogScanStatus ?? 'PENDING')
@@ -115,9 +123,21 @@ export default function SettingsForm({ userId, email, creator }: Props) {
     location: creator?.location ?? '',
     websiteUrl: creator?.websiteUrl ?? '',
   })
+  const [storefront, setStorefront] = useState({
+    storefrontTheme: creator?.storefrontTheme ?? 'CITY_EDITORIAL',
+    storefrontTagline: creator?.storefrontTagline ?? '',
+    storefrontIntro: creator?.storefrontIntro ?? '',
+    coverImageUrl: creator?.coverImageUrl ?? '',
+    storefrontMoodImageUrl: creator?.storefrontMoodImageUrl ?? '',
+    storefrontGalleryImagesRaw: (creator?.storefrontGalleryImages ?? []).join('\n'),
+  })
 
   function setP(key: keyof typeof profile, val: string) {
     setProfile(prev => ({ ...prev, [key]: val }))
+  }
+
+  function setStorefrontValue(key: keyof typeof storefront, value: string) {
+    setStorefront(prev => ({ ...prev, [key]: value }))
   }
 
   async function saveProfile() {
@@ -128,12 +148,18 @@ export default function SettingsForm({ userId, email, creator }: Props) {
       const res = await fetch('/api/creator/profile', {
         method: creator ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...profile, userId }),
+        body: JSON.stringify({
+          ...profile,
+          ...storefront,
+          storefrontGalleryImages: parseStorefrontGalleryImages(storefront.storefrontGalleryImagesRaw),
+          userId,
+        }),
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
         throw new Error(d.error ?? 'Save failed')
       }
+      setShowThemePicker(false)
       setSuccess('Profile saved')
       router.refresh()
     } catch (e) {
@@ -270,8 +296,9 @@ export default function SettingsForm({ userId, email, creator }: Props) {
     }
   }
 
-  const inputCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/30'
-  const labelCls = 'block text-xs font-medium text-white/50 uppercase tracking-wider mb-1.5'
+  const inputCls = 'dashboard-input'
+  const labelCls = 'dashboard-mirror-kicker mb-1.5 block text-[11px]'
+  const activeTheme = getStorefrontTheme(storefront.storefrontTheme)
 
   return (
     <div className="max-w-2xl">
@@ -290,13 +317,13 @@ export default function SettingsForm({ userId, email, creator }: Props) {
         ))}
       </div>
 
-      {error && <div className="glass-card p-3 mb-4 text-red-400 text-sm">{error}</div>}
-      {success && <div className="glass-card p-3 mb-4 text-green-400 text-sm">{success}</div>}
+      {error && <div className="dashboard-mirror-card p-3 mb-4 text-red-200 text-sm">{error}</div>}
+      {success && <div className="dashboard-mirror-card p-3 mb-4 text-green-100 text-sm">{success}</div>}
 
       {/* ── Profile tab ── */}
       {tab === 'profile' && (
         <div className="space-y-5">
-          <div className="glass-card p-6 space-y-4">
+          <div className="dashboard-mirror-card p-6 space-y-4">
             <div className="flex items-center justify-between mb-2">
               <h2 className="font-semibold text-white">Public Profile</h2>
               {creator && (
@@ -347,11 +374,208 @@ export default function SettingsForm({ userId, email, creator }: Props) {
         </div>
       )}
 
+      {tab === 'storefront' && (
+        <div className="space-y-5">
+          <div className="dashboard-mirror-card p-6 space-y-5">
+            <div>
+              <h2 className="font-semibold text-white">Storefront Theme</h2>
+              <p className="mt-1 text-sm text-white/45">
+                Pick a travel style template, then layer in your own imagery and copy to make the storefront feel like you.
+              </p>
+            </div>
+
+            <div className="rounded-[1.75rem] border border-white/10 bg-white/5 p-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="h-24 w-32 overflow-hidden rounded-[1.25rem] border border-white/10 bg-white/5">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={activeTheme.previewImageUrl} alt={activeTheme.name} className="h-full w-full object-cover" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-white">{activeTheme.name}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.22em] text-white/35">{activeTheme.chip}</p>
+                    <p className="mt-2 max-w-md text-sm leading-6 text-white/55">{activeTheme.vibe}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowThemePicker(true)}
+                  className="dashboard-pill-button self-start px-4 py-2 text-sm text-white md:self-center"
+                >
+                  Choose theme
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {showThemePicker && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#02140f]/80 px-5 backdrop-blur-md">
+              <div className="max-h-[84vh] w-full max-w-6xl overflow-hidden rounded-[2rem] border border-white/10 bg-[#06231b]/95 shadow-[0_40px_160px_rgba(0,0,0,0.55)]">
+                <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Choose a storefront mood</h3>
+                    <p className="mt-1 text-sm text-white/45">Pick the visual world your subscribers step into first.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowThemePicker(false)}
+                    className="dashboard-pill-button px-4 py-2 text-sm text-white"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="grid max-h-[calc(84vh-88px)] gap-4 overflow-y-auto p-6 lg:grid-cols-2">
+                  {STOREFRONT_THEMES.map((theme) => {
+                    const selected = storefront.storefrontTheme === theme.id
+                    return (
+                      <button
+                        key={theme.id}
+                        type="button"
+                        onClick={() => {
+                          setStorefrontValue('storefrontTheme', theme.id)
+                          setShowThemePicker(false)
+                        }}
+                        className={`overflow-hidden rounded-[1.75rem] border text-left transition-all ${
+                          selected
+                            ? 'border-white/40 bg-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.14)]'
+                            : 'border-white/10 bg-white/5 hover:border-white/25 hover:bg-white/8'
+                        }`}
+                      >
+                        <div className="relative h-48">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={theme.previewImageUrl} alt={theme.name} className="h-full w-full object-cover" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
+                          {selected ? (
+                            <span className="absolute right-4 top-4 rounded-full border border-white/25 bg-black/35 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-white">
+                              Selected
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="p-5">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="font-medium text-white">{theme.name}</p>
+                            <p className="text-[11px] uppercase tracking-[0.22em] text-white/35">{theme.chip}</p>
+                          </div>
+                          <p className="mt-3 text-sm leading-6 text-white/58">{theme.vibe}</p>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className={`dashboard-mirror-card border ${activeTheme.shellClassName} p-6 space-y-5`}>
+            <div>
+              <h2 className="font-semibold text-white">Personal Touches</h2>
+              <p className="mt-1 text-sm text-white/45">
+                Use your own cover art, atmosphere image, and custom words so subscribers feel like they are stepping into your travel world.
+              </p>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+              <div className="space-y-4">
+                <div>
+                  <label className={labelCls}>Storefront tagline</label>
+                  <input
+                    className={inputCls}
+                    placeholder={activeTheme.headline}
+                    value={storefront.storefrontTagline}
+                    onChange={(e) => setStorefrontValue('storefrontTagline', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Intro copy</label>
+                  <textarea
+                    className={`${inputCls} resize-none`}
+                    rows={4}
+                    placeholder={activeTheme.subheadline}
+                    value={storefront.storefrontIntro}
+                    onChange={(e) => setStorefrontValue('storefrontIntro', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Hero cover image URL</label>
+                  <input
+                    className={inputCls}
+                    placeholder="https://images.example.com/cover.jpg"
+                    value={storefront.coverImageUrl}
+                    onChange={(e) => setStorefrontValue('coverImageUrl', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Mood image URL</label>
+                  <input
+                    className={inputCls}
+                    placeholder="https://images.example.com/mood.jpg"
+                    value={storefront.storefrontMoodImageUrl}
+                    onChange={(e) => setStorefrontValue('storefrontMoodImageUrl', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Gallery image URLs</label>
+                  <textarea
+                    className={`${inputCls} resize-none font-mono text-xs`}
+                    rows={5}
+                    placeholder={'https://images.example.com/1.jpg\nhttps://images.example.com/2.jpg\nhttps://images.example.com/3.jpg'}
+                    value={storefront.storefrontGalleryImagesRaw}
+                    onChange={(e) => setStorefrontValue('storefrontGalleryImagesRaw', e.target.value)}
+                  />
+                  <p className="mt-2 text-xs text-white/30">Add up to 6 image URLs, one per line.</p>
+                </div>
+              </div>
+
+              <div className={`rounded-[2rem] border ${activeTheme.cardClassName} p-5`}>
+                <div className={`rounded-[1.75rem] border ${activeTheme.heroClassName} p-5`}>
+                  <div className="flex items-center justify-between">
+                    <span className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.24em] ${activeTheme.pillClassName}`}>
+                      {activeTheme.chip}
+                    </span>
+                    <span className="text-[11px] uppercase tracking-[0.22em] text-white/35">Preview</span>
+                  </div>
+                  <h3 className="mt-5 text-2xl font-semibold text-white">
+                    {storefront.storefrontTagline || activeTheme.headline}
+                  </h3>
+                  <p className="mt-3 text-sm leading-7 text-white/65">
+                    {storefront.storefrontIntro || activeTheme.subheadline}
+                  </p>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="col-span-2 overflow-hidden rounded-[1.4rem] border border-white/10 bg-white/5">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={activeTheme.previewImageUrl} alt="" className="h-32 w-full object-cover" />
+                  </div>
+                  {[storefront.coverImageUrl, storefront.storefrontMoodImageUrl, ...parseStorefrontGalleryImages(storefront.storefrontGalleryImagesRaw)].slice(0, 4).map((imageUrl, index) => (
+                    <div key={`${imageUrl}-${index}`} className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={imageUrl} alt="" className="h-24 w-full object-cover" />
+                    </div>
+                  ))}
+                  {parseStorefrontGalleryImages(storefront.storefrontGalleryImagesRaw).length === 0 &&
+                    !storefront.coverImageUrl &&
+                    !storefront.storefrontMoodImageUrl && (
+                      <div className="col-span-2 rounded-2xl border border-dashed border-white/15 bg-white/5 px-4 py-8 text-center text-sm text-white/35">
+                        Add your own imagery to make this storefront feel personal.
+                      </div>
+                    )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button onClick={saveProfile} disabled={saving} className="btn-primary disabled:opacity-50">
+            {saving ? 'Saving…' : 'Save Storefront'}
+          </button>
+        </div>
+      )}
+
       {/* ── Channels tab ── */}
       {tab === 'channels' && (
         <div className="space-y-4">
           {/* YouTube */}
-          <div className="glass-card p-6">
+          <div className="dashboard-mirror-card p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center">
@@ -405,7 +629,7 @@ export default function SettingsForm({ userId, email, creator }: Props) {
           </div>
 
           {/* TikTok */}
-          <div className="glass-card p-6">
+          <div className="dashboard-mirror-card p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
@@ -440,7 +664,7 @@ export default function SettingsForm({ userId, email, creator }: Props) {
 
           {/* Create / edit form */}
           {showTierForm && (
-            <div className="glass-card p-6 space-y-4 border border-white/20">
+            <div className="dashboard-mirror-card p-6 space-y-4 border border-white/20">
               <h3 className="font-semibold text-white">
                 {editingTierId ? 'Edit tier' : 'Create new tier'}
               </h3>
@@ -551,14 +775,14 @@ export default function SettingsForm({ userId, email, creator }: Props) {
 
           {/* Existing tiers */}
           {creator?.tiers.length === 0 && !showTierForm && (
-            <div className="glass-card p-8 text-center">
+            <div className="dashboard-mirror-card p-8 text-center">
               <p className="text-white/40 text-sm mb-4">No tiers yet. Create your first paid subscription tier.</p>
               <button className="btn-primary text-sm" onClick={openCreateTier}>Create first tier</button>
             </div>
           )}
 
           {creator?.tiers.map(tier => (
-            <div key={tier.id} className="glass-card p-5">
+            <div key={tier.id} className="dashboard-mirror-card p-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -608,7 +832,7 @@ export default function SettingsForm({ userId, email, creator }: Props) {
       {/* ── Billing tab ── */}
       {tab === 'billing' && (
         <div className="space-y-4">
-          <div className="glass-card p-6">
+          <div className="dashboard-mirror-card p-6">
             <h2 className="font-semibold text-white mb-4">VlogShopper Plan</h2>
             <div className="space-y-3">
               {(Object.entries(billingPlans) as [keyof typeof billingPlans, typeof billingPlans.FREE][]).map(
