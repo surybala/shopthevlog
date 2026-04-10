@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,10 +8,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
+from app.core.observability import observability_store
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
+from app.core.sentry import init_sentry
 from app.api.v1.router import api_router
 
 logging.basicConfig(level=logging.DEBUG)
+init_sentry()
 
 # Allow Google OAuth over plain HTTP in local development.
 # google-auth-oauthlib rejects non-HTTPS redirect URIs unless this is set.
@@ -54,6 +58,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def record_http_observability(request, call_next):
+    started_at = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        observability_store.record(
+            kind="http",
+            name=request.url.path,
+            status="error",
+            duration_ms=(time.perf_counter() - started_at) * 1000,
+            detail=type(exc).__name__,
+        )
+        raise
+
+    observability_store.record(
+        kind="http",
+        name=request.url.path,
+        status=str(response.status_code),
+        duration_ms=(time.perf_counter() - started_at) * 1000,
+    )
+    return response
+
 # Routes
 app.include_router(api_router)
 
@@ -65,3 +93,8 @@ async def health():
         "env": settings.APP_ENV,
         "oauthlib_insecure_transport": os.environ.get("OAUTHLIB_INSECURE_TRANSPORT", "NOT SET"),
     }
+
+
+@app.get("/health/metrics")
+async def health_metrics():
+    return observability_store.snapshot()

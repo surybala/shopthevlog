@@ -79,6 +79,18 @@ class TestSettings:
         )
         assert s.YOUTUBE_API_KEY == "yt-api-key"
 
+    def test_sentry_config_can_be_overridden(self):
+        from app.core.config import Settings
+        s = Settings(
+            DATABASE_URL="postgresql://x:y@localhost/db",
+            SUPABASE_URL="https://test.supabase.co",
+            SUPABASE_SECRET_KEY="test-key",
+            SENTRY_DSN="https://public@example.ingest.sentry.io/1",
+            SENTRY_TRACES_SAMPLE_RATE=0.25,
+        )
+        assert s.SENTRY_DSN == "https://public@example.ingest.sentry.io/1"
+        assert s.SENTRY_TRACES_SAMPLE_RATE == 0.25
+
     def test_settings_singleton_is_settings_instance(self):
         from app.core.config import settings, Settings
         assert isinstance(settings, Settings)

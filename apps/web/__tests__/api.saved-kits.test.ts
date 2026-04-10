@@ -20,6 +20,7 @@ const mockSubscriberCreate = vi.fn()
 const mockSavedKitUpsert = vi.fn()
 const mockSavedKitDeleteMany = vi.fn()
 const mockSavedKitFindMany = vi.fn()
+const mockRecordApiObservation = vi.fn()
 
 vi.mock('@/lib/prisma/client', () => ({
   default: {
@@ -37,6 +38,10 @@ vi.mock('@/lib/prisma/client', () => ({
       findMany:   (...a: unknown[]) => mockSavedKitFindMany(...a),
     },
   },
+}))
+
+vi.mock('@/lib/observability', () => ({
+  recordApiObservation: (...args: unknown[]) => mockRecordApiObservation(...args),
 }))
 
 vi.mock('@/lib/rateLimit', () => ({ rateLimit: () => false }))
@@ -75,6 +80,7 @@ describe('POST /api/account/saved-kits', () => {
     const req = makeRequest('POST', 'http://localhost/api/account/saved-kits', { kitId: 'kit-1' })
     const res = await POST(req)
     expect(res.status).toBe(401)
+    expect(mockRecordApiObservation).toHaveBeenCalledWith('/api/account/saved-kits', 401, expect.any(Number), 'unauthorized')
   })
 
   it('returns 422 when kitId is missing', async () => {
@@ -101,6 +107,7 @@ describe('POST /api/account/saved-kits', () => {
     const req = makeRequest('POST', 'http://localhost/api/account/saved-kits', { kitId: 'kit-1' })
     const res = await POST(req)
     expect(res.status).toBe(200)
+    expect(mockRecordApiObservation).toHaveBeenCalledWith('/api/account/saved-kits', 200, expect.any(Number), 'saved_created')
     const body = await res.json()
     expect(body).toEqual({ saved: true })
     expect(mockSavedKitUpsert).toHaveBeenCalledWith(

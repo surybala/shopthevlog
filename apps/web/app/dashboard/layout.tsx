@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { isAdmin } from '@/lib/admin'
+import { isAdminUser } from '@/lib/admin'
 import prisma from '@/lib/prisma/client'
 import DashboardNav from './DashboardNav'
 
@@ -13,7 +13,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!user) redirect('/login')
 
   const creator = await prisma.creator.findUnique({ where: { userId: user.id } })
-  const admin = user.email ? isAdmin(user.email) : false
+  const admin = isAdminUser(user)
 
   return (
     <div className="min-h-screen bg-black flex">

@@ -15,6 +15,7 @@ const txOpportunityUpdate = vi.fn()
 const txOpportunityUpdateMany = vi.fn()
 const txVlogUpdate = vi.fn()
 const txTripKitFindUnique = vi.fn()
+const mockRecordApiObservation = vi.fn()
 
 vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServer: () => ({ auth: { getUser: mockGetUser } }),
@@ -26,6 +27,10 @@ vi.mock('@/lib/prisma/client', () => ({
     vlog: { findFirst: (...args: unknown[]) => mockVlogFindFirst(...args) },
     $transaction: (...args: unknown[]) => mockTransaction(...args),
   },
+}))
+
+vi.mock('@/lib/observability', () => ({
+  recordApiObservation: (...args: unknown[]) => mockRecordApiObservation(...args),
 }))
 
 import { POST as publishVlog } from '../app/api/vlogs/[id]/publish/route'
@@ -81,6 +86,7 @@ describe('vlog publish route', () => {
     })
 
     expect(res.status).toBe(401)
+    expect(mockRecordApiObservation).toHaveBeenCalledWith('/api/vlogs/[id]/publish', 401, expect.any(Number), 'unauthorized')
   })
 
   it('creates a published Trip Kit from an approved itinerary opportunity', async () => {
@@ -127,6 +133,7 @@ describe('vlog publish route', () => {
     })
 
     expect(res.status).toBe(200)
+    expect(mockRecordApiObservation).toHaveBeenCalledWith('/api/vlogs/[id]/publish', 200, expect.any(Number), 'published')
     expect(txTripKitCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         creatorId: 'creator-1',

@@ -136,21 +136,21 @@ export default async function DashboardReviewPage() {
           </p>
         </div>
         <div className="grid grid-cols-4 gap-3">
-          <div className="glass-card p-4 min-w-28">
-            <p className="text-xs uppercase tracking-wider text-white/40">Total</p>
-            <p className="mt-1 text-xl font-semibold text-white">{summary.total}</p>
+          <div className="glass-card flex min-h-28 min-w-28 flex-col justify-between p-4">
+            <p className="min-h-[2.5rem] text-xs uppercase tracking-wider text-white/40">Total</p>
+            <p className="text-xl font-semibold text-white">{summary.total}</p>
           </div>
-          <div className="glass-card p-4 min-w-28">
-            <p className="text-xs uppercase tracking-wider text-white/40">Needs Review</p>
-            <p className="mt-1 text-xl font-semibold text-amber-300">{summary.pending}</p>
+          <div className="glass-card flex min-h-28 min-w-28 flex-col justify-between p-4">
+            <p className="min-h-[2.5rem] text-xs uppercase tracking-wider text-white/40">Needs Review</p>
+            <p className="text-xl font-semibold text-amber-300">{summary.pending}</p>
           </div>
-          <div className="glass-card p-4 min-w-28">
-            <p className="text-xs uppercase tracking-wider text-white/40">Auto Approved</p>
-            <p className="mt-1 text-xl font-semibold text-blue-300">{summary.autoApproved}</p>
+          <div className="glass-card flex min-h-28 min-w-28 flex-col justify-between p-4">
+            <p className="min-h-[2.5rem] text-xs uppercase tracking-wider text-white/40">Auto Approved</p>
+            <p className="text-xl font-semibold text-blue-300">{summary.autoApproved}</p>
           </div>
-          <div className="glass-card p-4 min-w-28">
-            <p className="text-xs uppercase tracking-wider text-white/40">Approved</p>
-            <p className="mt-1 text-xl font-semibold text-emerald-300">{summary.approved}</p>
+          <div className="glass-card flex min-h-28 min-w-28 flex-col justify-between p-4">
+            <p className="min-h-[2.5rem] text-xs uppercase tracking-wider text-white/40">Approved</p>
+            <p className="text-xl font-semibold text-emerald-300">{summary.approved}</p>
           </div>
         </div>
       </div>

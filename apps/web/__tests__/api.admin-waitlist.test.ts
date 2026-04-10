@@ -10,8 +10,13 @@ import { NextRequest } from 'next/server'
 
 // ── Mock Supabase (server) ─────────────────────────────────────────────────────
 const mockGetUser = vi.fn()
+const mockIsAdminUser = vi.fn()
 vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServer: () => ({ auth: { getUser: mockGetUser } }),
+}))
+
+vi.mock('@/lib/admin', () => ({
+  isAdminUser: (...args: unknown[]) => mockIsAdminUser(...args),
 }))
 
 // ── Mock Supabase (admin) ─────────────────────────────────────────────────────
@@ -60,9 +65,6 @@ vi.mock('nodemailer', () => ({
   default: { createTransport: () => ({ sendMail: vi.fn().mockResolvedValue({}) }) },
 }))
 
-// Set admin env before importing routes
-process.env.ADMIN_EMAILS = 'cherry@vlogshopper.com'
-
 import { GET } from '../app/api/admin/waitlist/route'
 import { POST as APPROVE } from '../app/api/admin/waitlist/[id]/approve/route'
 
@@ -79,6 +81,7 @@ function makeRequest(method: string, url: string): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks()
   mockGetUser.mockResolvedValue({ data: { user: ADMIN_USER } })
+  mockIsAdminUser.mockReturnValue(true)
   mockCreatorFindUnique.mockResolvedValue(CREATOR)
   mockWaitlistFindMany.mockResolvedValue([PENDING_REQ])
   mockWaitlistFindUnique.mockResolvedValue(PENDING_REQ)
@@ -100,6 +103,7 @@ describe('GET /api/admin/waitlist', () => {
 
   it('returns 403 when user is not an admin', async () => {
     mockGetUser.mockResolvedValue({ data: { user: NON_ADMIN } })
+    mockIsAdminUser.mockReturnValue(false)
     const req = makeRequest('GET', 'http://localhost/api/admin/waitlist')
     const res = await GET(req)
     expect(res.status).toBe(403)
@@ -165,9 +169,28 @@ describe('POST /api/admin/waitlist/[id]/approve', () => {
 
   it('returns 403 when user is not an admin', async () => {
     mockGetUser.mockResolvedValue({ data: { user: NON_ADMIN } })
+    mockIsAdminUser.mockReturnValue(false)
     const req = makeRequest('POST', 'http://localhost/api/admin/waitlist/req-1/approve')
     const res = await APPROVE(req, { params })
     expect(res.status).toBe(403)
+  })
+
+  it('allows admins via persisted metadata, not just env email checks', async () => {
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: 'user-admin',
+          email: 'ops@example.com',
+          app_metadata: { is_admin: true },
+        },
+      },
+    })
+    mockIsAdminUser.mockReturnValue(true)
+
+    const req = makeRequest('GET', 'http://localhost/api/admin/waitlist')
+    const res = await GET(req)
+
+    expect(res.status).toBe(200)
   })
 
   it('returns 404 when request does not exist', async () => {

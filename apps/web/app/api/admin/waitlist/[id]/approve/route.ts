@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createSupabaseAdmin } from '@/lib/supabase/admin'
-import { isAdmin } from '@/lib/admin'
+import { isAdminUser } from '@/lib/admin'
 import prisma from '@/lib/prisma/client'
 import { sendApprovalEmail } from '@/lib/email'
 
@@ -20,8 +20,8 @@ export async function POST(
 ) {
   const supabase = createSupabaseServer()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isAdmin(user.email)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminUser(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const request = await prisma.waitlistRequest.findUnique({ where: { id: params.id } })
   if (!request) return NextResponse.json({ error: 'Not found' }, { status: 404 })

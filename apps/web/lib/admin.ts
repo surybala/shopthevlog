@@ -18,3 +18,27 @@ export function isAdmin(email: string): boolean {
     .filter(Boolean)
     .includes(normalised)
 }
+
+type AdminLikeUser = {
+  email?: string | null
+  app_metadata?: {
+    admin?: boolean
+    is_admin?: boolean
+    role?: string
+  } | null
+} | null | undefined
+
+export function hasAdminMetadata(user: AdminLikeUser): boolean {
+  if (!user?.app_metadata) return false
+
+  return (
+    user.app_metadata.admin === true ||
+    user.app_metadata.is_admin === true ||
+    user.app_metadata.role === 'admin'
+  )
+}
+
+export function isAdminUser(user: AdminLikeUser): boolean {
+  if (!user) return false
+  return hasAdminMetadata(user) || (!!user.email && isAdmin(user.email))
+}

@@ -7,6 +7,7 @@ import {
   normalizeActivityType,
   selectPublishableItineraryOpportunity,
 } from '@/lib/opportunityPublish'
+import { recordApiObservation } from '@/lib/observability'
 
 function hasItineraryBlueprint(metadataJson: unknown) {
   return Boolean(getItineraryBlueprint({ metadataJson }))
@@ -57,12 +58,23 @@ async function getOwnedVlogForPublish(vlogId: string, userId: string) {
 }
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
+  const startedAt = Date.now()
+  const record = (status: number, detail?: string) => {
+    recordApiObservation('/api/vlogs/[id]/publish', status, Date.now() - startedAt, detail)
+  }
+
   const supabase = createSupabaseServer()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!user) {
+    record(401, 'unauthorized')
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   const owned = await getOwnedVlogForPublish(params.id, user.id)
-  if (!owned) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!owned) {
+    record(404, 'not_found')
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
 
   const existingTripKit = owned.vlog.tripKits[0]?.tripKit ?? null
   const summary = buildTripKitPublishSummary({
@@ -71,12 +83,14 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     existingTripKit,
   })
   if (!summary.readyToPublish) {
+    record(409, 'not_ready_to_publish')
     return NextResponse.json({ error: 'No approved itinerary opportunity is ready to publish' }, { status: 409 })
   }
 
   const sourceOpportunity = selectPublishableItineraryOpportunity(owned.vlog.opportunities)
   const itinerary = sourceOpportunity ? getItineraryBlueprint(sourceOpportunity) : null
   if (!sourceOpportunity || !itinerary) {
+    record(409, 'missing_itinerary_blueprint')
     return NextResponse.json({ error: 'Publishable itinerary blueprint is missing' }, { status: 409 })
   }
 
@@ -224,6 +238,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     }
   })
 
+  record(200, existingTripKit ? 'republished' : 'published')
   return NextResponse.json({
     ok: true,
     action: existingTripKit ? 'republished' : 'published',

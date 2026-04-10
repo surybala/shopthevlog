@@ -35,19 +35,39 @@ async function isWhitelisted(email: string): Promise<boolean> {
 describe('when ALLOWED_EMAILS is not set', () => {
   beforeEach(() => { delete process.env.ALLOWED_EMAILS })
 
-  it('allows any email', async () => {
-    expect(await isWhitelisted('anyone@example.com')).toBe(true)
+  it('denies any email by default', async () => {
+    expect(await isWhitelisted('anyone@example.com')).toBe(false)
   })
 
-  it('allows empty string', async () => {
-    expect(await isWhitelisted('')).toBe(true)
+  it('denies empty string', async () => {
+    expect(await isWhitelisted('')).toBe(false)
   })
 })
 
 describe('when ALLOWED_EMAILS is empty string', () => {
   beforeEach(() => { process.env.ALLOWED_EMAILS = '' })
 
-  it('allows any email (treated as unconfigured)', async () => {
+  it('denies any email (treated as closed beta)', async () => {
+    expect(await isWhitelisted('anyone@example.com')).toBe(false)
+  })
+})
+
+describe('when ALLOW_OPEN_SIGNUPS is enabled', () => {
+  let originalOpenSignups: string | undefined
+
+  beforeEach(() => {
+    originalOpenSignups = process.env.ALLOW_OPEN_SIGNUPS
+    process.env.ALLOW_OPEN_SIGNUPS = 'true'
+    delete process.env.ALLOWED_EMAILS
+  })
+
+  afterEach(() => {
+    if (originalOpenSignups === undefined) delete process.env.ALLOW_OPEN_SIGNUPS
+    else process.env.ALLOW_OPEN_SIGNUPS = originalOpenSignups
+    vi.resetModules()
+  })
+
+  it('allows any email explicitly', async () => {
     expect(await isWhitelisted('anyone@example.com')).toBe(true)
   })
 })

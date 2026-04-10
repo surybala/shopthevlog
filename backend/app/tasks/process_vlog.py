@@ -3,7 +3,9 @@ Background task: transcribe, build the graph, and stop at review readiness.
 Reads and writes to the Prisma PostgreSQL schema.
 """
 import logging
+import time
 
+from app.core.observability import observability_store
 from app.db.pg_client import PgClient
 from app.services.fusion_service import fuse_candidate_entities
 from app.services.opportunity_ranking_service import rank_opportunities
@@ -54,6 +56,7 @@ def _update_vlog_pipeline_error(vlog_id: str, message: str) -> None:
 async def process_vlog_task(vlog_id: str) -> None:
     """Process a vlog through extraction, fusion, resolution, and review readiness."""
     logger.info("Processing vlog %s", vlog_id)
+    started_at = time.perf_counter()
 
     try:
         with PgClient() as db:
@@ -72,15 +75,18 @@ async def process_vlog_task(vlog_id: str) -> None:
 
         if not vlog:
             logger.error("Vlog %s not found", vlog_id)
+            observability_store.record(kind="pipeline", name="process_vlog", status="skipped", detail="missing_vlog")
             return
 
         status = vlog["processingStatus"]
         if status in TERMINAL_OR_ACTIVE_STATUSES:
             logger.info("Vlog %s already in status '%s', skipping", vlog_id, status)
+            observability_store.record(kind="pipeline", name="process_vlog", status="skipped", detail=f"status:{status}")
             return
 
         if vlog.get("hasOpportunities"):
             logger.info("Vlog %s already has graph opportunities, skipping reprocessing", vlog_id)
+            observability_store.record(kind="pipeline", name="process_vlog", status="skipped", detail="has_opportunities")
             return
 
         creator_id = vlog["creatorId"]
@@ -123,9 +129,22 @@ async def process_vlog_task(vlog_id: str) -> None:
 
         _update_vlog_status(vlog_id, "REVIEW_PENDING")
         logger.info("Graph created reviewable opportunities for vlog %s; awaiting creator publish", vlog_id)
+        observability_store.record(
+            kind="pipeline",
+            name="process_vlog",
+            status="success",
+            duration_ms=(time.perf_counter() - started_at) * 1000,
+        )
 
     except Exception as error:
         logger.exception("Unexpected error processing vlog %s: %s", vlog_id, error)
+        observability_store.record(
+            kind="pipeline",
+            name="process_vlog",
+            status="failed",
+            duration_ms=(time.perf_counter() - started_at) * 1000,
+            detail=type(error).__name__,
+        )
         try:
             _mark_vlog_failed(vlog_id)
         except Exception:

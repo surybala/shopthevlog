@@ -18,6 +18,7 @@ const mockCreatorFindUnique   = vi.fn()
 const mockTierFindUnique      = vi.fn()
 const mockSubscriberFindUnique = vi.fn()
 const mockSubscriberCreate    = vi.fn()
+const mockRecordApiObservation = vi.fn()
 
 vi.mock('@/lib/prisma/client', () => ({
   default: {
@@ -32,6 +33,10 @@ vi.mock('@/lib/prisma/client', () => ({
       create:     (...a: unknown[]) => mockSubscriberCreate(...a),
     },
   },
+}))
+
+vi.mock('@/lib/observability', () => ({
+  recordApiObservation: (...args: unknown[]) => mockRecordApiObservation(...args),
 }))
 
 // ── Mock Stripe ────────────────────────────────────────────────────────────────
@@ -82,6 +87,7 @@ describe('GET /api/checkout/subscribe', () => {
     const req = makeRequest('http://localhost/api/checkout/subscribe?tierId=tier-1')
     const res = await GET(req)
     expect(res.status).toBe(307)
+    expect(mockRecordApiObservation).toHaveBeenCalledWith('/api/checkout/subscribe', 307, expect.any(Number), 'login_redirect')
     expect(res.headers.get('location')).toContain('/login')
   })
 
@@ -140,6 +146,7 @@ describe('GET /api/checkout/subscribe', () => {
     const req = makeRequest('http://localhost/api/checkout/subscribe?tierId=tier-1')
     const res = await GET(req)
     expect(res.status).toBe(307)
+    expect(mockRecordApiObservation).toHaveBeenCalledWith('/api/checkout/subscribe', 307, expect.any(Number), 'stripe_redirect')
     expect(res.headers.get('location')).toBe(CHECKOUT_URL)
   })
 

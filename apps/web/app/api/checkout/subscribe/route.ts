@@ -3,12 +3,18 @@ import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 import { stripe } from '@/lib/stripe'
 import { getOrCreateSubscriber } from '@/lib/subscriber'
+import { recordApiObservation } from '@/lib/observability'
 
 // GET /api/checkout/subscribe?tierId=xxx&billing=monthly|yearly
 //
 // Creates a Stripe Checkout session for the requested tier and redirects
 // the browser there.  After payment Stripe redirects to /checkout/success.
 export async function GET(req: NextRequest) {
+  const startedAt = Date.now()
+  const record = (status: number, detail?: string) => {
+    recordApiObservation('/api/checkout/subscribe', status, Date.now() - startedAt, detail)
+  }
+
   const supabase = createSupabaseServer()
   const {
     data: { user },
@@ -16,6 +22,7 @@ export async function GET(req: NextRequest) {
   if (!user) {
     const loginUrl = new URL('/login', req.url)
     loginUrl.searchParams.set('next', req.nextUrl.pathname + req.nextUrl.search)
+    record(307, 'login_redirect')
     return NextResponse.redirect(loginUrl)
   }
 
@@ -23,6 +30,7 @@ export async function GET(req: NextRequest) {
   const billing = req.nextUrl.searchParams.get('billing') === 'yearly' ? 'yearly' : 'monthly'
 
   if (!tierId?.trim()) {
+    record(422, 'tier_id_required')
     return NextResponse.json({ error: 'tierId is required' }, { status: 422 })
   }
 
@@ -32,6 +40,7 @@ export async function GET(req: NextRequest) {
     include: { creator: { select: { id: true, handle: true, displayName: true } } },
   })
   if (!tier) {
+    record(404, 'tier_missing')
     return NextResponse.json({ error: 'Tier not found or inactive' }, { status: 404 })
   }
 
@@ -41,6 +50,7 @@ export async function GET(req: NextRequest) {
       : tier.stripePriceId
 
   if (!stripePriceId) {
+    record(422, 'stripe_price_missing')
     return NextResponse.json(
       { error: 'This tier is not yet configured for payments. Contact the creator.' },
       { status: 422 }
@@ -53,6 +63,7 @@ export async function GET(req: NextRequest) {
     select: { id: true },
   })
   if (isOwnCreator) {
+    record(422, 'own_creator_blocked')
     return NextResponse.json({ error: 'Creators cannot subscribe to their own tiers' }, { status: 422 })
   }
 
@@ -96,8 +107,10 @@ export async function GET(req: NextRequest) {
   const session = await stripe.checkout.sessions.create(sessionParams)
 
   if (!session.url) {
+    record(500, 'checkout_session_missing_url')
     return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 })
   }
 
+  record(307, 'stripe_redirect')
   return NextResponse.redirect(session.url)
 }

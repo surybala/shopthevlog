@@ -17,6 +17,7 @@ const mockCreatorChannelTokenFindUnique = vi.fn()
 const mockCreatorChannelTokenUpdate = vi.fn()
 const mockVlogFindMany = vi.fn()
 const mockVlogUpsert = vi.fn()
+const mockRecordApiObservation = vi.fn()
 
 vi.mock('@/lib/prisma/client', () => ({
   default: {
@@ -33,6 +34,10 @@ vi.mock('@/lib/prisma/client', () => ({
       upsert: (...args: unknown[]) => mockVlogUpsert(...args),
     },
   },
+}))
+
+vi.mock('@/lib/observability', () => ({
+  recordApiObservation: (...args: unknown[]) => mockRecordApiObservation(...args),
 }))
 
 import { POST as triggerScan } from '../app/api/creator/scan/route'
@@ -102,6 +107,7 @@ describe('creator scan trigger route', () => {
     const res = await triggerScan(new NextRequest('http://localhost/api/creator/scan', { method: 'POST' }))
 
     expect(res.status).toBe(401)
+    expect(mockRecordApiObservation).toHaveBeenCalledWith('/api/creator/scan', 401, expect.any(Number), 'unauthorized')
   })
 
   it('returns 429 when rate limited', async () => {
@@ -138,6 +144,7 @@ describe('creator scan trigger route', () => {
 
     expect(res.status).toBe(200)
     await expect(res.json()).resolves.toEqual({ status: 'SCANNING' })
+    expect(mockRecordApiObservation).toHaveBeenCalledWith('/api/creator/scan', 200, expect.any(Number), 'scan_started')
 
     await vi.waitFor(() => {
       expect(mockCreatorUpdate).toHaveBeenCalledWith({

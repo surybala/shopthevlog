@@ -3,6 +3,7 @@ import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 import { rateLimit } from '@/lib/rateLimit'
 import { getCreatorPlanConfig } from '@/lib/creatorPlans'
+import { recordApiObservation } from '@/lib/observability'
 
 async function refreshYouTubeToken(token: { refreshToken: string; creatorId: string }) {
   const res = await fetch('https://oauth2.googleapis.com/token', {
@@ -27,18 +28,31 @@ async function refreshYouTubeToken(token: { refreshToken: string; creatorId: str
 }
 
 export async function POST(req: NextRequest) {
+  const startedAt = Date.now()
+  const record = (status: number, detail?: string) => {
+    recordApiObservation('/api/creator/scan', status, Date.now() - startedAt, detail)
+  }
+
   const supabase = createSupabaseServer()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!user) {
+    record(401, 'unauthorized')
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   // Scans are expensive — limit to 5 per minute per user
   if (rateLimit(user.id, 'scan:trigger', { limit: 5, windowMs: 60_000 })) {
+    record(429, 'rate_limited')
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
 
   const creator = await prisma.creator.findUnique({ where: { userId: user.id } })
-  if (!creator) return NextResponse.json({ error: 'Creator profile not found' }, { status: 404 })
+  if (!creator) {
+    record(404, 'creator_missing')
+    return NextResponse.json({ error: 'Creator profile not found' }, { status: 404 })
+  }
   if (!creator.youtubeChannelId) {
+    record(400, 'youtube_not_connected')
     return NextResponse.json({ error: 'Connect a YouTube channel first' }, { status: 400 })
   }
 
@@ -56,6 +70,7 @@ export async function POST(req: NextRequest) {
     })
   })
 
+  record(200, 'scan_started')
   return NextResponse.json({ status: 'SCANNING' })
 }
 

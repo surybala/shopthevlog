@@ -104,6 +104,8 @@ describe('DashboardReviewPage', () => {
     expect(html).toContain('Review Queue')
     expect(html).toContain('Park Hyatt Tokyo')
     expect(html).toContain('Needs Review')
+    expect(html).toContain('min-h-[2.5rem]')
+    expect(html).toContain('flex min-h-28 min-w-28 flex-col justify-between p-4')
     expect(html).toContain('Transcript, Scene Summary')
     expect(html).toContain('Previously rejected')
     expect(html).toContain('Preferred naming: Park Hyatt Tokyo')

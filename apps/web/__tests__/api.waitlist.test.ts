@@ -179,11 +179,21 @@ describe('GET /api/auth/whitelist-check', () => {
   afterEach(() => {
     if (origAllowed === undefined) delete process.env.ALLOWED_EMAILS
     else process.env.ALLOWED_EMAILS = origAllowed
+    delete process.env.ALLOW_OPEN_SIGNUPS
     vi.resetModules()
   })
 
-  it('returns { allowed: true } when ALLOWED_EMAILS is not set', async () => {
+  it('returns { allowed: false } when ALLOWED_EMAILS is not set', async () => {
     delete process.env.ALLOWED_EMAILS
+    const req = makeRequest('GET', 'http://localhost/api/auth/whitelist-check?email=anyone@example.com')
+    const res = await GET(req)
+    const body = await res.json()
+    expect(body.allowed).toBe(false)
+  })
+
+  it('returns { allowed: true } when open signups are explicitly enabled', async () => {
+    delete process.env.ALLOWED_EMAILS
+    process.env.ALLOW_OPEN_SIGNUPS = 'true'
     const req = makeRequest('GET', 'http://localhost/api/auth/whitelist-check?email=anyone@example.com')
     const res = await GET(req)
     const body = await res.json()

@@ -3,7 +3,7 @@ import { createSupabaseServer } from '@/lib/supabase/server'
 import { createSupabaseAdmin } from '@/lib/supabase/admin'
 import prisma from '@/lib/prisma/client'
 import { isWhitelisted } from '@/lib/whitelist'
-import { isAdmin } from '@/lib/admin'
+import { hasAdminMetadata, isAdmin, isAdminUser } from '@/lib/admin'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl
@@ -17,11 +17,30 @@ export async function GET(request: NextRequest) {
     if (!error) {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
+        const userIsBootstrapAdmin = user.email ? isAdmin(user.email) : false
+        const userIsAdmin = isAdminUser(user)
         // Check if already approved via app_metadata (fastest — no DB query)
         const alreadyApproved = user.app_metadata?.approved === true
         const envAllowed = user.email ? isWhitelisted(user.email) : false
 
-        if (!alreadyApproved && !envAllowed) {
+        if (userIsBootstrapAdmin && !hasAdminMetadata(user)) {
+          try {
+            const admin = createSupabaseAdmin()
+            await admin.auth.admin.updateUserById(user.id, {
+              app_metadata: {
+                ...user.app_metadata,
+                approved: true,
+                admin: true,
+                is_admin: true,
+                role: 'admin',
+              },
+            })
+          } catch (err) {
+            console.warn('Failed to stamp app_metadata admin flags:', err)
+          }
+        }
+
+        if (!userIsAdmin && !alreadyApproved && !envAllowed) {
           // Check DB whitelist — the user may have been approved since they last logged in
           const approved = user.email
             ? await prisma.waitlistRequest.findFirst({
@@ -57,7 +76,6 @@ export async function GET(request: NextRequest) {
 
         // Admins don't need a creator profile — send them straight to dashboard.
         // Regular users who haven't completed onboarding go to /onboarding.
-        const userIsAdmin = user.email ? isAdmin(user.email) : false
         if (userIsAdmin) {
           return NextResponse.redirect(`${origin}${next}`)
         }

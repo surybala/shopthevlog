@@ -19,6 +19,7 @@ const mockFollowFindUnique = vi.fn()
 const mockFollowUpsert = vi.fn()
 const mockFollowDeleteMany = vi.fn()
 const mockSubscriberCreate = vi.fn()
+const mockRecordApiObservation = vi.fn()
 
 vi.mock('@/lib/prisma/client', () => ({
   default: {
@@ -33,6 +34,10 @@ vi.mock('@/lib/prisma/client', () => ({
       deleteMany:  (...a: unknown[]) => mockFollowDeleteMany(...a),
     },
   },
+}))
+
+vi.mock('@/lib/observability', () => ({
+  recordApiObservation: (...args: unknown[]) => mockRecordApiObservation(...args),
 }))
 
 // ── Mock rate limiter (always pass) ───────────────────────────────────────────
@@ -71,6 +76,7 @@ describe('POST /api/account/follow', () => {
     const req = makeRequest('POST', 'http://localhost/api/account/follow', { creatorHandle: 'alex' })
     const res = await POST(req)
     expect(res.status).toBe(401)
+    expect(mockRecordApiObservation).toHaveBeenCalledWith('/api/account/follow', 401, expect.any(Number), 'unauthorized')
   })
 
   it('returns 422 when creatorHandle is missing', async () => {
@@ -123,6 +129,7 @@ describe('POST /api/account/follow', () => {
     const req = makeRequest('POST', 'http://localhost/api/account/follow', { creatorHandle: 'alex' })
     const res = await POST(req)
     expect(res.status).toBe(200)
+    expect(mockRecordApiObservation).toHaveBeenCalledWith('/api/account/follow', 200, expect.any(Number), 'following_created')
     const body = await res.json()
     expect(body).toEqual({ following: true })
     expect(mockFollowUpsert).toHaveBeenCalled()

@@ -4,6 +4,7 @@ Tests for app.main — health endpoint, lifespan startup, and app wiring.
 import pytest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
+from app.core.observability import observability_store
 
 
 def _get_client() -> TestClient:
@@ -12,6 +13,9 @@ def _get_client() -> TestClient:
 
 
 class TestHealthEndpoint:
+    def setup_method(self):
+        observability_store.reset()
+
     def test_returns_200(self):
         client = _get_client()
         resp = client.get("/health")
@@ -39,6 +43,17 @@ class TestHealthEndpoint:
         client = _get_client()
         resp = client.get("/health")
         assert resp.json()["env"] == settings.APP_ENV
+
+    def test_health_metrics_returns_observability_snapshot(self):
+        observability_store.record(kind="http", name="/health", status="200", duration_ms=12.5)
+
+        client = _get_client()
+        resp = client.get("/health/metrics")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "metrics" in data
+        assert data["metrics"]
 
 
 class TestCorsMiddleware:

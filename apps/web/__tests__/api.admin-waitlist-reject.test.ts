@@ -6,9 +6,9 @@ vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServer: () => ({ auth: { getUser: mockGetUser } }),
 }));
 
-const mockIsAdmin = vi.fn();
+const mockIsAdminUser = vi.fn();
 vi.mock('@/lib/admin', () => ({
-  isAdmin: (...args: unknown[]) => mockIsAdmin(...args),
+  isAdminUser: (...args: unknown[]) => mockIsAdminUser(...args),
 }));
 
 const mockFindUnique = vi.fn();
@@ -28,7 +28,7 @@ describe('POST /api/admin/waitlist/[id]/reject', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetUser.mockResolvedValue({ data: { user: { id: 'u-1', email: 'admin@example.com' } } });
-    mockIsAdmin.mockReturnValue(true);
+    mockIsAdminUser.mockReturnValue(true);
     mockFindUnique.mockResolvedValue({ id: 'req-1', status: 'PENDING' });
     mockUpdate.mockResolvedValue({});
   });
@@ -42,7 +42,7 @@ describe('POST /api/admin/waitlist/[id]/reject', () => {
   });
 
   it('returns 403 for non-admin viewers', async () => {
-    mockIsAdmin.mockReturnValue(false);
+    mockIsAdminUser.mockReturnValue(false);
 
     const res = await POST(new NextRequest('http://localhost/api/admin/waitlist/req-1/reject', { method: 'POST' }), { params: { id: 'req-1' } });
 
