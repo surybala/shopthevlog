@@ -43,11 +43,11 @@ export default function PublishTripKitButton({
         type="button"
         onClick={publish}
         disabled={disabled || isPending}
-        className="dashboard-pill-button bg-[linear-gradient(135deg,rgba(90,146,255,0.18),rgba(66,116,212,0.08))] text-sky-100 ring-sky-400/20 hover:bg-[linear-gradient(135deg,rgba(90,146,255,0.28),rgba(66,116,212,0.14))] disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-[rgba(45,94,191,0.18)] bg-[linear-gradient(135deg,rgba(103,147,233,0.16),rgba(82,124,212,0.06))] px-4 py-2 text-sm font-medium leading-none text-[#214d8f] transition-colors hover:bg-[linear-gradient(135deg,rgba(103,147,233,0.24),rgba(82,124,212,0.12))] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isPending ? `${actionLabel}...` : actionLabel}
       </button>
-      {error ? <p className="text-xs text-red-300">{error}</p> : null}
+      {error ? <p className="text-xs text-[#9f3a24]">{error}</p> : null}
     </div>
   )
 }

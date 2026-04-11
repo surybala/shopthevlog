@@ -4,8 +4,8 @@ import Image from 'next/image'
 import prisma from '@/lib/prisma/client'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import StorefrontNavActions from '@/components/StorefrontNavActions'
+import { getStorefrontTheme } from '@/lib/storefrontThemes'
 
-// Helper — derive display name from Supabase user metadata
 function navDisplayName(user: Awaited<ReturnType<ReturnType<typeof createSupabaseServer>['auth']['getUser']>>['data']['user']) {
   if (!user) return null
   return (
@@ -26,16 +26,23 @@ export default async function StorefrontLayout({
 }) {
   const creator = await prisma.creator.findUnique({
     where: { handle: params.handle },
-    select: { id: true, handle: true, displayName: true, avatarUrl: true, isPublished: true },
+    select: {
+      id: true,
+      handle: true,
+      displayName: true,
+      avatarUrl: true,
+      isPublished: true,
+      storefrontTheme: true,
+    },
   })
 
   if (!creator) notFound()
 
-  // Auth check — needed for preview gating + follow state
   const supabase = createSupabaseServer()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  // If unpublished, only the creator themselves can preview it
   let isPreview = false
   if (!creator.isPublished) {
     if (!user) notFound()
@@ -47,15 +54,17 @@ export default async function StorefrontLayout({
     isPreview = true
   }
 
-  // Check current follow state + whether the viewer is a creator themselves
   let initialFollowing = false
   let viewerIsCreator = false
+
   if (user) {
     const [subscriber, viewerCreator] = await Promise.all([
       prisma.subscriber.findUnique({ where: { userId: user.id }, select: { id: true } }),
       prisma.creator.findUnique({ where: { userId: user.id }, select: { id: true } }),
     ])
+
     viewerIsCreator = !!viewerCreator
+
     if (subscriber) {
       const follow = await prisma.follow.findUnique({
         where: { subscriberId_creatorId: { subscriberId: subscriber.id, creatorId: creator.id } },
@@ -67,36 +76,56 @@ export default async function StorefrontLayout({
 
   const displayName = navDisplayName(user)
   const accountHref = viewerIsCreator ? '/dashboard' : '/account'
+  const theme = getStorefrontTheme(creator.storefrontTheme)
 
   return (
-    <div className="min-h-screen text-[#17332d]">
-      {/* Preview banner */}
+    <div className="min-h-screen text-[var(--storefront-text)]" style={theme.cssVars}>
       {isPreview && (
-        <div className="border-b border-yellow-600/20 bg-yellow-500/10 px-6 py-2.5 flex items-center justify-between">
-          <p className="text-xs text-yellow-400">
-            Preview mode — this storefront is not yet published. Only you can see it.
+        <div
+          className="flex items-center justify-between border-b px-6 py-2.5"
+          style={{ borderColor: 'var(--storefront-border)', background: 'var(--storefront-soft-bg)' }}
+        >
+          <p className="storefront-subtle text-xs">
+            Preview mode - this storefront is not yet published. Only you can see it.
           </p>
           <Link
             href="/dashboard/settings"
-            className="text-xs text-yellow-800 hover:text-yellow-900 underline underline-offset-2"
+            className="storefront-heading text-xs underline underline-offset-2"
           >
-            Publish in Settings →
+            Publish in Settings -&gt;
           </Link>
         </div>
       )}
-      {/* Top nav */}
-      <nav className="fixed top-0 inset-x-0 z-50 border-b border-[#17332d]/10 bg-[rgba(255,248,240,0.84)] backdrop-blur" style={isPreview ? { top: '41px' } : undefined}>
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-1.5 group">
-            <Image src="/logo.png" alt="VlogShopper" width={24} height={24} className="rounded-md opacity-60 group-hover:opacity-100 transition-opacity" />
-            <span className="text-sm font-semibold text-[#17332d]/55 group-hover:text-[#17332d] transition-colors">VlogShopper</span>
+
+      <nav
+        className="fixed inset-x-0 top-0 z-50 border-b backdrop-blur"
+        style={{
+          ...(isPreview ? { top: '41px' } : undefined),
+          borderColor: 'var(--storefront-border)',
+          background: 'var(--storefront-nav-bg)',
+        }}
+      >
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
+          <Link href="/" className="group flex items-center gap-1.5">
+            <Image
+              src="/logo.png"
+              alt="VlogShopper"
+              width={24}
+              height={24}
+              className="rounded-md opacity-60 transition-opacity group-hover:opacity-100"
+            />
+            <span className="storefront-muted text-sm font-semibold transition-colors group-hover:text-[var(--storefront-text)]">
+              VlogShopper
+            </span>
           </Link>
-          <div className="flex items-center gap-2 text-sm text-[#17332d]/55">
+
+          <div className="storefront-muted flex items-center gap-2 text-sm">
             <span>by</span>
-            <Link href={`/@${creator.handle}`} className="font-medium text-[#17332d]">
+            <Link href={`/@${creator.handle}`} className="storefront-heading font-medium">
               {creator.displayName}
             </Link>
           </div>
+
           <div className="flex items-center gap-3">
             <StorefrontNavActions
               creatorHandle={creator.handle}
@@ -108,6 +137,7 @@ export default async function StorefrontLayout({
           </div>
         </div>
       </nav>
+
       <div className={isPreview ? 'pt-[97px]' : 'pt-14'}>{children}</div>
     </div>
   )

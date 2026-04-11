@@ -13,10 +13,18 @@ describe('storefront themes', () => {
   })
 
   it('provides image-backed previews and storefront backdrops for every theme', () => {
+    const pageBackgrounds = new Set<string>()
     for (const theme of STOREFRONT_THEMES) {
       expect(theme.previewImageUrl.startsWith('data:image/svg+xml')).toBe(true)
       expect(theme.storefrontBackdropImageUrl.startsWith('data:image/svg+xml')).toBe(true)
+      expect(theme.pageClassName).not.toContain('text-white')
+      expect(theme.shellClassName).toContain('storefront-panel')
+      expect(theme.cardClassName).toContain('storefront-card')
+      expect(theme.cssVars['--storefront-page-bg']).toBeTruthy()
+      expect(theme.cssVars['--storefront-text']).toBeTruthy()
+      pageBackgrounds.add(theme.cssVars['--storefront-page-bg'])
     }
+    expect(pageBackgrounds.size).toBeGreaterThan(6)
   })
 
   it('parses custom gallery URLs from newline-separated input', () => {

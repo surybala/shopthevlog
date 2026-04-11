@@ -4,15 +4,15 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface Props {
-  kitId:        string
+  kitId: string
   initialSaved: boolean
-  isLoggedIn:   boolean
+  isLoggedIn: boolean
   creatorHandle: string
 }
 
 export default function SaveKitButton({ kitId, initialSaved, isLoggedIn, creatorHandle }: Props) {
   const router = useRouter()
-  const [saved, setSaved]   = useState(initialSaved)
+  const [saved, setSaved] = useState(initialSaved)
   const [loading, setLoading] = useState(false)
 
   async function toggle() {
@@ -45,14 +45,12 @@ export default function SaveKitButton({ kitId, initialSaved, isLoggedIn, creator
       onClick={toggle}
       disabled={loading}
       aria-label={saved ? 'Unsave kit' : 'Save kit'}
-      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 ${
-        saved
-          ? 'bg-white/10 border-white/20 text-white hover:bg-white/5'
-          : 'border-white/20 text-white/60 hover:text-white hover:border-white/40'
+      className={`storefront-outline-button rounded-xl ${
+        saved ? 'storefront-outline-button--active' : ''
       }`}
     >
       <span>{saved ? '★' : '☆'}</span>
-      {saved ? 'Saved' : 'Save'}
+      <span>{loading ? '...' : saved ? 'Saved' : 'Save'}</span>
     </button>
   )
 }

@@ -39,7 +39,7 @@ export default async function DashboardKitsPage() {
             </p>
           </div>
           {atLimit ? (
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center justify-end gap-3">
               <p className="text-xs text-[#17332d]/68">Upgrade to PRO for unlimited kits.</p>
               <Link href="/dashboard/settings?tab=billing" className="btn-primary text-sm">Upgrade</Link>
             </div>
@@ -58,7 +58,7 @@ export default async function DashboardKitsPage() {
           <p className="mx-auto mb-6 max-w-sm text-sm text-[#17332d]/72">
             Create your first Trip Kit manually, or connect YouTube and let the AI pipeline turn your vlogs into bookable itineraries.
           </p>
-          <div className="flex justify-center gap-3">
+          <div className="flex flex-wrap justify-center gap-3">
             <Link href="/dashboard/kits/new" className="btn-primary text-sm">Create manually</Link>
             <Link href="/dashboard/settings?tab=channels" className="btn-ghost text-sm">Connect YouTube</Link>
           </div>
@@ -90,7 +90,7 @@ export default async function DashboardKitsPage() {
                     <span className="shrink-0 rounded bg-sky-500/16 px-1.5 py-0.5 text-xs text-sky-900">AI generated</span>
                   ) : null}
                 </div>
-                <div className="flex items-center gap-4 text-xs text-[#17332d]/64">
+                <div className="flex flex-wrap items-center gap-4 text-xs text-[#17332d]/64">
                   {kit.primaryCity ? <span>{kit.primaryCity}</span> : null}
                   {kit.durationDays ? <span>{kit.durationDays} days</span> : null}
                   <span>{kit._count.days} planned days</span>
@@ -105,19 +105,13 @@ export default async function DashboardKitsPage() {
                 <Metric value={`$${kit.estimatedEarnings.toFixed(0)}`} label="earned" />
               </div>
 
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                 {kit.isPublished ? (
-                  <Link
-                    href={`/@${creator.handle}/kits/${kit.slug}`}
-                    className="rounded-full bg-[#17332d]/8 px-3 py-1.5 text-xs text-[#17332d] transition-colors hover:bg-[#17332d]/12"
-                  >
+                  <Link href={`/@${creator.handle}/kits/${kit.slug}`} className="dashboard-action-chip text-xs">
                     View {'->'}
                   </Link>
                 ) : null}
-                <Link
-                  href={`/dashboard/kits/${kit.id}`}
-                  className="rounded-lg bg-[#17332d]/10 px-3 py-1.5 text-xs text-[#17332d] transition-colors hover:bg-[#17332d]/14"
-                >
+                <Link href={`/dashboard/kits/${kit.id}`} className="dashboard-action-chip text-xs">
                   Edit
                 </Link>
               </div>

@@ -256,15 +256,21 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog.rank_opportunities", return_value={"ranked": 3}) as mock_rank,
             patch("app.tasks.process_vlog._update_vlog_status") as mock_update_status,
             patch("app.tasks.process_vlog._update_vlog_pipeline_error") as mock_pipeline_error,
+            patch("app.tasks.process_vlog.observability_store.record") as mock_record,
         ):
             from app.tasks.process_vlog import process_vlog_task
             await process_vlog_task("vlog-001")
 
-        mock_pipeline_error.assert_called_once_with("vlog-001", "visual_evidence_failed: ffmpeg unavailable")
+        mock_pipeline_error.assert_called_once_with("vlog-001", "visual_storage_failed: ffmpeg unavailable")
         mock_visual_enrich.assert_not_called()
         mock_fuse.assert_called_once_with("vlog-001")
         mock_resolve.assert_called_once_with("vlog-001")
         mock_rank.assert_called_once_with("vlog-001")
+        assert any(
+            call.kwargs.get("name") == "process_vlog.visual_storage"
+            and call.kwargs.get("status") == "failed"
+            for call in mock_record.call_args_list
+        )
         mock_update_status.assert_has_calls([
             call("vlog-001", "TRANSCRIPT_DONE"),
             call("vlog-001", "FUSED"),
@@ -288,6 +294,7 @@ class TestPhaseOnePipeline:
             patch("app.tasks.process_vlog._update_vlog_status") as mock_update_status,
             patch("app.tasks.process_vlog._update_vlog_pipeline_error") as mock_pipeline_error,
             patch("app.tasks.process_vlog._mark_vlog_failed") as mock_mark_failed,
+            patch("app.tasks.process_vlog.observability_store.record") as mock_record,
         ):
             from app.tasks.process_vlog import process_vlog_task
             await process_vlog_task("vlog-001")
@@ -298,11 +305,52 @@ class TestPhaseOnePipeline:
         mock_rank.assert_not_called()
         mock_mark_failed.assert_called_once_with("vlog-001")
         assert mock_pipeline_error.call_args_list == [
-            call("vlog-001", "visual_evidence_failed: Invalid API key"),
-            call("vlog-001", "no_opportunities_extracted; visual_evidence_failed: Invalid API key"),
+            call("vlog-001", "visual_storage_failed: Invalid API key"),
+            call("vlog-001", "no_opportunities_extracted; visual_storage_failed: Invalid API key"),
         ]
+        assert any(
+            call.kwargs.get("name") == "process_vlog.visual_storage"
+            and call.kwargs.get("detail") == "visual_storage_credentials"
+            for call in mock_record.call_args_list
+        )
         mock_update_status.assert_has_calls([
             call("vlog-001", "TRANSCRIPT_DONE"),
+        ])
+
+    @pytest.mark.asyncio
+    async def test_visual_enrichment_failure_is_logged_separately_from_storage(self):
+        pg = _make_vlog_pg("PENDING")
+        with (
+            patch("app.tasks.process_vlog.PgClient", return_value=pg),
+            patch("app.tasks.process_vlog.transcribe_vlog", return_value="graph transcript"),
+            patch("app.tasks.process_vlog.sync_transcript_graph", return_value={"opportunities": 2}),
+            patch("app.tasks.process_vlog.sync_visual_evidence", return_value={"scene_segments": 3}),
+            patch("app.tasks.process_vlog.enrich_visual_graph", side_effect=RuntimeError("Gemini API key rejected")),
+            patch("app.tasks.process_vlog.fuse_candidate_entities", return_value={"clusters": 1}) as mock_fuse,
+            patch("app.tasks.process_vlog.resolve_candidates", return_value={"resolved": 1}) as mock_resolve,
+            patch("app.tasks.process_vlog.rank_opportunities", return_value={"ranked": 2}) as mock_rank,
+            patch("app.tasks.process_vlog._update_vlog_status") as mock_update_status,
+            patch("app.tasks.process_vlog._update_vlog_pipeline_error") as mock_pipeline_error,
+            patch("app.tasks.process_vlog.observability_store.record") as mock_record,
+        ):
+            from app.tasks.process_vlog import process_vlog_task
+            await process_vlog_task("vlog-001")
+
+        mock_pipeline_error.assert_called_once_with("vlog-001", "visual_enrichment_failed: Gemini API key rejected")
+        mock_fuse.assert_called_once_with("vlog-001")
+        mock_resolve.assert_called_once_with("vlog-001")
+        mock_rank.assert_called_once_with("vlog-001")
+        assert any(
+            call.kwargs.get("name") == "process_vlog.visual_enrichment"
+            and call.kwargs.get("detail") == "visual_enrichment_gemini"
+            for call in mock_record.call_args_list
+        )
+        mock_update_status.assert_has_calls([
+            call("vlog-001", "TRANSCRIPT_DONE"),
+            call("vlog-001", "FUSED"),
+            call("vlog-001", "RESOLVED"),
+            call("vlog-001", "RANKED"),
+            call("vlog-001", "REVIEW_PENDING"),
         ])
 
     @pytest.mark.asyncio

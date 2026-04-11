@@ -3,6 +3,7 @@ import Link from 'next/link'
 import prisma from '@/lib/prisma/client'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import SaveKitButton from '@/components/SaveKitButton'
+import { getStorefrontTheme } from '@/lib/storefrontThemes'
 
 export async function generateMetadata({ params }: { params: { handle: string; slug: string } }) {
   const kit = await prisma.tripKit.findFirst({
@@ -11,30 +12,38 @@ export async function generateMetadata({ params }: { params: { handle: string; s
   })
   if (!kit) return {}
   return {
-    title: `${kit.title} — VlogShopper`,
+    title: `${kit.title} - VlogShopper`,
     description: kit.description ?? kit.title,
     openGraph: { title: kit.title, description: kit.description ?? '', images: kit.coverImageUrl ? [kit.coverImageUrl] : [] },
   }
 }
 
 export default async function KitDetailPage({ params }: { params: { handle: string; slug: string } }) {
-  const creator = await prisma.creator.findUnique({ where: { handle: params.handle }, select: { id: true, handle: true, displayName: true, avatarUrl: true, isPublished: true } })
+  const creator = await prisma.creator.findUnique({
+    where: { handle: params.handle },
+    select: {
+      id: true,
+      handle: true,
+      displayName: true,
+      avatarUrl: true,
+      isPublished: true,
+      storefrontTheme: true,
+    },
+  })
   if (!creator) notFound()
 
-  // Check auth before enforcing publish gating — the creator can always preview
-  // their own storefront and kits (matching the preview banner in the layout).
   const supabase = createSupabaseServer()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   const viewerIsCreator = user
     ? !!(await prisma.creator.findUnique({ where: { userId: user.id, id: creator.id }, select: { id: true } }))
     : false
 
-  // Non-owners cannot see unpublished storefronts
   if (!creator.isPublished && !viewerIsCreator) notFound()
 
   const kit = await prisma.tripKit.findFirst({
-    // Creators can preview their own draft kits; everyone else only sees published
     where: { slug: params.slug, creatorId: creator.id, ...(viewerIsCreator ? {} : { isPublished: true }) },
     include: {
       days: {
@@ -53,8 +62,6 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
 
   if (!kit) notFound()
 
-  // user + viewerIsCreator already resolved above for publish gating;
-  // reuse them here for access gating and save state.
   let hasAccess = kit.accessTier === 'FREE' || viewerIsCreator
   let subscriber: { id: string } | null = null
   let isSaved = false
@@ -66,7 +73,6 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
     })
 
     if (subscriber) {
-      // Check access for gated kits
       if (!hasAccess) {
         const sub = await prisma.subscription.findFirst({
           where: { subscriberId: subscriber.id, creatorId: creator.id, status: 'ACTIVE' },
@@ -82,7 +88,6 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
         }
       }
 
-      // Check saved state
       const saved = await prisma.savedKit.findUnique({
         where: { subscriberId_tripKitId: { subscriberId: subscriber.id, tripKitId: kit.id } },
         select: { id: true },
@@ -91,51 +96,53 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
     }
   }
 
-  // Increment view count (fire-and-forget, best effort)
   void prisma.tripKit.update({ where: { id: kit.id }, data: { viewCount: { increment: 1 } } }).catch(() => {})
 
   const previewDays = hasAccess ? kit.days : kit.days.slice(0, 1)
-
   const isDraftPreview = viewerIsCreator && (!creator.isPublished || !kit.isPublished)
+  const theme = getStorefrontTheme(creator.storefrontTheme)
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-12">
-      {/* Draft preview banner */}
+    <div
+      className="storefront-shell mx-auto max-w-4xl px-6 py-12"
+      style={{ ...theme.cssVars, backgroundImage: `var(--storefront-page-bg), url(${theme.storefrontBackdropImageUrl})` }}
+    >
       {isDraftPreview && (
-        <div className="mb-6 rounded-xl bg-yellow-500/10 border border-yellow-500/20 px-4 py-3 flex items-center justify-between gap-4">
-          <p className="text-sm text-yellow-400">
-            {!kit.isPublished ? '📝 Draft — only you can see this kit.' : '🔒 Your storefront is unpublished — only you can preview it.'}
+        <div className="storefront-surface mb-6 flex items-center justify-between gap-4 rounded-xl border px-4 py-3">
+          <p className="storefront-subtle text-sm">
+            {!kit.isPublished ? 'Draft preview - only you can see this kit.' : 'Your storefront is unpublished - only you can preview it.'}
           </p>
-          <a href="/dashboard/kits" className="text-xs text-yellow-400 hover:text-yellow-300 underline underline-offset-2 shrink-0">
-            Manage kits →
+          <a href="/dashboard/kits" className="storefront-heading shrink-0 text-xs underline underline-offset-2">
+            Manage kits -&gt;
           </a>
         </div>
       )}
 
-      {/* Header */}
       <div className="mb-8">
-        <Link href={`/@${creator.handle}/kits`} className="text-sm text-white/40 hover:text-white mb-4 inline-block">← All kits</Link>
+        <Link href={`/@${creator.handle}/kits`} className="storefront-muted mb-4 inline-block text-sm hover:text-[var(--storefront-text)]">
+          &larr; All kits
+        </Link>
 
         {kit.coverImageUrl && (
-          <div className="aspect-video rounded-2xl overflow-hidden mb-6">
+          <div className="mb-6 aspect-video overflow-hidden rounded-2xl">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={kit.coverImageUrl} alt={kit.title} className="w-full h-full object-cover" />
+            <img src={kit.coverImageUrl} alt={kit.title} className="h-full w-full object-cover" />
           </div>
         )}
 
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white">{kit.title}</h1>
-            {kit.description && <p className="text-white/60 mt-2 leading-relaxed">{kit.description}</p>}
-            <div className="flex flex-wrap items-center gap-3 mt-3 text-sm text-white/40">
-              {kit.primaryCity && <span>📍 {kit.primaryCity}</span>}
-              {kit.durationDays && <span>📅 {kit.durationDays} days</span>}
+            <h1 className="storefront-heading text-3xl font-bold">{kit.title}</h1>
+            {kit.description && <p className="storefront-subtle mt-2 leading-relaxed">{kit.description}</p>}
+            <div className="storefront-muted mt-3 flex flex-wrap items-center gap-3 text-sm">
+              {kit.primaryCity && <span>{kit.primaryCity}</span>}
+              {kit.durationDays && <span>{kit.durationDays} days</span>}
               {kit.estimatedBudgetLow && kit.estimatedBudgetHigh && (
-                <span>💰 ${kit.estimatedBudgetLow.toLocaleString()}–${kit.estimatedBudgetHigh.toLocaleString()} per person</span>
+                <span>${kit.estimatedBudgetLow.toLocaleString()}-${kit.estimatedBudgetHigh.toLocaleString()} per person</span>
               )}
             </div>
           </div>
-          <div className="shrink-0 flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <SaveKitButton
               kitId={kit.id}
               initialSaved={isSaved}
@@ -143,37 +150,40 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
               creatorHandle={creator.handle}
             />
             {!hasAccess && (
-              <span className="text-xs px-2 py-1 rounded-full bg-white/10 text-white/50">
-                {kit.accessTier === 'FOLLOWER' ? '🔓 Follow to unlock' : '⭐ Premium'}
+              <span className="storefront-chip rounded-full px-2 py-1 text-xs">
+                {kit.accessTier === 'FOLLOWER' ? 'Follow to unlock' : 'Premium'}
               </span>
             )}
           </div>
         </div>
 
-        {/* Creator card */}
-        <div className="flex items-center gap-3 mt-6 pt-6 border-t border-white/10">
+        <div className="mt-6 flex items-center gap-3 border-t pt-6" style={{ borderColor: 'var(--storefront-border)' }}>
           {creator.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={creator.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover" />
+            <img src={creator.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
           ) : (
-            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-sm">{creator.displayName[0]}</div>
+            <div className="storefront-surface storefront-heading flex h-10 w-10 items-center justify-center rounded-full border text-sm">
+              {creator.displayName[0]}
+            </div>
           )}
           <div>
-            <Link href={`/@${creator.handle}`} className="text-sm font-medium text-white hover:text-white/70">{creator.displayName}</Link>
-            <p className="text-xs text-white/40">@{creator.handle}</p>
+            <Link href={`/@${creator.handle}`} className="storefront-heading text-sm font-medium hover:opacity-80">
+              {creator.displayName}
+            </Link>
+            <p className="storefront-muted text-xs">@{creator.handle}</p>
           </div>
-          <Link href={`/@${creator.handle}/subscribe`} className="ml-auto text-sm btn-ghost py-1.5 px-4">Follow</Link>
+          <Link href={`/@${creator.handle}/subscribe`} className="ml-auto btn-ghost px-4 py-1.5 text-sm">
+            Follow
+          </Link>
         </div>
       </div>
 
-      {/* Paywall */}
       {!hasAccess && (
-        <div className="glass-card p-8 mb-8 text-center">
-          <p className="text-2xl mb-3">{kit.accessTier === 'FOLLOWER' ? '🔓' : '⭐'}</p>
-          <h2 className="text-lg font-semibold text-white mb-2">
+        <div className="storefront-card mb-8 p-8 text-center">
+          <h2 className="storefront-heading mb-2 text-lg font-semibold">
             {kit.accessTier === 'FOLLOWER' ? 'Follow to unlock this kit' : 'Subscribe to unlock this kit'}
           </h2>
-          <p className="text-white/40 text-sm mb-6">
+          <p className="storefront-muted mb-6 text-sm">
             {kit.accessTier === 'FOLLOWER'
               ? `Follow ${creator.displayName} for free to access all follower-tier kits.`
               : `Subscribe to ${creator.displayName} to unlock premium kits and exclusive content.`}
@@ -184,67 +194,72 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
         </div>
       )}
 
-      {/* Itinerary */}
       {previewDays.length > 0 && (
         <div className="space-y-6">
-          <h2 className="text-xl font-bold text-white">Itinerary</h2>
+          <h2 className="storefront-heading text-xl font-bold">Itinerary</h2>
 
-          {previewDays.map(day => (
-            <div key={day.id} className="glass-card overflow-hidden">
-              <div className="p-5 border-b border-white/10">
-                <h3 className="font-semibold text-white">{day.title}</h3>
-                {day.summary && <p className="text-white/40 text-sm mt-1">{day.summary}</p>}
+          {previewDays.map((day) => (
+            <div key={day.id} className="storefront-card overflow-hidden">
+              <div className="border-b p-5" style={{ borderColor: 'var(--storefront-border)' }}>
+                <h3 className="storefront-heading font-semibold">{day.title}</h3>
+                {day.summary && <p className="storefront-muted mt-1 text-sm">{day.summary}</p>}
               </div>
-              <div className="divide-y divide-white/10">
-                {day.activities.map(activity => (
-                  <div key={activity.id} className="p-5 flex gap-4">
-                    <div className="shrink-0 text-xs text-white/30 w-16 pt-0.5">{activity.time ?? '—'}</div>
+              <div className="divide-y" style={{ borderColor: 'var(--storefront-border)' }}>
+                {day.activities.map((activity) => (
+                  <div key={activity.id} className="flex gap-4 p-5">
+                    <div className="storefront-muted w-16 shrink-0 pt-0.5 text-xs">{activity.time ?? '-'}</div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-white">{activity.title}</p>
-                      {activity.description && <p className="text-xs text-white/50 mt-1 leading-relaxed">{activity.description}</p>}
+                      <p className="storefront-heading text-sm font-medium">{activity.title}</p>
+                      {activity.description && <p className="storefront-muted mt-1 text-xs leading-relaxed">{activity.description}</p>}
                       {activity.affiliateLink && (
                         <a
                           href={`/r/r/${activity.affiliateLink.shortCode}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 mt-2 text-xs text-white/70 hover:text-white border border-white/10 px-3 py-1.5 rounded-lg hover:border-white/30 transition-colors"
+                          className="mt-2 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors hover:opacity-80"
+                          style={{ borderColor: 'var(--storefront-border)', color: 'var(--storefront-subtle)' }}
                         >
                           {activity.affiliateLink.priceFrom && <span>{activity.affiliateLink.priceFrom}</span>}
-                          Book on {activity.affiliateLink.provider.replace(/_/g, ' ')} ↗
+                          Book on {activity.affiliateLink.provider.replace(/_/g, ' ')} -&gt;
                         </a>
                       )}
                     </div>
                   </div>
                 ))}
                 {day.activities.length === 0 && (
-                  <div className="p-5 text-white/30 text-sm text-center">No activities planned for this day yet.</div>
+                  <div className="storefront-muted p-5 text-center text-sm">No activities planned for this day yet.</div>
                 )}
               </div>
               {day.tips.length > 0 && (
                 <div className="px-5 pb-5">
-                  <p className="text-xs font-medium text-white/40 uppercase tracking-wider mb-2">Tips</p>
+                  <p className="storefront-muted mb-2 text-xs font-medium uppercase tracking-wider">Tips</p>
                   <ul className="space-y-1">
-                    {day.tips.map((tip, i) => <li key={i} className="text-xs text-white/50">💡 {tip}</li>)}
+                    {day.tips.map((tip, i) => (
+                      <li key={i} className="storefront-muted text-xs">
+                        {tip}
+                      </li>
+                    ))}
                   </ul>
                 </div>
               )}
             </div>
           ))}
 
-          {/* Blurred remaining days if no access */}
           {!hasAccess && kit.days.length > 1 && (
             <div className="relative">
-              <div className="opacity-20 pointer-events-none select-none">
-                {kit.days.slice(1, 3).map(day => (
-                  <div key={day.id} className="glass-card mb-4 p-5">
-                    <h3 className="font-semibold text-white">{day.title}</h3>
+              <div className="pointer-events-none select-none opacity-20">
+                {kit.days.slice(1, 3).map((day) => (
+                  <div key={day.id} className="storefront-card mb-4 p-5">
+                    <h3 className="storefront-heading font-semibold">{day.title}</h3>
                   </div>
                 ))}
               </div>
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
-                  <p className="text-white/60 text-sm mb-3">{kit.days.length - 1} more days inside</p>
-                  <Link href={`/@${creator.handle}/subscribe`} className="btn-primary text-sm">Unlock full itinerary</Link>
+                  <p className="storefront-subtle mb-3 text-sm">{kit.days.length - 1} more days inside</p>
+                  <Link href={`/@${creator.handle}/subscribe`} className="btn-primary text-sm">
+                    Unlock full itinerary
+                  </Link>
                 </div>
               </div>
             </div>
@@ -252,19 +267,20 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
         </div>
       )}
 
-      {/* Source vlogs */}
       {kit.sourceVlogs.length > 0 && hasAccess && (
         <div className="mt-10">
-          <h2 className="text-xl font-bold text-white mb-4">Watch the Vlog</h2>
+          <h2 className="storefront-heading mb-4 text-xl font-bold">Watch the Vlog</h2>
           <div className="space-y-3">
-            {kit.sourceVlogs.map(sv => (
-              <div key={sv.vlogId} className="glass-card p-4 flex items-center gap-3">
-                <span className="text-lg">{sv.vlog.platform === 'YOUTUBE' ? '▶' : '♪'}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white truncate">{sv.vlog.title}</p>
-                  <p className="text-xs text-white/40">{sv.vlog.platform}</p>
+            {kit.sourceVlogs.map((sv) => (
+              <div key={sv.vlogId} className="storefront-card flex items-center gap-3 p-4">
+                <span className="storefront-heading text-lg">{sv.vlog.platform === 'YOUTUBE' ? 'Video' : 'Clip'}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="storefront-heading truncate text-sm">{sv.vlog.title}</p>
+                  <p className="storefront-muted text-xs">{sv.vlog.platform}</p>
                 </div>
-                <a href={sv.vlog.externalUrl} target="_blank" rel="noopener noreferrer" className="text-xs btn-ghost py-1.5 px-3">Watch ↗</a>
+                <a href={sv.vlog.externalUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost px-3 py-1.5 text-xs">
+                  Watch -&gt;
+                </a>
               </div>
             ))}
           </div>

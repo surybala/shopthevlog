@@ -33,6 +33,17 @@ TERMINAL_OR_ACTIVE_STATUSES = {
 }
 
 
+def _classify_visual_failure(error: Exception, *, stage: str) -> str:
+    message = str(error).lower()
+    if any(token in message for token in {"supabase", "bucket", "storage", "public url"}):
+        return f"{stage}_supabase"
+    if "gemini" in message:
+        return f"{stage}_gemini"
+    if "api key" in message:
+        return f"{stage}_credentials"
+    return f"{stage}_{type(error).__name__}"
+
+
 def _update_vlog_status(vlog_id: str, status: str) -> None:
     with PgClient() as db:
         db.execute(
@@ -104,7 +115,8 @@ async def process_vlog_task(vlog_id: str) -> None:
         _update_vlog_status(vlog_id, "TRANSCRIPT_DONE")
 
         visual_opportunity_count = 0
-        visual_error_message: str | None = None
+        visual_error_messages: list[str] = []
+        visual_sync_succeeded = False
         try:
             sync_visual_evidence(
                 vlog_id,
@@ -114,19 +126,41 @@ async def process_vlog_task(vlog_id: str) -> None:
                 external_video_url=external_video_url,
                 thumbnail_url=thumbnail_url,
             )
-            visual_summary = enrich_visual_graph(vlog_id, creator_id, title) or {}
-            visual_opportunity_count = int(visual_summary.get("opportunities") or 0)
-            _update_vlog_status(vlog_id, "VISION_DONE")
+            visual_sync_succeeded = True
         except Exception as visual_error:
-            logger.warning("Visual evidence sync failed for vlog %s: %s", vlog_id, visual_error)
-            visual_error_message = f"visual_evidence_failed: {visual_error}"
+            logger.warning("Visual asset storage failed for vlog %s: %s", vlog_id, visual_error)
+            visual_error_message = f"visual_storage_failed: {visual_error}"
+            visual_error_messages.append(visual_error_message)
             _update_vlog_pipeline_error(vlog_id, visual_error_message)
+            observability_store.record(
+                kind="pipeline",
+                name="process_vlog.visual_storage",
+                status="failed",
+                detail=_classify_visual_failure(visual_error, stage="visual_storage"),
+            )
+
+        if visual_sync_succeeded:
+            try:
+                visual_summary = enrich_visual_graph(vlog_id, creator_id, title) or {}
+                visual_opportunity_count = int(visual_summary.get("opportunities") or 0)
+                _update_vlog_status(vlog_id, "VISION_DONE")
+            except Exception as visual_error:
+                logger.warning("Visual Gemini enrichment failed for vlog %s: %s", vlog_id, visual_error)
+                visual_error_message = f"visual_enrichment_failed: {visual_error}"
+                visual_error_messages.append(visual_error_message)
+                _update_vlog_pipeline_error(vlog_id, visual_error_message)
+                observability_store.record(
+                    kind="pipeline",
+                    name="process_vlog.visual_enrichment",
+                    status="failed",
+                    detail=_classify_visual_failure(visual_error, stage="visual_enrichment"),
+                )
 
         total_opportunities = int(transcript_summary.get("opportunities") or 0) + visual_opportunity_count
         if total_opportunities <= 0:
             failure_reason = "no_opportunities_extracted"
-            if visual_error_message:
-                failure_reason = f"{failure_reason}; {visual_error_message}"
+            if visual_error_messages:
+                failure_reason = f"{failure_reason}; {'; '.join(visual_error_messages)}"
             logger.warning("No reviewable opportunities created for vlog %s (%s)", vlog_id, failure_reason)
             _update_vlog_pipeline_error(vlog_id, failure_reason)
             _mark_vlog_failed(vlog_id)

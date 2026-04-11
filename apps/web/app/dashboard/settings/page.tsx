@@ -17,7 +17,7 @@ export default async function DashboardSettingsPage() {
     <div className="p-8">
       <div className="dashboard-mirror-panel mb-8 p-6">
         <p className="dashboard-mirror-kicker text-xs">Creator identity</p>
-        <h1 className="mt-3 text-3xl font-bold text-white">Settings</h1>
+        <h1 className="mt-3 text-3xl font-bold text-[#17332d]">Settings</h1>
         <p className="dashboard-mirror-subtle mt-2 text-sm">Manage your profile, channels, storefront theme, and subscription tiers.</p>
       </div>
       <SettingsForm

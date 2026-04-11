@@ -89,7 +89,10 @@ describe('StorefrontHomePage', () => {
     expect(html).toContain('Sunset itineraries and sea air');
     expect(html).not.toContain('What subscribers get');
     expect(html).not.toContain('Moodboard');
-    expect(html).toContain('background-image:linear-gradient');
+    expect(html).toContain('storefront-shell');
+    expect(html).toContain('text-[#17332d]');
+    expect(html).toContain('--storefront-page-bg');
+    expect(html).toContain('background-image:var(--storefront-page-bg)');
     expect(html).toContain('data:image/svg+xml');
   });
 });

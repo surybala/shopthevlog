@@ -7,7 +7,6 @@ interface Props {
   creatorHandle: string
   initialFollowing: boolean
   isLoggedIn: boolean
-  /** Optional extra classes for the button */
   className?: string
   size?: 'sm' | 'default'
 }
@@ -23,7 +22,7 @@ export default function FollowButton({
   const [following, setFollowing] = useState(initialFollowing)
   const [loading, setLoading] = useState(false)
 
-  const sizeCls = size === 'sm' ? 'text-sm py-1.5 px-4' : 'text-sm py-2 px-6'
+  const sizeCls = size === 'sm' ? 'px-4 py-1.5 text-sm' : 'px-6 py-2 text-sm'
 
   async function handleClick() {
     if (!isLoggedIn) {
@@ -55,13 +54,11 @@ export default function FollowButton({
     <button
       onClick={handleClick}
       disabled={loading}
-      className={`${sizeCls} font-medium rounded-xl transition-colors disabled:opacity-50 ${
-        following
-          ? 'border border-white/20 text-white/60 hover:border-red-500/40 hover:text-red-400 bg-transparent'
-          : 'btn-primary'
+      className={`${sizeCls} disabled:opacity-50 ${
+        following ? 'storefront-outline-button storefront-outline-button--active' : 'btn-primary'
       } ${className}`}
     >
-      {loading ? '…' : following ? 'Following' : 'Follow'}
+      {loading ? '...' : following ? 'Following' : 'Follow'}
     </button>
   )
 }

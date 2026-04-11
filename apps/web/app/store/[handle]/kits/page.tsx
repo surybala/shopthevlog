@@ -9,15 +9,18 @@ import {
 } from '@/lib/ranking'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import AccessBadge from '@/components/AccessBadge'
+import { getStorefrontTheme } from '@/lib/storefrontThemes'
 
 export async function generateMetadata({ params }: { params: { handle: string } }) {
   const creator = await prisma.creator.findUnique({ where: { handle: params.handle }, select: { displayName: true } })
-  return { title: `Trip Kits — ${creator?.displayName ?? params.handle} — VlogShopper` }
+  return { title: `Trip Kits - ${creator?.displayName ?? params.handle} - VlogShopper` }
 }
 
 export default async function StorefrontKitsPage({ params }: { params: { handle: string } }) {
   const supabase = createSupabaseServer()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   const creator = await prisma.creator.findUnique({
     where: { handle: params.handle },
@@ -26,10 +29,23 @@ export default async function StorefrontKitsPage({ params }: { params: { handle:
         where: { isPublished: true },
         orderBy: tripKitRankingOrder,
         select: {
-          id: true, title: true, slug: true, coverImageUrl: true, primaryCity: true, countries: true,
-          cities: true, durationDays: true, accessTier: true, isFeatured: true, viewCount: true,
-          saveCount: true, estimatedBudgetLow: true, estimatedBudgetHigh: true, travelStyle: true,
-          description: true, generatedByAI: true,
+          id: true,
+          title: true,
+          slug: true,
+          coverImageUrl: true,
+          primaryCity: true,
+          countries: true,
+          cities: true,
+          durationDays: true,
+          accessTier: true,
+          isFeatured: true,
+          viewCount: true,
+          saveCount: true,
+          estimatedBudgetLow: true,
+          estimatedBudgetHigh: true,
+          travelStyle: true,
+          description: true,
+          generatedByAI: true,
         },
       },
     },
@@ -82,32 +98,48 @@ export default async function StorefrontKitsPage({ params }: { params: { handle:
     creator.tripKits.map((kit) => ({ ...kit, creatorId: creator.id })),
     { [creator.id]: accessLevel },
   )
+  const theme = getStorefrontTheme(creator.storefrontTheme)
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-12">
+    <div
+      className="storefront-shell mx-auto max-w-6xl px-6 py-12"
+      style={{ ...theme.cssVars, backgroundImage: `var(--storefront-page-bg), url(${theme.storefrontBackdropImageUrl})` }}
+    >
       <div className="mb-10">
-        <Link href={`/@${creator.handle}`} className="text-sm text-white/40 hover:text-white mb-4 inline-block">← {creator.displayName}</Link>
-        <h1 className="text-3xl font-bold text-white">All Trip Kits</h1>
-        <p className="text-white/40 mt-1">{rankedTripKits.length} kits by {creator.displayName}</p>
+        <Link href={`/@${creator.handle}`} className="storefront-muted mb-4 inline-block text-sm hover:text-[var(--storefront-text)]">
+          &larr; {creator.displayName}
+        </Link>
+        <h1 className="storefront-heading text-3xl font-bold">All Trip Kits</h1>
+        <p className="storefront-muted mt-1">{rankedTripKits.length} kits by {creator.displayName}</p>
       </div>
 
       {rankedTripKits.length === 0 ? (
-        <div className="text-center py-24">
-          <p className="text-white/30">No kits published yet.</p>
+        <div className="py-24 text-center">
+          <p className="storefront-muted">No kits published yet.</p>
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-6">
-          {rankedTripKits.map(kit => (
-            <Link key={kit.id} href={`/@${creator.handle}/kits/${kit.slug}`} className="glass-card overflow-hidden group">
-              <div className="aspect-video bg-white/5 relative overflow-hidden">
+          {rankedTripKits.map((kit) => (
+            <Link key={kit.id} href={`/@${creator.handle}/kits/${kit.slug}`} className="storefront-card group overflow-hidden">
+              <div className="storefront-surface relative aspect-video overflow-hidden border-0">
                 {kit.coverImageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={kit.coverImageUrl} alt={kit.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <img
+                    src={kit.coverImageUrl}
+                    alt={kit.title}
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-5xl">🗺</div>
+                  <div className="storefront-muted flex h-full w-full items-center justify-center text-3xl font-semibold">
+                    KIT
+                  </div>
                 )}
-                <div className="absolute top-2 right-2 flex gap-1">
-                  {kit.isFeatured && <span className="text-xs px-2 py-0.5 rounded-full bg-black/60 text-yellow-400">Featured</span>}
+                <div className="absolute right-2 top-2 flex gap-1">
+                  {kit.isFeatured && (
+                    <span className="rounded-full px-2 py-0.5 text-xs text-[#fff6ee]" style={{ background: 'var(--storefront-text)' }}>
+                      Featured
+                    </span>
+                  )}
                   {kit.accessTier !== 'FREE' && (
                     <AccessBadge label={kit.accessTier === 'FOLLOWER' ? 'Follow' : 'Premium'} />
                   )}
@@ -118,14 +150,24 @@ export default async function StorefrontKitsPage({ params }: { params: { handle:
                       className="text-[11px]"
                     />
                   )}
-                  {kit.generatedByAI && <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/60 text-white">AI</span>}
+                  {kit.generatedByAI && (
+                    <span className="rounded-full px-2 py-0.5 text-xs text-[#fff6ee]" style={{ background: 'color-mix(in srgb, var(--storefront-text) 80%, transparent)' }}>
+                      AI
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="p-5">
-                <h3 className="font-semibold text-white group-hover:text-white/80 line-clamp-2 leading-snug">{kit.title}</h3>
-                {kit.description && <p className="text-white/40 text-sm mt-1.5 line-clamp-2">{kit.description}</p>}
-                <div className="flex flex-wrap items-center gap-2 mt-3 text-xs text-white/40">
-                  {kit.countries.map(c => <span key={c} className="bg-white/5 px-2 py-0.5 rounded">{c}</span>)}
+                <h3 className="storefront-heading line-clamp-2 font-semibold leading-snug group-hover:opacity-80">
+                  {kit.title}
+                </h3>
+                {kit.description && <p className="storefront-muted mt-1.5 line-clamp-2 text-sm">{kit.description}</p>}
+                <div className="storefront-muted mt-3 flex flex-wrap items-center gap-2 text-xs">
+                  {kit.countries.map((country) => (
+                    <span key={country} className="storefront-chip rounded px-2 py-0.5">
+                      {country}
+                    </span>
+                  ))}
                   {kit.durationDays && <span>{kit.durationDays}d</span>}
                   {kit.estimatedBudgetLow && <span>from ${kit.estimatedBudgetLow.toLocaleString()}</span>}
                 </div>

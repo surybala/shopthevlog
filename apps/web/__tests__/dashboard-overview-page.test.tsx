@@ -96,6 +96,6 @@ describe('DashboardOverviewPage', () => {
     expect(html).toContain('Tokyo Spring Edit')
     expect(html).toContain('dashboard-mirror-panel')
     expect(html).toContain('dashboard-mirror-card')
-    expect(html).toContain('text-4xl font-semibold tracking-tight text-[#f7f1e4]')
+    expect(html).toContain('text-4xl font-semibold tracking-tight text-[#17332d]')
   })
 })

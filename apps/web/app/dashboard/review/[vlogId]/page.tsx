@@ -163,25 +163,25 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
           <Link href="/dashboard/review" className="dashboard-mirror-subtle mt-3 inline-block text-sm hover:text-white">
             Back to review queue
           </Link>
-          <h1 className="mt-3 text-3xl font-bold text-white">{vlog.title}</h1>
+          <h1 className="mt-3 text-3xl font-bold text-[#17332d]">{vlog.title}</h1>
           <p className="dashboard-mirror-subtle mt-2 text-sm">
             {opportunities.length} opportunity{opportunities.length !== 1 ? 'ies' : 'y'} extracted from this vlog
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
           <PublishTripKitButton
             vlogId={vlog.id}
             disabled={!publishSummary.readyToPublish}
             actionLabel={publishSummary.actionLabel}
           />
-          <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/82">
+          <span className="inline-flex shrink-0 items-center rounded-full bg-[rgba(23,51,45,0.08)] px-3 py-1 text-xs font-medium uppercase tracking-[0.14em] text-[rgba(23,51,45,0.72)]">
             {vlog.processingStatus}
           </span>
           <a
             href={vlog.externalUrl}
             target="_blank"
             rel="noreferrer"
-            className="rounded-full bg-white/10 px-3 py-2 text-sm text-white transition-colors hover:bg-white/16"
+            className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-[rgba(23,51,45,0.12)] bg-[rgba(255,255,255,0.54)] px-4 py-2 text-sm font-medium text-[#17332d] transition-colors hover:bg-[rgba(255,255,255,0.76)]"
           >
             Open source vlog
           </a>
@@ -204,9 +204,9 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
             </p>
           </div>
           {publishSummary.tripKit ? (
-            <div className="rounded-2xl bg-white/8 px-4 py-3 text-sm text-white/80">
+            <div className="rounded-2xl bg-[rgba(23,51,45,0.08)] px-4 py-3 text-sm text-[rgba(23,51,45,0.7)]">
               <p className="dashboard-mirror-kicker text-xs">Current Trip Kit</p>
-              <p className="mt-1 font-medium text-white">{publishSummary.tripKit.title}</p>
+              <p className="mt-1 font-medium text-[#17332d]">{publishSummary.tripKit.title}</p>
               <p className="dashboard-mirror-muted mt-1 text-xs">/{publishSummary.tripKit.slug}</p>
             </div>
           ) : null}
@@ -214,24 +214,24 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
 
         {publishSummary.readyToPublish ? (
           <div className="mt-4 grid gap-3 md:grid-cols-4">
-            <div>
-              <p className="dashboard-mirror-kicker text-xs">Source Opportunity</p>
-              <p className="mt-1 text-sm text-white">{publishSummary.opportunity?.title}</p>
-            </div>
-            <div>
-              <p className="dashboard-mirror-kicker text-xs">Days</p>
-              <p className="mt-1 text-sm text-white">{publishSummary.totalDays}</p>
-            </div>
-            <div>
-              <p className="dashboard-mirror-kicker text-xs">Activities</p>
-              <p className="mt-1 text-sm text-white">{publishSummary.totalActivities}</p>
-            </div>
-            <div>
-              <p className="dashboard-mirror-kicker text-xs">Destination</p>
-              <p className="mt-1 text-sm text-white">
-                {publishSummary.itinerary?.primaryCity ?? publishSummary.itinerary?.destinations?.[0] ?? 'Not set'}
-              </p>
-            </div>
+                <div>
+                  <p className="dashboard-mirror-kicker text-xs">Source Opportunity</p>
+                  <p className="mt-1 text-sm text-[#17332d]">{publishSummary.opportunity?.title}</p>
+                </div>
+                <div>
+                  <p className="dashboard-mirror-kicker text-xs">Days</p>
+                  <p className="mt-1 text-sm text-[#17332d]">{publishSummary.totalDays}</p>
+                </div>
+                <div>
+                  <p className="dashboard-mirror-kicker text-xs">Activities</p>
+                  <p className="mt-1 text-sm text-[#17332d]">{publishSummary.totalActivities}</p>
+                </div>
+                <div>
+                  <p className="dashboard-mirror-kicker text-xs">Destination</p>
+                  <p className="mt-1 text-sm text-[#17332d]">
+                    {publishSummary.itinerary?.primaryCity ?? publishSummary.itinerary?.destinations?.[0] ?? 'Not set'}
+                  </p>
+                </div>
           </div>
         ) : null}
 
@@ -277,20 +277,20 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
               <div className="mb-4 flex items-start justify-between gap-6">
                 <div>
                   <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/78">
+                    <span className="rounded-full bg-[rgba(23,51,45,0.08)] px-2 py-1 text-xs text-[rgba(23,51,45,0.72)]">
                       {formatOpportunityTypeLabel(opportunity.opportunityType)}
                     </span>
-                    <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/78">
+                    <span className="rounded-full bg-[rgba(23,51,45,0.08)] px-2 py-1 text-xs text-[rgba(23,51,45,0.72)]">
                       Confidence {formatPercent(opportunity.confidence)}
                     </span>
-                    <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/78">
+                    <span className="rounded-full bg-[rgba(23,51,45,0.08)] px-2 py-1 text-xs text-[rgba(23,51,45,0.72)]">
                       Rank {(opportunity.rankScore ?? 0).toFixed(2)}
                     </span>
-                    <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/78">
+                    <span className="rounded-full bg-[rgba(23,51,45,0.08)] px-2 py-1 text-xs text-[rgba(23,51,45,0.72)]">
                       {opportunity.reviewState}
                     </span>
                   </div>
-                  <h2 className="text-lg font-semibold text-white">{opportunity.title}</h2>
+                  <h2 className="text-lg font-semibold text-[#17332d]">{opportunity.title}</h2>
                   {opportunity.description ? (
                     <p className="dashboard-mirror-subtle mt-2 max-w-3xl text-sm">{opportunity.description}</p>
                   ) : null}
@@ -301,7 +301,7 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
               <div className="mb-4 grid gap-3 md:grid-cols-3">
                 <div>
                   <p className="dashboard-mirror-kicker text-xs">Entity</p>
-                  <p className="mt-1 text-sm text-white">
+                  <p className="mt-1 text-sm text-[#17332d]">
                     {opportunity.candidateEntity?.canonicalLabel
                       ?? opportunity.candidateEntity?.rawLabel
                       ?? 'Graph-only opportunity'}
@@ -309,11 +309,11 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
                 </div>
                 <div>
                   <p className="dashboard-mirror-kicker text-xs">Evidence Sources</p>
-                  <p className="mt-1 text-sm text-white">{summarizeEvidenceSources(opportunity)}</p>
+                  <p className="mt-1 text-sm text-[#17332d]">{summarizeEvidenceSources(opportunity)}</p>
                 </div>
                 <div>
                   <p className="dashboard-mirror-kicker text-xs">Temporal Anchor</p>
-                  <p className="mt-1 text-sm text-white">
+                  <p className="mt-1 text-sm text-[#17332d]">
                     {opportunity.candidateEntity
                       ? `${Math.round(opportunity.candidateEntity.startSec)}s - ${Math.round(opportunity.candidateEntity.endSec)}s`
                       : 'Graph-level opportunity'}

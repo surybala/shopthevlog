@@ -13,8 +13,8 @@ function SuccessContent({
   const creatorHandle = searchParams.creator
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6">
-      <div className="max-w-md w-full text-center">
+    <div className="editorial-shell min-h-screen flex items-center justify-center px-6 text-[#17332d]">
+      <div className="editorial-card max-w-md w-full p-10 text-center">
         {/* Checkmark */}
         <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-6">
           <svg
@@ -28,8 +28,8 @@ function SuccessContent({
           </svg>
         </div>
 
-        <h1 className="text-2xl font-bold text-white mb-3">You&apos;re subscribed!</h1>
-        <p className="text-white/50 text-sm leading-relaxed mb-8">
+        <h1 className="mb-3 text-2xl font-bold text-[#17332d]">You&apos;re subscribed!</h1>
+        <p className="editorial-subtle mb-8 text-sm leading-relaxed">
           Your subscription is active. You now have access to all premium Trip Kits and exclusive
           content. A receipt has been sent to your email.
         </p>

@@ -13,7 +13,10 @@ import AccessBadge from '@/components/AccessBadge'
 import { getStorefrontTheme } from '@/lib/storefrontThemes'
 
 export async function generateMetadata({ params }: { params: { handle: string } }) {
-  const creator = await prisma.creator.findUnique({ where: { handle: params.handle }, select: { displayName: true, bio: true, avatarUrl: true } })
+  const creator = await prisma.creator.findUnique({
+    where: { handle: params.handle },
+    select: { displayName: true, bio: true, avatarUrl: true },
+  })
   if (!creator) return {}
   return {
     title: `${creator.displayName} - VlogShopper`,
@@ -28,7 +31,9 @@ export async function generateMetadata({ params }: { params: { handle: string } 
 
 export default async function StorefrontHomePage({ params }: { params: { handle: string } }) {
   const supabase = createSupabaseServer()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   const creator = await prisma.creator.findUnique({
     where: { handle: params.handle },
@@ -122,74 +127,93 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
 
   return (
     <div
-      className={`relative min-h-screen overflow-hidden ${theme.pageClassName}`}
+      className={`storefront-shell relative min-h-screen overflow-hidden ${theme.pageClassName}`}
       style={{
-        backgroundImage: `linear-gradient(180deg, rgba(3,12,11,0.72) 0%, rgba(3,12,11,0.88) 42%, rgba(3,12,11,0.96) 100%), url(${theme.storefrontBackdropImageUrl})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center top',
+        ...theme.cssVars,
+        backgroundImage: `var(--storefront-page-bg), url(${theme.storefrontBackdropImageUrl})`,
       }}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.08),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.06),transparent_28%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.1),transparent_28%)]" />
 
       <section className="relative px-6 pb-12 pt-10 md:pb-16 md:pt-16">
-        <div className={`mx-auto max-w-6xl overflow-hidden rounded-[2rem] border ${theme.shellClassName} shadow-[0_30px_120px_rgba(0,0,0,0.35)]`}>
+        <div className={`mx-auto max-w-6xl overflow-hidden ${theme.shellClassName} shadow-[0_30px_120px_rgba(0,0,0,0.12)]`}>
           <div className="grid gap-0 lg:grid-cols-[1.1fr_0.9fr]">
             <div className={`relative p-8 md:p-10 ${theme.heroClassName}`}>
               <div className="mt-6 flex items-start gap-4">
                 {creator.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={creator.avatarUrl} alt={creator.displayName} className="h-20 w-20 shrink-0 rounded-full object-cover ring-2 ring-white/10" />
+                  <img
+                    src={creator.avatarUrl}
+                    alt={creator.displayName}
+                    className="h-20 w-20 shrink-0 rounded-full object-cover ring-2 ring-[color:var(--storefront-border)]"
+                  />
                 ) : (
-                  <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-white/10 text-3xl text-white">
+                  <div className="storefront-surface storefront-heading flex h-20 w-20 shrink-0 items-center justify-center rounded-full border text-3xl">
                     {creator.displayName[0]}
                   </div>
                 )}
                 <div className="min-w-0">
-                  <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">{creator.displayName}</h1>
+                  <h1 className="storefront-heading text-3xl font-semibold tracking-tight md:text-4xl">
+                    {creator.displayName}
+                  </h1>
                 </div>
               </div>
 
-              <h2 className="mt-8 max-w-2xl text-3xl font-semibold leading-tight text-white md:text-5xl">
+              <h2 className="storefront-heading mt-8 max-w-2xl text-3xl font-semibold leading-tight md:text-5xl">
                 {heroTitle}
               </h2>
-              <p className="mt-5 max-w-2xl text-sm leading-7 text-white/68 md:text-base">
+              <p className="storefront-subtle mt-5 max-w-2xl text-sm leading-7 md:text-base">
                 {heroBody}
               </p>
 
-              <div className="mt-6 flex flex-wrap items-center gap-4 text-xs text-white/45 md:text-sm">
+              <div className="storefront-muted mt-6 flex flex-wrap items-center gap-4 text-xs md:text-sm">
                 {creator.location && <span>Based in {creator.location}</span>}
                 <span>{creator._count.subscribers.toLocaleString()} subscribers</span>
                 {creator.youtubeHandle && (
-                  <a href={`https://youtube.com/@${creator.youtubeHandle}`} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-white">
+                  <a
+                    href={`https://youtube.com/@${creator.youtubeHandle}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="transition-colors hover:text-[var(--storefront-text)]"
+                  >
                     YouTube {'->'}
                   </a>
                 )}
                 {creator.tiktokHandle && (
-                  <a href={`https://tiktok.com/@${creator.tiktokHandle}`} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-white">
+                  <a
+                    href={`https://tiktok.com/@${creator.tiktokHandle}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="transition-colors hover:text-[var(--storefront-text)]"
+                  >
                     TikTok {'->'}
                   </a>
                 )}
               </div>
 
               <div className="mt-8 flex flex-wrap items-center gap-3">
-                <Link href={`/@${creator.handle}/subscribe`} className="btn-primary text-sm">Follow for free</Link>
-                <Link href={`/@${creator.handle}/kits`} className="btn-ghost text-sm">Browse all kits</Link>
+                <Link href={`/@${creator.handle}/subscribe`} className="btn-primary text-sm">
+                  Follow for free
+                </Link>
+                <Link href={`/@${creator.handle}/kits`} className="btn-ghost text-sm">
+                  Browse all kits
+                </Link>
               </div>
             </div>
 
-            <div className={`border-t border-white/10 p-6 lg:border-l lg:border-t-0 ${theme.cardClassName}`}>
+            <div className={`border-t border-[#17332d]/10 p-6 lg:border-l lg:border-t-0 ${theme.cardClassName}`}>
               <div className="grid grid-cols-2 gap-3">
                 {storefrontImages.slice(0, 4).map((imageUrl, index) => (
                   <div
                     key={`${imageUrl}-${index}`}
-                    className={`${index === 0 ? 'col-span-2' : ''} overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/5`}
+                    className={`${index === 0 ? 'col-span-2' : ''} storefront-surface overflow-hidden rounded-[1.5rem] border`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={imageUrl} alt="" className={`w-full object-cover ${index === 0 ? 'h-56' : 'h-32'}`} />
                   </div>
                 ))}
                 {storefrontImages.length === 0 && (
-                  <div className="col-span-2 flex min-h-72 items-center justify-center rounded-[1.5rem] border border-dashed border-white/15 bg-white/5 px-6 text-center text-sm leading-7 text-white/35">
+                  <div className="storefront-muted storefront-surface col-span-2 flex min-h-72 items-center justify-center rounded-[1.5rem] border border-dashed px-6 text-center text-sm leading-7">
                     This storefront will feel even more personal once the creator adds travel imagery in settings.
                   </div>
                 )}
@@ -199,12 +223,14 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
         </div>
       </section>
 
-      <div className="relative mx-auto max-w-6xl px-6 py-12 space-y-16">
+      <div className="relative mx-auto max-w-6xl space-y-16 px-6 py-12">
         {featuredKits.length > 0 && (
           <section>
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-white">Featured Trip Kits</h2>
-              <Link href={`/@${creator.handle}/kits`} className="text-sm text-white/40 hover:text-white">View all {'->'}</Link>
+              <h2 className="storefront-heading text-xl font-bold">Featured Trip Kits</h2>
+              <Link href={`/@${creator.handle}/kits`} className="storefront-muted text-sm hover:text-[var(--storefront-text)]">
+                View all {'->'}
+              </Link>
             </div>
             <div className="grid grid-cols-3 gap-4">
               {featuredKits.map((kit) => (
@@ -223,8 +249,10 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
         {recentKits.length > 0 && (
           <section>
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-white">Latest Drops</h2>
-              <Link href={`/@${creator.handle}/kits`} className="text-sm text-white/40 hover:text-white">View all {'->'}</Link>
+              <h2 className="storefront-heading text-xl font-bold">Latest Drops</h2>
+              <Link href={`/@${creator.handle}/kits`} className="storefront-muted text-sm hover:text-[var(--storefront-text)]">
+                View all {'->'}
+              </Link>
             </div>
             <div className="grid grid-cols-3 gap-4">
               {recentKits.map((kit) => (
@@ -241,8 +269,8 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
         )}
 
         {creator.tripKits.length === 0 && (
-          <div className={`rounded-[2rem] border ${theme.cardClassName} py-16 text-center`}>
-            <p className="text-white/40">No kits published yet. Check back soon!</p>
+          <div className={`py-16 text-center ${theme.cardClassName}`}>
+            <p className="storefront-muted">No kits published yet. Check back soon!</p>
           </div>
         )}
       </div>
@@ -280,17 +308,23 @@ function KitCard({
   )
 
   return (
-    <Link href={`/@${handle}/kits/${kit.slug}`} className={`overflow-hidden rounded-[1.5rem] border ${cardClassName} group`}>
-      <div className="relative aspect-video bg-white/5">
+    <Link href={`/@${handle}/kits/${kit.slug}`} className={`group overflow-hidden ${cardClassName}`}>
+      <div className="relative aspect-video bg-[rgba(255,255,255,0.3)]">
         {kit.coverImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={kit.coverImageUrl} alt={kit.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+          <img
+            src={kit.coverImageUrl}
+            alt={kit.title}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-4xl">🗺</div>
+          <div className="storefront-muted flex h-full w-full items-center justify-center text-3xl font-semibold">
+            KIT
+          </div>
         )}
         {kit.accessTier !== 'FREE' && (
           <AccessBadge
-            label={kit.accessTier === 'FOLLOWER' ? '🔓 Follow' : '⭐ Premium'}
+            label={kit.accessTier === 'FOLLOWER' ? 'Follow' : 'Premium'}
             className="absolute right-2 top-2"
           />
         )}
@@ -303,8 +337,10 @@ function KitCard({
         )}
       </div>
       <div className="p-4">
-        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-white group-hover:text-white/80">{kit.title}</h3>
-        <div className="mt-2 flex items-center gap-3 text-xs text-white/40">
+        <h3 className="storefront-heading line-clamp-2 text-sm font-semibold leading-snug group-hover:opacity-80">
+          {kit.title}
+        </h3>
+        <div className="storefront-muted mt-2 flex items-center gap-3 text-xs">
           {kit.primaryCity && <span>{kit.primaryCity}</span>}
           {kit.durationDays && <span>{kit.durationDays}d</span>}
           {kit.estimatedBudgetLow && <span>from ${kit.estimatedBudgetLow.toLocaleString()}</span>}

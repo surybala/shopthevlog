@@ -2,15 +2,14 @@ fastapi==0.111.0
 uvicorn[standard]==0.30.1
 pydantic==2.12.5
 pydantic-settings==2.13.1
-# TODO: upgrade to supabase>=2.7.0 once transitive deps (pyiceberg) resolve —
-#       newer versions drop gotrue in favour of supabase_auth and are compatible
-#       with httpx>=0.28. The gotrue __del__ bug is patched in tests/conftest.py.
-supabase==2.5.0
+# NOTE: newer supabase-py currently pulls in pyiceberg on Windows/Python 3.14.
+# The backend includes a tiny local shim for that optional analytics import so
+# the client can use modern sb_secret keys without requiring native build tools.
+supabase==2.28.3
 google-genai>=1.0.0
 httpx==0.27.0
-# h2 is intentionally excluded — httpcore negotiates HTTP/2 via ALPN when h2 is
-# installed, which triggers a ProtocolError with Supabase's server (httpcore#738).
-# Keeping h2 absent forces HTTP/1.1 for all supabase-py / httpx connections.
+# h2 is intentionally excluded from explicit requirements, but may arrive
+# transitively from newer supabase-py versions.
 python-jose[cryptography]==3.3.0
 google-auth==2.30.0
 google-auth-oauthlib==1.2.0

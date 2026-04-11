@@ -165,16 +165,13 @@ export default function VlogsClient({ initialVlogs }: Props) {
                 ) : null}
               </div>
 
-              <div className="shrink-0 flex items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                 {tripKit ? (
-                  <Link
-                    href={`/dashboard/kits/${tripKit.id}`}
-                    className="dashboard-pill-button text-sm"
-                  >
+                  <Link href={`/dashboard/kits/${tripKit.id}`} className="dashboard-action-chip text-sm">
                     {tripKit.isPublished ? 'View Kit' : 'Edit Draft'}
                   </Link>
                 ) : vlog.processingStatus === 'REVIEW_PENDING' ? (
-                  <Link href={`/dashboard/review/${vlog.id}`} className="dashboard-pill-button text-sm">
+                  <Link href={`/dashboard/review/${vlog.id}`} className="dashboard-action-chip text-sm">
                     Review Queue
                   </Link>
                 ) : canProcess ? (
