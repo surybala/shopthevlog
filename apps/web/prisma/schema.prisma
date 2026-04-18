@@ -348,6 +348,8 @@ model Creator {
   plan              CreatorPlan @default(FREE)
   catalogScanStatus ScanStatus  @default(PENDING)
   lastCatalogScan   DateTime?
+  processingCreditsUsed Int     @default(0)
+  processingCreditsResetAt DateTime?
   isPublished       Boolean     @default(false)
   isVerified        Boolean     @default(false)
 
@@ -458,6 +460,8 @@ model Vlog {
   processingStatus ProcessingStatus @default(PENDING)
   pipelineError    String?
   processedAt      DateTime?
+  processingCreditsConsumed Boolean @default(false)
+  processingCreditsConsumedAt DateTime?
   lastPipelineRunAt DateTime?
   reviewReadyAt     DateTime?
   publishedFromGraphAt DateTime?

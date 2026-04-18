@@ -36,7 +36,6 @@ def test_fetch_frame_bytes_uses_placeholder_when_source_missing():
 
 def test_store_frame_asset_uploads_to_supabase_bucket():
     mock_bucket = MagicMock()
-    mock_bucket.get_public_url.return_value = "https://storage.example.com/frame-000030.jpg"
     mock_supabase = MagicMock()
     mock_supabase.storage.from_.return_value = mock_bucket
 
@@ -58,20 +57,19 @@ def test_store_frame_asset_uploads_to_supabase_bucket():
             source_url="https://cdn.example.com/thumb.jpg",
         )
 
-    mock_supabase.storage.from_.assert_called_once()
+    assert mock_supabase.storage.from_.call_count == 1
     mock_bucket.upload.assert_called_once_with(
         "creators/creator-001/vlogs/vlog-001/frames/frame-000030.jpg",
         b"jpeg-bytes",
         {"content-type": "image/jpeg", "upsert": "true"},
     )
-    assert stored.public_url == "https://storage.example.com/frame-000030.jpg"
+    assert stored.path == "creators/creator-001/vlogs/vlog-001/frames/frame-000030.jpg"
     assert stored.content_type == "image/jpeg"
     assert stored.size_bytes == len(b"jpeg-bytes")
 
 
 def test_store_frame_asset_prefers_extracted_frame_bytes():
     mock_bucket = MagicMock()
-    mock_bucket.get_public_url.return_value = "https://storage.example.com/frame-000045.jpg"
     mock_supabase = MagicMock()
     mock_supabase.storage.from_.return_value = mock_bucket
 
@@ -92,7 +90,7 @@ def test_store_frame_asset_prefers_extracted_frame_bytes():
         b"real-frame-jpeg",
         {"content-type": "image/jpeg", "upsert": "true"},
     )
-    assert stored.public_url == "https://storage.example.com/frame-000045.jpg"
+    assert stored.path == "creators/creator-001/vlogs/vlog-001/frames/frame-000045.jpg"
 
 
 def test_extract_video_frames_downloads_once_and_returns_all_requested_jpegs():
@@ -192,7 +190,6 @@ def test_load_cached_frame_assets_returns_manifest_matches():
             },
         }
     ).encode("utf-8")
-    mock_bucket.get_public_url.return_value = "https://storage.example.com/frame-000012.jpg"
     mock_supabase = MagicMock()
     mock_supabase.storage.from_.return_value = mock_bucket
 
@@ -207,7 +204,7 @@ def test_load_cached_frame_assets_returns_manifest_matches():
         )
 
     assert list(cached.keys()) == [12.0]
-    assert cached[12.0].public_url == "https://storage.example.com/frame-000012.jpg"
+    assert cached[12.0].path == "creators/creator-001/vlogs/vlog-001/frames/frame-000012.jpg"
 
 
 def test_write_frame_manifest_uploads_json_manifest():
@@ -225,7 +222,6 @@ def test_write_frame_manifest_uploads_json_manifest():
             frame_assets={
                 12.0: StoredFrameAsset(
                     path="creators/creator-001/vlogs/vlog-001/frames/frame-000012.jpg",
-                    public_url="https://storage.example.com/frame-000012.jpg",
                     content_type="image/jpeg",
                     size_bytes=123,
                 )
@@ -236,3 +232,23 @@ def test_write_frame_manifest_uploads_json_manifest():
     assert upload_path == "creators/creator-001/vlogs/vlog-001/frames/manifest.json"
     assert json.loads(payload.decode("utf-8"))["sourceVideoUrl"] == "https://youtube.com/watch?v=abc"
     assert options == {"content-type": "application/json", "upsert": "true"}
+
+
+def test_download_frame_asset_bytes_reads_storage_paths_and_passes_through_external_urls():
+    mock_bucket = MagicMock()
+    mock_bucket.download.return_value = b"stored-frame-bytes"
+    mock_supabase = MagicMock()
+    mock_supabase.storage.from_.return_value = mock_bucket
+
+    with patch("app.services.frame_storage_service.get_supabase", return_value=mock_supabase):
+        from app.services.frame_storage_service import download_frame_asset_bytes
+
+        assert (
+            download_frame_asset_bytes("creators/creator-001/vlogs/vlog-001/frames/frame-000012.jpg")
+            == (b"stored-frame-bytes", "image/jpeg")
+        )
+
+    with patch("app.services.frame_storage_service.fetch_frame_bytes", return_value=(b"remote-bytes", "image/png")):
+        from app.services.frame_storage_service import download_frame_asset_bytes
+
+        assert download_frame_asset_bytes("https://cdn.example.com/frame.jpg") == (b"remote-bytes", "image/png")

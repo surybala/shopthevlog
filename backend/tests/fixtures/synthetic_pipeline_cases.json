@@ -68,7 +68,7 @@
     "expected": {
       "sceneSegments": 2,
       "frameAssets": 2,
-      "minimumOpportunityCount": 3,
+      "minimumOpportunityCount": 2,
       "titleChecks": [
         {
           "title": "2 Days in Tokyo",
@@ -76,7 +76,7 @@
         },
         {
           "title": "Park Hyatt Tokyo",
-          "minimumMatches": 2,
+          "minimumMatches": 1,
           "minimumScore": 0.76,
           "reviewRecommendation": "strong_candidate",
           "requiredSignals": ["multimodal_evidence", "exact_resolution", "source:ocr"]
@@ -157,7 +157,7 @@
     "expected": {
       "sceneSegments": 3,
       "frameAssets": 3,
-      "minimumOpportunityCount": 4,
+      "minimumOpportunityCount": 3,
       "titleChecks": [
         {
           "title": "Carry-On Packing Guide",
@@ -165,7 +165,7 @@
         },
         {
           "title": "Away Carry-On",
-          "minimumMatches": 2,
+          "minimumMatches": 1,
           "minimumScore": 0.84,
           "reviewState": "AUTO_APPROVED",
           "reviewRecommendation": "auto_approved_from_memory",

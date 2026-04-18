@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma/client'
 import { rateLimit } from '@/lib/rateLimit'
 import { recordApiObservation } from '@/lib/observability'
 import { formatVlogPipelineErrorMessage } from '@/lib/vlogProcessing'
+import { getCreatorProcessingQuotaSnapshot } from '@/lib/creatorProcessingQuota'
 
 export async function POST(
   _req: NextRequest,
@@ -44,6 +45,48 @@ export async function POST(
   if (vlog.processingStatus === 'TRANSCRIBING' || vlog.processingStatus === 'EXTRACTING') {
     record(200, 'already_processing')
     return NextResponse.json({ status: vlog.processingStatus, message: 'Already processing' })
+  }
+
+  const quota = getCreatorProcessingQuotaSnapshot({
+    plan: creator.plan,
+    used: creator.processingCreditsUsed,
+    resetAt: creator.processingCreditsResetAt,
+  })
+
+  if (quota.shouldPersistReset) {
+    await prisma.creator.update({
+      where: { id: creator.id },
+      data: {
+        processingCreditsUsed: 0,
+        processingCreditsResetAt: new Date(),
+      },
+    })
+  }
+
+  if (!vlog.processingCreditsConsumed) {
+    if (quota.remaining <= 0) {
+      record(403, 'processing_credit_limit_reached')
+      return NextResponse.json(
+        { error: 'You have used all of your video processing credits for this month.' },
+        { status: 403 },
+      )
+    }
+
+    await prisma.creator.update({
+      where: { id: creator.id },
+      data: {
+        processingCreditsUsed: { increment: 1 },
+        processingCreditsResetAt: quota.shouldPersistReset ? new Date() : creator.processingCreditsResetAt ?? new Date(),
+      },
+    })
+
+    await prisma.vlog.update({
+      where: { id: vlog.id },
+      data: {
+        processingCreditsConsumed: true,
+        processingCreditsConsumedAt: new Date(),
+      },
+    })
   }
 
   const aiUrl = process.env.AI_PIPELINE_URL

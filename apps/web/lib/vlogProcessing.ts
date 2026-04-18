@@ -19,6 +19,10 @@ export function formatVlogPipelineErrorMessage(raw: string | null | undefined): 
     return 'We had trouble analyzing the visuals from this video. Please try again later.'
   }
 
+  if (normalized.includes('processing credits')) {
+    return 'You have used all of your video processing credits for this month. Upgrade or wait until next month to process another video.'
+  }
+
   if (normalized.includes('network')) {
     return 'We could not reach the processing service. Please try again in a moment.'
   }

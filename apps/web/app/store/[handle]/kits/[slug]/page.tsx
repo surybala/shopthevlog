@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma/client'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import SaveKitButton from '@/components/SaveKitButton'
 import { getStorefrontTheme } from '@/lib/storefrontThemes'
+import { resolveAbsoluteStorageAssetUrl, resolveStorageAssetUrl } from '@/lib/storageAssets'
 
 export async function generateMetadata({ params }: { params: { handle: string; slug: string } }) {
   const kit = await prisma.tripKit.findFirst({
@@ -14,7 +15,11 @@ export async function generateMetadata({ params }: { params: { handle: string; s
   return {
     title: `${kit.title} - VlogShopper`,
     description: kit.description ?? kit.title,
-    openGraph: { title: kit.title, description: kit.description ?? '', images: kit.coverImageUrl ? [kit.coverImageUrl] : [] },
+    openGraph: {
+      title: kit.title,
+      description: kit.description ?? '',
+      images: kit.coverImageUrl ? [resolveAbsoluteStorageAssetUrl(kit.coverImageUrl) ?? kit.coverImageUrl] : [],
+    },
   }
 }
 
@@ -126,7 +131,7 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
         {kit.coverImageUrl && (
           <div className="mb-6 aspect-video overflow-hidden rounded-2xl">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={kit.coverImageUrl} alt={kit.title} className="h-full w-full object-cover" />
+            <img src={resolveStorageAssetUrl(kit.coverImageUrl) ?? ''} alt={kit.title} className="h-full w-full object-cover" />
           </div>
         )}
 
@@ -160,7 +165,7 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
         <div className="mt-6 flex items-center gap-3 border-t pt-6" style={{ borderColor: 'var(--storefront-border)' }}>
           {creator.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={creator.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
+            <img src={resolveStorageAssetUrl(creator.avatarUrl) ?? ''} alt="" className="h-10 w-10 rounded-full object-cover" />
           ) : (
             <div className="storefront-surface storefront-heading flex h-10 w-10 items-center justify-center rounded-full border text-sm">
               {creator.displayName[0]}

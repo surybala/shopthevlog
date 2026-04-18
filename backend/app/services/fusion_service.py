@@ -69,6 +69,124 @@ def _confidence_boost(confidences: list[float], source_types: set[str]) -> float
     return max(0.0, min(boosted, 1.0))
 
 
+def _coerce_confidence(value: object) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _merge_opportunity_metadata(primary: dict, duplicates: list[dict]) -> dict:
+    merged = _coerce_evidence_bundle(primary.get("metadataJson"))
+    merged_source_types = {
+        str(source_type)
+        for source_type in merged.get("sourceTypes", [])
+        if source_type
+    }
+    merged_source_kinds = {
+        str(source_kind)
+        for source_kind in merged.get("sourceKinds", [])
+        if source_kind
+    }
+    merged_opportunity_ids = [primary["id"]]
+
+    for duplicate in duplicates:
+        duplicate_metadata = _coerce_evidence_bundle(duplicate.get("metadataJson"))
+        duplicate_source_type = duplicate_metadata.get("sourceType")
+        if duplicate_source_type:
+            merged_source_kinds.add(str(duplicate_source_type))
+        merged_source_types.update(
+            str(source_type)
+            for source_type in duplicate_metadata.get("sourceTypes", [])
+            if source_type
+        )
+        merged_source_kinds.update(
+            str(source_kind)
+            for source_kind in duplicate_metadata.get("sourceKinds", [])
+            if source_kind
+        )
+        merged_opportunity_ids.append(duplicate["id"])
+
+    if merged_source_types:
+        merged["sourceTypes"] = sorted(merged_source_types)
+    if merged_source_kinds or merged.get("sourceType"):
+        if merged.get("sourceType"):
+            merged_source_kinds.add(str(merged["sourceType"]))
+        merged["sourceKinds"] = sorted(merged_source_kinds)
+    merged["dedupedOpportunityIds"] = merged_opportunity_ids
+    merged["dedupeVersion"] = "phase4-v3"
+    merged["isFusedOpportunity"] = len(merged_opportunity_ids) > 1
+    return merged
+
+
+def _dedupe_opportunities_for_vlog(db: PgClient, vlog_id: str) -> int:
+    db.execute(
+        '''SELECT id, "candidateEntityId", "opportunityType", title, description,
+                  confidence, "reviewState", "publishState", "metadataJson"
+           FROM "Opportunity"
+           WHERE "vlogId" = %s
+           ORDER BY "createdAt" ASC''',
+        (vlog_id,),
+    )
+    opportunities = db.fetchall()
+
+    grouped: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for opportunity in opportunities:
+        candidate_entity_id = opportunity.get("candidateEntityId")
+        opportunity_type = opportunity.get("opportunityType")
+        if not candidate_entity_id or not opportunity_type:
+            continue
+        grouped[(candidate_entity_id, opportunity_type)].append(opportunity)
+
+    deduped_count = 0
+
+    for (_candidate_entity_id, _opportunity_type), group in grouped.items():
+        if len(group) <= 1:
+            continue
+
+        ranked_group = sorted(
+            group,
+            key=lambda row: (
+                _coerce_confidence(row.get("confidence")),
+                len(_normalize_label(row.get("title"))),
+                len(_normalize_label(row.get("description"))),
+            ),
+            reverse=True,
+        )
+        primary = ranked_group[0]
+        duplicates = ranked_group[1:]
+        if not duplicates:
+            continue
+
+        merged_metadata = _merge_opportunity_metadata(primary, duplicates)
+        merged_confidence = max(_coerce_confidence(row.get("confidence")) for row in ranked_group)
+
+        db.execute(
+            '''UPDATE "Opportunity"
+               SET confidence = %s,
+                   "metadataJson" = %s::jsonb,
+                   "updatedAt" = NOW()
+               WHERE id = %s''',
+            (
+                merged_confidence,
+                json.dumps(merged_metadata),
+                primary["id"],
+            ),
+        )
+
+        for duplicate in duplicates:
+            db.execute(
+                '''UPDATE "OpportunityEvidence"
+                   SET "opportunityId" = %s
+                   WHERE "opportunityId" = %s''',
+                (primary["id"], duplicate["id"]),
+            )
+            db.execute('DELETE FROM "Opportunity" WHERE id = %s', (duplicate["id"],))
+            deduped_count += 1
+
+    return deduped_count
+
+
 def fuse_candidate_entities(vlog_id: str) -> dict:
     with PgClient() as db:
         db.execute(
@@ -183,6 +301,8 @@ def fuse_candidate_entities(vlog_id: str) -> dict:
 
                 fused_clusters += 1
 
+        deduped_opportunities = _dedupe_opportunities_for_vlog(db, vlog_id)
+
         db.execute(
             '''UPDATE "Vlog"
                SET "lastPipelineRunAt" = NOW()
@@ -193,5 +313,6 @@ def fuse_candidate_entities(vlog_id: str) -> dict:
     return {
         "clusters": fused_clusters,
         "merged_candidates": merged_candidates,
+        "deduped_opportunities": deduped_opportunities,
         "remaining_candidates": len(rows) - merged_candidates,
     }

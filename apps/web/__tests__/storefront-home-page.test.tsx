@@ -43,13 +43,13 @@ describe('StorefrontHomePage', () => {
       handle: 'alexwanders',
       displayName: 'Alex Wanders',
       bio: 'Travel creator',
-      avatarUrl: null,
-      coverImageUrl: 'https://images.example.com/cover.jpg',
+      avatarUrl: 'creators/creator-1/storefront/avatar/avatar.jpg',
+      coverImageUrl: 'creators/creator-1/storefront/cover/cover.jpg',
       storefrontTheme: 'BEACH_RETREAT',
       storefrontTagline: 'Sunset itineraries and sea air',
       storefrontIntro: 'A storefront shaped by swims, ferries, and long beach dinners.',
-      storefrontMoodImageUrl: 'https://images.example.com/mood.jpg',
-      storefrontGalleryImages: ['https://images.example.com/gallery-1.jpg'],
+      storefrontMoodImageUrl: 'creators/creator-1/storefront/mood/mood.jpg',
+      storefrontGalleryImages: ['creators/creator-1/storefront/gallery/gallery-1.jpg'],
       isPublished: true,
       location: 'Los Angeles',
       youtubeHandle: 'alexwanders',
@@ -94,5 +94,6 @@ describe('StorefrontHomePage', () => {
     expect(html).toContain('--storefront-page-bg');
     expect(html).toContain('background-image:var(--storefront-page-bg)');
     expect(html).toContain('data:image/svg+xml');
+    expect(html).toContain('/api/media?path=creators%2Fcreator-1%2Fstorefront%2Fcover%2Fcover.jpg');
   });
 });

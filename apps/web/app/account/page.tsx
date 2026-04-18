@@ -7,6 +7,7 @@ import { buildViewerCreatorAccessMapFromRelationships } from '@/lib/viewerAccess
 import AccessBadge from '@/components/AccessBadge'
 import UnfollowButton from './UnfollowButton'
 import UnsaveButton from './UnsaveButton'
+import { resolveStorageAssetUrl } from '@/lib/storageAssets'
 
 export const metadata = { title: 'My Account - VlogShopper' }
 
@@ -175,7 +176,7 @@ export default async function AccountPage({
                   <div key={follow.id} className="dashboard-mirror-card flex items-start gap-4 p-5">
                     {follow.creator.avatarUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={follow.creator.avatarUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
+                      <img src={resolveStorageAssetUrl(follow.creator.avatarUrl) ?? ''} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
                     ) : (
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#17332d]/10 text-lg text-[#17332d]/85">
                         {follow.creator.displayName[0]}
@@ -223,7 +224,7 @@ export default async function AccountPage({
                       <div className="flex items-center gap-3">
                         {subscription.creator.avatarUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={subscription.creator.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
+                          <img src={resolveStorageAssetUrl(subscription.creator.avatarUrl) ?? ''} alt="" className="h-10 w-10 rounded-full object-cover" />
                         ) : (
                           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#17332d]/10 text-sm text-[#17332d]/85">
                             {subscription.creator.displayName[0]}
@@ -307,7 +308,7 @@ export default async function AccountPage({
                         {kit.coverImageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={kit.coverImageUrl}
+                            src={resolveStorageAssetUrl(kit.coverImageUrl) ?? ''}
                             alt={kit.title}
                             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                           />

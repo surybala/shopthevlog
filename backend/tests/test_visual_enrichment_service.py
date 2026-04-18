@@ -11,7 +11,7 @@ def test_enrich_visual_graph_persists_visual_evidence_candidates_and_opportuniti
         {
             "id": "frame-001",
             "timestampSec": 30.0,
-            "imageUri": "https://storage.example.com/frame-30.jpg",
+            "imageUri": "creators/creator-001/vlogs/vlog-001/frames/frame-30.jpg",
             "summary": "Hotel lobby frame",
             "startSec": 0.0,
             "endSec": 60.0,
@@ -19,7 +19,7 @@ def test_enrich_visual_graph_persists_visual_evidence_candidates_and_opportuniti
         {
             "id": "frame-002",
             "timestampSec": 90.0,
-            "imageUri": "https://storage.example.com/frame-90.jpg",
+            "imageUri": "creators/creator-001/vlogs/vlog-001/frames/frame-90.jpg",
             "summary": "Cafe sign frame",
             "startSec": 60.0,
             "endSec": 120.0,
@@ -54,6 +54,10 @@ def test_enrich_visual_graph_persists_visual_evidence_candidates_and_opportuniti
 
     with (
         patch("app.services.visual_enrichment_service.PgClient", return_value=fake_pg),
+        patch(
+            "app.services.visual_enrichment_service.download_frame_asset_bytes",
+            side_effect=[(b"frame-30", "image/jpeg"), (b"frame-90", "image/jpeg")],
+        ),
         patch(
             "app.services.visual_enrichment_service.extract_visual_opportunities_batch",
             return_value={

@@ -10,6 +10,7 @@ import {
 import { createSupabaseServer } from '@/lib/supabase/server'
 import AccessBadge from '@/components/AccessBadge'
 import { getStorefrontTheme } from '@/lib/storefrontThemes'
+import { resolveStorageAssetUrl } from '@/lib/storageAssets'
 
 export async function generateMetadata({ params }: { params: { handle: string } }) {
   const creator = await prisma.creator.findUnique({ where: { handle: params.handle }, select: { displayName: true } })
@@ -125,7 +126,7 @@ export default async function StorefrontKitsPage({ params }: { params: { handle:
                 {kit.coverImageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={kit.coverImageUrl}
+                    src={resolveStorageAssetUrl(kit.coverImageUrl) ?? ''}
                     alt={kit.title}
                     className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />

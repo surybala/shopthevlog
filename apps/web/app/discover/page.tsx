@@ -9,6 +9,7 @@ import { createSupabaseServer } from '@/lib/supabase/server'
 import { getViewerCreatorAccessMap } from '@/lib/viewerAccess'
 import AccessBadge from '@/components/AccessBadge'
 import PublicNav from '@/components/PublicNav'
+import { resolveStorageAssetUrl } from '@/lib/storageAssets'
 
 export const metadata = {
   title: 'Discover — VlogShopper',
@@ -156,7 +157,7 @@ export default async function DiscoverPage({
                   <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-white/30">
                     {kit.coverImageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={kit.coverImageUrl} alt="" className="h-full w-full object-cover transition-transform group-hover:scale-110" />
+                      <img src={resolveStorageAssetUrl(kit.coverImageUrl) ?? ''} alt="" className="h-full w-full object-cover transition-transform group-hover:scale-110" />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-2xl">🗺</div>
                     )}
@@ -201,7 +202,7 @@ export default async function DiscoverPage({
                   <div className="relative aspect-video overflow-hidden bg-white/30">
                     {kit.coverImageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={kit.coverImageUrl} alt={kit.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                      <img src={resolveStorageAssetUrl(kit.coverImageUrl) ?? ''} alt={kit.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-4xl">🗺</div>
                     )}
@@ -224,7 +225,7 @@ export default async function DiscoverPage({
                     <div className="mt-1.5 flex items-center gap-2">
                       {kit.creator.avatarUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={kit.creator.avatarUrl} alt="" className="h-4 w-4 rounded-full" />
+                        <img src={resolveStorageAssetUrl(kit.creator.avatarUrl) ?? ''} alt="" className="h-4 w-4 rounded-full" />
                       ) : null}
                       <p className="truncate text-xs text-[#17332d]/48">{kit.creator.displayName}</p>
                     </div>

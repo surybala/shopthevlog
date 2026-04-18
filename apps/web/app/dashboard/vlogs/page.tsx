@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 import { getCreatorPlanConfig } from '@/lib/creatorPlans'
+import { getCreatorProcessingQuotaSnapshot } from '@/lib/creatorProcessingQuota'
 import VlogsClient from './VlogsClient'
 
 export default async function VlogsPage() {
@@ -12,6 +13,11 @@ export default async function VlogsPage() {
   const creator = await prisma.creator.findUnique({ where: { userId: user.id } })
   if (!creator) redirect('/onboarding')
   const planConfig = getCreatorPlanConfig(creator.plan)
+  const processingQuota = getCreatorProcessingQuotaSnapshot({
+    plan: creator.plan,
+    used: creator.processingCreditsUsed,
+    resetAt: creator.processingCreditsResetAt,
+  })
 
   const vlogs = await prisma.vlog.findMany({
     where: { creatorId: creator.id },
@@ -34,9 +40,14 @@ export default async function VlogsPage() {
           <div>
             <p className="dashboard-mirror-kicker text-xs">Video library</p>
             <h1 className="mt-3 text-3xl font-bold text-[#17332d]">Source videos powering your storefront.</h1>
-            <p className="dashboard-mirror-subtle mt-2 text-sm">
-              {vlogs.length}/{planConfig.maxImportedVlogs} video{planConfig.maxImportedVlogs !== 1 ? 's' : ''} imported
-            </p>
+            <div className="dashboard-mirror-subtle mt-2 space-y-1 text-sm">
+              <p>
+                {vlogs.length}/{planConfig.maxImportedVlogs} video{planConfig.maxImportedVlogs !== 1 ? 's' : ''} imported
+              </p>
+              <p>
+                {processingQuota.remaining}/{processingQuota.limit} processing credit{processingQuota.limit !== 1 ? 's' : ''} left this month
+              </p>
+            </div>
           </div>
           {vlogs.length === 0 && (
             <a href="/dashboard/settings?tab=channels" className="btn-primary text-sm">
@@ -45,7 +56,11 @@ export default async function VlogsPage() {
           )}
         </div>
 
-        <VlogsClient initialVlogs={vlogs as Parameters<typeof VlogsClient>[0]['initialVlogs']} />
+        <VlogsClient
+          initialVlogs={vlogs as Parameters<typeof VlogsClient>[0]['initialVlogs']}
+          youtubeConnected={!!creator.youtubeChannelId}
+          remainingVlogSlots={Math.max(planConfig.maxImportedVlogs - vlogs.length, 0)}
+        />
       </div>
     </div>
   )

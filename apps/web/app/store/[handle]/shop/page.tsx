@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import prisma from '@/lib/prisma/client'
 import { getStorefrontTheme } from '@/lib/storefrontThemes'
+import { resolveStorageAssetUrl } from '@/lib/storageAssets'
 
 export async function generateMetadata({ params }: { params: { handle: string } }) {
   const creator = await prisma.creator.findUnique({ where: { handle: params.handle }, select: { displayName: true } })
@@ -85,7 +86,7 @@ function MerchCard({
     <Link href={`/@${handle}/shop/${item.slug}`} className="storefront-card group overflow-hidden">
       <div className="storefront-surface aspect-square overflow-hidden border-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={item.coverImageUrl} alt={item.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+        <img src={resolveStorageAssetUrl(item.coverImageUrl) ?? ''} alt={item.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
       </div>
       <div className="p-4">
         <p className="storefront-heading truncate text-sm font-medium">{item.title}</p>

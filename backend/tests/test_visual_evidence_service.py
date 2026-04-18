@@ -46,8 +46,8 @@ def test_sync_visual_evidence_persists_scenes_frames_and_evidence():
         patch(
             "app.services.visual_evidence_service.store_frame_asset",
             side_effect=[
-                type("StoredFrame", (), {"public_url": "https://storage.example.com/frame-30.jpg"})(),
-                type("StoredFrame", (), {"public_url": "https://storage.example.com/frame-90.jpg"})(),
+                type("StoredFrame", (), {"path": "creators/creator-001/vlogs/vlog-001/frames/frame-000030.jpg"})(),
+                type("StoredFrame", (), {"path": "creators/creator-001/vlogs/vlog-001/frames/frame-000090.jpg"})(),
             ],
         ) as mock_store_frame,
     ):
@@ -87,8 +87,8 @@ def test_sync_visual_evidence_persists_scenes_frames_and_evidence():
     assert mock_write_manifest.call_count == 1
 
     frame_inserts = [params for sql, params in fake_pg.cursor.queries if 'INSERT INTO "FrameAsset"' in sql]
-    assert frame_inserts[0][4] == "https://storage.example.com/frame-30.jpg"
-    assert frame_inserts[1][4] == "https://storage.example.com/frame-90.jpg"
+    assert frame_inserts[0][4] == "creators/creator-001/vlogs/vlog-001/frames/frame-000030.jpg"
+    assert frame_inserts[1][4] == "creators/creator-001/vlogs/vlog-001/frames/frame-000090.jpg"
     first_call = mock_store_frame.call_args_list[0].kwargs
     assert first_call["frame_content"] == b"frame-30"
     assert first_call["frame_content_type"] == "image/jpeg"
@@ -108,7 +108,7 @@ def test_sync_visual_evidence_clears_previous_visual_rows_before_reinserting():
             return_value={},
         ), patch(
             "app.services.visual_evidence_service.store_frame_asset",
-            return_value=type("StoredFrame", (), {"public_url": "https://storage.example.com/frame-15.jpg"})(),
+            return_value=type("StoredFrame", (), {"path": "creators/creator-001/vlogs/vlog-001/frames/frame-000015.jpg"})(),
         ):
             sync_visual_evidence("vlog-001", "creator-001", "Tokyo vlog", duration_seconds=45)
 
@@ -126,7 +126,6 @@ def test_sync_visual_evidence_reuses_cached_frames_without_reextracting():
         (),
         {
             "path": "creators/creator-001/vlogs/vlog-001/frames/frame-000030.jpg",
-            "public_url": "https://storage.example.com/frame-30.jpg",
             "content_type": "image/jpeg",
             "size_bytes": 123,
         },

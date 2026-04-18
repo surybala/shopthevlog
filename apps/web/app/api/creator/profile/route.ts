@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 import {
-  optionalUrlArray,
+  optionalStorageAssetRef,
+  optionalStorageAssetRefArray,
   requireEnum,
   requireHandle,
   requireString,
@@ -35,8 +36,8 @@ export async function POST(req: NextRequest) {
       : requireEnum(body.storefrontTheme, 'storefrontTheme', STOREFRONT_THEME_IDS)
     storefrontTagline = optionalString(body.storefrontTagline, 'storefrontTagline', { max: 120 })
     storefrontIntro = optionalString(body.storefrontIntro, 'storefrontIntro', { max: 400 })
-    storefrontMoodImageUrl = optionalUrl(body.storefrontMoodImageUrl, 'storefrontMoodImageUrl')
-    storefrontGalleryImages = optionalUrlArray(body.storefrontGalleryImages, 'storefrontGalleryImages', { maxItems: 6 })
+    storefrontMoodImageUrl = optionalStorageAssetRef(body.storefrontMoodImageUrl, 'storefrontMoodImageUrl')
+    storefrontGalleryImages = optionalStorageAssetRefArray(body.storefrontGalleryImages, 'storefrontGalleryImages', { maxItems: 6 })
   } catch (e) {
     const ve = validationErrorResponse(e)
     if (ve) return NextResponse.json(ve, { status: 422 })
@@ -85,16 +86,16 @@ export async function PATCH(req: NextRequest) {
     if (body.storefrontTheme !== undefined) patch.storefrontTheme = requireEnum(body.storefrontTheme, 'storefrontTheme', STOREFRONT_THEME_IDS)
     if (body.storefrontTagline !== undefined) patch.storefrontTagline = optionalString(body.storefrontTagline, 'storefrontTagline', { max: 120 })
     if (body.storefrontIntro !== undefined) patch.storefrontIntro = optionalString(body.storefrontIntro, 'storefrontIntro', { max: 400 })
-    if (body.storefrontMoodImageUrl !== undefined) patch.storefrontMoodImageUrl = optionalUrl(body.storefrontMoodImageUrl, 'storefrontMoodImageUrl')
-    if (body.storefrontGalleryImages !== undefined) patch.storefrontGalleryImages = optionalUrlArray(body.storefrontGalleryImages, 'storefrontGalleryImages', { maxItems: 6 })
+    if (body.storefrontMoodImageUrl !== undefined) patch.storefrontMoodImageUrl = optionalStorageAssetRef(body.storefrontMoodImageUrl, 'storefrontMoodImageUrl')
+    if (body.storefrontGalleryImages !== undefined) patch.storefrontGalleryImages = optionalStorageAssetRefArray(body.storefrontGalleryImages, 'storefrontGalleryImages', { maxItems: 6 })
     // Booleans — no length concern but validate type
     if (body.isPublished !== undefined) {
       if (typeof body.isPublished !== 'boolean') throw new Error('isPublished must be a boolean')
       patch.isPublished = body.isPublished
     }
     // Image URLs
-    if (body.avatarUrl     !== undefined) patch.avatarUrl     = optionalUrl(body.avatarUrl, 'avatarUrl')
-    if (body.coverImageUrl !== undefined) patch.coverImageUrl = optionalUrl(body.coverImageUrl, 'coverImageUrl')
+    if (body.avatarUrl     !== undefined) patch.avatarUrl     = optionalStorageAssetRef(body.avatarUrl, 'avatarUrl')
+    if (body.coverImageUrl !== undefined) patch.coverImageUrl = optionalStorageAssetRef(body.coverImageUrl, 'coverImageUrl')
   } catch (e) {
     const ve = validationErrorResponse(e)
     if (ve) return NextResponse.json(ve, { status: 422 })

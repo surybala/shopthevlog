@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getCreatorPlanConfig } from '@/lib/creatorPlans'
-import { getStorefrontTheme, parseStorefrontGalleryImages, STOREFRONT_THEMES, type StorefrontThemeId } from '@/lib/storefrontThemes'
+import { getStorefrontTheme, STOREFRONT_THEMES, type StorefrontThemeId } from '@/lib/storefrontThemes'
+import { resolveStorageAssetUrl } from '@/lib/storageAssets'
 
 interface Tier { id: string; name: string; monthlyPrice: number; yearlyPrice?: number | null; description: string | null; perks: string[]; kitAccess: 'FREE' | 'FOLLOWER' | 'PREMIUM'; isActive: boolean }
 interface Creator {
@@ -30,6 +31,8 @@ export default function SettingsForm({ userId, creator }: Props) {
   const [success, setSuccess] = useState('')
   const [scanStatus, setScanStatus] = useState(creator?.catalogScanStatus ?? 'PENDING')
   const [vlogCount, setVlogCount] = useState(0)
+  const [remainingProcessingCredits, setRemainingProcessingCredits] = useState<number | null>(null)
+  const [processingCreditLimit, setProcessingCreditLimit] = useState<number | null>(null)
   const planConfig = getCreatorPlanConfig(creator?.plan)
   const billingPlans = { FREE: getCreatorPlanConfig('FREE'), PRO: getCreatorPlanConfig('PRO'), STUDIO: getCreatorPlanConfig('STUDIO') } as const
   const [showTierForm, setShowTierForm] = useState(false)
@@ -37,6 +40,7 @@ export default function SettingsForm({ userId, creator }: Props) {
   const [tierSaving, setTierSaving] = useState(false)
   const [tierError, setTierError] = useState('')
   const [editingTierId, setEditingTierId] = useState<string | null>(null)
+  const [uploading, setUploading] = useState<'cover' | 'mood' | 'gallery' | null>(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -56,6 +60,8 @@ export default function SettingsForm({ userId, creator }: Props) {
       const data = await res.json()
       setScanStatus(data.status)
       setVlogCount(data.vlogCount)
+      setRemainingProcessingCredits(data.remainingProcessingCredits ?? null)
+      setProcessingCreditLimit(data.processingCreditsLimit ?? null)
     })()
   }, [creator?.youtubeChannelId])
 
@@ -67,6 +73,8 @@ export default function SettingsForm({ userId, creator }: Props) {
       const data = await res.json()
       setScanStatus(data.status)
       setVlogCount(data.vlogCount)
+      setRemainingProcessingCredits(data.remainingProcessingCredits ?? null)
+      setProcessingCreditLimit(data.processingCreditsLimit ?? null)
       if (data.status !== 'SCANNING') clearInterval(interval)
     }, 3000)
     return () => clearInterval(interval)
@@ -79,7 +87,7 @@ export default function SettingsForm({ userId, creator }: Props) {
     storefrontIntro: creator?.storefrontIntro ?? '',
     coverImageUrl: creator?.coverImageUrl ?? '',
     storefrontMoodImageUrl: creator?.storefrontMoodImageUrl ?? '',
-    storefrontGalleryImagesRaw: (creator?.storefrontGalleryImages ?? []).join('\n'),
+    storefrontGalleryImages: creator?.storefrontGalleryImages ?? [],
   })
 
   const setP = (key: keyof typeof profile, value: string) => setProfile((prev) => ({ ...prev, [key]: value }))
@@ -91,7 +99,7 @@ export default function SettingsForm({ userId, creator }: Props) {
       const res = await fetch('/api/creator/profile', {
         method: creator ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...profile, ...storefront, storefrontGalleryImages: parseStorefrontGalleryImages(storefront.storefrontGalleryImagesRaw), userId }),
+        body: JSON.stringify({ ...profile, ...storefront, userId }),
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
@@ -122,6 +130,49 @@ export default function SettingsForm({ userId, creator }: Props) {
     const res = await fetch('/api/auth/youtube')
     const { url } = await res.json()
     window.location.href = url
+  }
+
+  async function uploadImages(kind: 'cover' | 'mood' | 'gallery', files: FileList | null) {
+    if (!files || files.length === 0) return
+    setUploading(kind)
+    setError('')
+    setSuccess('')
+    try {
+      const formData = new FormData()
+      formData.append('kind', kind)
+      Array.from(files).forEach((file) => formData.append('files', file))
+
+      const res = await fetch('/api/creator/media', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? 'Upload failed')
+
+      const paths = Array.isArray(data.paths) ? data.paths : []
+      if (kind === 'cover') {
+        setStorefrontValue('coverImageUrl', paths[0] ?? '')
+      } else if (kind === 'mood') {
+        setStorefrontValue('storefrontMoodImageUrl', paths[0] ?? '')
+      } else {
+        setStorefront((prev) => ({
+          ...prev,
+          storefrontGalleryImages: [...prev.storefrontGalleryImages, ...paths].slice(0, 6),
+        }))
+      }
+      setSuccess('Images uploaded')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not upload image')
+    } finally {
+      setUploading(null)
+    }
+  }
+
+  function removeGalleryImage(imageUrl: string) {
+    setStorefront((prev) => ({
+      ...prev,
+      storefrontGalleryImages: prev.storefrontGalleryImages.filter((url) => url !== imageUrl),
+    }))
   }
 
   function openCreateTier() { setEditingTierId(null); setTierForm(emptyTierForm); setTierError(''); setShowTierForm(true) }
@@ -166,7 +217,7 @@ export default function SettingsForm({ userId, creator }: Props) {
   const inputCls = 'dashboard-input'
   const labelCls = 'dashboard-mirror-kicker mb-1.5 block text-[11px]'
   const activeTheme = getStorefrontTheme(storefront.storefrontTheme)
-  const galleryImages = parseStorefrontGalleryImages(storefront.storefrontGalleryImagesRaw)
+  const galleryImages = storefront.storefrontGalleryImages
 
   return (
     <div className="max-w-2xl">
@@ -227,9 +278,43 @@ export default function SettingsForm({ userId, creator }: Props) {
             <div className="space-y-4">
               <div><label className={labelCls}>Storefront tagline</label><input className={inputCls} placeholder={activeTheme.headline} value={storefront.storefrontTagline} onChange={(e) => setStorefrontValue('storefrontTagline', e.target.value)} /></div>
               <div><label className={labelCls}>Intro copy</label><textarea className={`${inputCls} resize-none`} rows={4} placeholder={activeTheme.subheadline} value={storefront.storefrontIntro} onChange={(e) => setStorefrontValue('storefrontIntro', e.target.value)} /></div>
-              <div><label className={labelCls}>Hero cover image URL</label><input className={inputCls} placeholder="https://images.example.com/cover.jpg" value={storefront.coverImageUrl} onChange={(e) => setStorefrontValue('coverImageUrl', e.target.value)} /></div>
-              <div><label className={labelCls}>Mood image URL</label><input className={inputCls} placeholder="https://images.example.com/mood.jpg" value={storefront.storefrontMoodImageUrl} onChange={(e) => setStorefrontValue('storefrontMoodImageUrl', e.target.value)} /></div>
-              <div><label className={labelCls}>Gallery image URLs</label><textarea className={`${inputCls} resize-none font-mono text-xs`} rows={5} placeholder={'https://images.example.com/1.jpg\nhttps://images.example.com/2.jpg\nhttps://images.example.com/3.jpg'} value={storefront.storefrontGalleryImagesRaw} onChange={(e) => setStorefrontValue('storefrontGalleryImagesRaw', e.target.value)} /><p className="mt-2 text-xs text-[rgba(23,51,45,0.42)]">Add up to 6 image URLs, one per line.</p></div>
+              <div className="rounded-[1.4rem] border border-[rgba(23,51,45,0.1)] bg-[rgba(255,255,255,0.58)] p-4">
+                <label className={labelCls}>Hero cover image</label>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <input type="file" accept="image/*" onChange={(e) => void uploadImages('cover', e.target.files)} className="text-sm text-[rgba(23,51,45,0.66)]" />
+                  {storefront.coverImageUrl ? <button type="button" onClick={() => setStorefrontValue('coverImageUrl', '')} className="dashboard-pill-button px-3 py-1.5 text-xs">Remove</button> : null}
+                </div>
+                {uploading === 'cover' ? <p className="mt-2 text-xs text-[rgba(23,51,45,0.52)]">Uploading cover image...</p> : null}
+              </div>
+              <div className="rounded-[1.4rem] border border-[rgba(23,51,45,0.1)] bg-[rgba(255,255,255,0.58)] p-4">
+                <label className={labelCls}>Mood image</label>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <input type="file" accept="image/*" onChange={(e) => void uploadImages('mood', e.target.files)} className="text-sm text-[rgba(23,51,45,0.66)]" />
+                  {storefront.storefrontMoodImageUrl ? <button type="button" onClick={() => setStorefrontValue('storefrontMoodImageUrl', '')} className="dashboard-pill-button px-3 py-1.5 text-xs">Remove</button> : null}
+                </div>
+                {uploading === 'mood' ? <p className="mt-2 text-xs text-[rgba(23,51,45,0.52)]">Uploading mood image...</p> : null}
+              </div>
+              <div className="rounded-[1.4rem] border border-[rgba(23,51,45,0.1)] bg-[rgba(255,255,255,0.58)] p-4">
+                <label className={labelCls}>Gallery images</label>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <input type="file" accept="image/*" multiple onChange={(e) => void uploadImages('gallery', e.target.files)} className="text-sm text-[rgba(23,51,45,0.66)]" />
+                  <span className="text-xs text-[rgba(23,51,45,0.42)]">{galleryImages.length}/6 uploaded</span>
+                </div>
+                {uploading === 'gallery' ? <p className="mt-2 text-xs text-[rgba(23,51,45,0.52)]">Uploading gallery images...</p> : null}
+                {galleryImages.length > 0 ? (
+                  <div className="mt-4 grid grid-cols-3 gap-3">
+                    {galleryImages.map((imageUrl) => (
+                      <div key={imageUrl} className="overflow-hidden rounded-2xl border border-[rgba(23,51,45,0.1)] bg-[rgba(255,255,255,0.46)]">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={resolveStorageAssetUrl(imageUrl) ?? ''} alt="" className="h-24 w-full object-cover" />
+                        <div className="p-2">
+                          <button type="button" onClick={() => removeGalleryImage(imageUrl)} className="dashboard-pill-button w-full justify-center px-3 py-1.5 text-xs">Remove</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
             <div className={`rounded-[2rem] border ${activeTheme.cardClassName} p-5`}>
               <div className={`rounded-[1.75rem] border ${activeTheme.heroClassName} p-5`}>
@@ -239,7 +324,7 @@ export default function SettingsForm({ userId, creator }: Props) {
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="col-span-2 overflow-hidden rounded-[1.4rem] border border-[rgba(23,51,45,0.1)] bg-[rgba(255,255,255,0.46)]">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={activeTheme.previewImageUrl} alt="" className="h-32 w-full object-cover" /></div>
-                {[storefront.coverImageUrl, storefront.storefrontMoodImageUrl, ...galleryImages].slice(0, 4).map((imageUrl, index) => <div key={`${imageUrl}-${index}`} className="overflow-hidden rounded-2xl border border-[rgba(23,51,45,0.1)] bg-[rgba(255,255,255,0.46)]">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={imageUrl} alt="" className="h-24 w-full object-cover" /></div>)}
+                {[storefront.coverImageUrl, storefront.storefrontMoodImageUrl, ...galleryImages].slice(0, 4).map((imageUrl, index) => <div key={`${imageUrl}-${index}`} className="overflow-hidden rounded-2xl border border-[rgba(23,51,45,0.1)] bg-[rgba(255,255,255,0.46)]">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={resolveStorageAssetUrl(imageUrl) ?? ''} alt="" className="h-24 w-full object-cover" /></div>)}
                 {galleryImages.length === 0 && !storefront.coverImageUrl && !storefront.storefrontMoodImageUrl ? <div className="col-span-2 rounded-2xl border border-dashed border-[rgba(23,51,45,0.15)] bg-[rgba(255,255,255,0.46)] px-4 py-8 text-center text-sm text-[rgba(23,51,45,0.46)]">Add your own imagery to make this storefront feel personal.</div> : null}
               </div>
             </div>
@@ -263,7 +348,10 @@ export default function SettingsForm({ userId, creator }: Props) {
               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${scanStatus === 'COMPLETE' ? 'bg-green-500/20 text-green-400' : scanStatus === 'SCANNING' ? 'animate-pulse bg-yellow-500/20 text-yellow-400' : scanStatus === 'FAILED' ? 'bg-red-500/20 text-red-400' : 'bg-[rgba(23,51,45,0.08)] text-[rgba(23,51,45,0.52)]'}`}>{scanStatus === 'SCANNING' ? 'Scanning...' : scanStatus}</span>
               {scanStatus === 'COMPLETE' && vlogCount > 0 ? <span className="text-xs text-[rgba(23,51,45,0.42)]">{vlogCount}/{planConfig.maxImportedVlogs} videos imported</span> : null}
             </div>
-            <p className="text-xs text-[rgba(23,51,45,0.42)]">Your {planConfig.label} plan currently includes up to {planConfig.maxImportedVlogs} imported videos.</p>
+            <p className="text-xs text-[rgba(23,51,45,0.42)]">
+              Your {planConfig.label} plan includes up to {planConfig.maxImportedVlogs} imported videos and {processingCreditLimit ?? planConfig.monthlyProcessingCredits} processing credits each month.
+              {remainingProcessingCredits !== null ? ` ${remainingProcessingCredits} credit${remainingProcessingCredits === 1 ? '' : 's'} remaining.` : ''}
+            </p>
             {scanStatus === 'PENDING' || scanStatus === 'COMPLETE' || scanStatus === 'FAILED' ? <button onClick={async () => { const res = await fetch('/api/creator/scan', { method: 'POST' }); if (res.ok) setScanStatus('SCANNING') }} className="btn-ghost text-sm">{scanStatus === 'COMPLETE' ? 'Re-scan' : 'Start scan'}</button> : null}
           </div> : null}
         </div>

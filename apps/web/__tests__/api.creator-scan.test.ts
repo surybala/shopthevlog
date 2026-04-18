@@ -16,6 +16,8 @@ const mockCreatorUpdate = vi.fn()
 const mockCreatorChannelTokenFindUnique = vi.fn()
 const mockCreatorChannelTokenUpdate = vi.fn()
 const mockVlogFindMany = vi.fn()
+const mockVlogFindUnique = vi.fn()
+const mockVlogCount = vi.fn()
 const mockVlogUpsert = vi.fn()
 const mockRecordApiObservation = vi.fn()
 
@@ -31,6 +33,8 @@ vi.mock('@/lib/prisma/client', () => ({
     },
     vlog: {
       findMany: (...args: unknown[]) => mockVlogFindMany(...args),
+      findUnique: (...args: unknown[]) => mockVlogFindUnique(...args),
+      count: (...args: unknown[]) => mockVlogCount(...args),
       upsert: (...args: unknown[]) => mockVlogUpsert(...args),
     },
   },
@@ -41,6 +45,7 @@ vi.mock('@/lib/observability', () => ({
 }))
 
 import { POST as triggerScan } from '../app/api/creator/scan/route'
+import { GET as previewScan, POST as previewVideoByUrl } from '../app/api/creator/scan/preview/route'
 
 describe('creator scan trigger route', () => {
   beforeEach(() => {
@@ -63,6 +68,8 @@ describe('creator scan trigger route', () => {
     })
     mockCreatorChannelTokenUpdate.mockResolvedValue({})
     mockVlogUpsert.mockResolvedValue({})
+    mockVlogFindUnique.mockResolvedValue(null)
+    mockVlogCount.mockResolvedValue(0)
     process.env.AI_PIPELINE_URL = 'http://ai.example.com'
     process.env.YOUTUBE_CLIENT_ID = 'yt-client'
     process.env.YOUTUBE_CLIENT_SECRET = 'yt-secret'
@@ -163,6 +170,180 @@ describe('creator scan trigger route', () => {
         })
       )
     })
+  })
+
+  it('preview returns channel videos with imported state', async () => {
+    mockVlogFindMany.mockResolvedValue([{ externalId: 'video-1', id: 'vlog-1', processingStatus: 'PENDING' }])
+
+    const res = await previewScan(new NextRequest('http://localhost/api/creator/scan/preview?showImported=true'))
+
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({
+      vlogLimit: 25,
+      remainingVlogSlots: 24,
+      videos: [
+        {
+          videoId: 'video-1',
+          title: 'My Vlog',
+          description: 'Desc',
+          thumbnailUrl: 'https://img.example/1.jpg',
+          publishedAt: '2024-01-01T00:00:00.000Z',
+          imported: true,
+          importedVlogId: 'vlog-1',
+          importedProcessingStatus: 'PENDING',
+        },
+      ],
+    })
+  })
+
+  it('preview filters videos by query and excludes imported videos by default', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          json: async () => ({
+            items: [
+              {
+                contentDetails: {
+                  relatedPlaylists: { uploads: 'uploads-1' },
+                },
+              },
+            ],
+          }),
+        })
+        .mockResolvedValueOnce({
+          json: async () => ({
+            items: [
+              {
+                contentDetails: { videoId: 'video-1' },
+                snippet: {
+                  title: 'Tokyo Food Guide',
+                  description: 'Desc',
+                  publishedAt: '2024-01-01T00:00:00.000Z',
+                  thumbnails: { high: { url: 'https://img.example/1.jpg' } },
+                },
+              },
+              {
+                contentDetails: { videoId: 'video-2' },
+                snippet: {
+                  title: 'Iceland Road Trip',
+                  description: 'Desc 2',
+                  publishedAt: '2024-01-02T00:00:00.000Z',
+                  thumbnails: { high: { url: 'https://img.example/2.jpg' } },
+                },
+              },
+            ],
+          }),
+        }),
+    )
+    mockVlogFindMany.mockResolvedValue([{ externalId: 'video-1', id: 'vlog-1', processingStatus: 'PENDING' }])
+
+    const res = await previewScan(new NextRequest('http://localhost/api/creator/scan/preview?query=iceland'))
+
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({
+      vlogLimit: 25,
+      remainingVlogSlots: 24,
+      videos: [
+        {
+          videoId: 'video-2',
+          title: 'Iceland Road Trip',
+          description: 'Desc 2',
+          thumbnailUrl: 'https://img.example/2.jpg',
+          publishedAt: '2024-01-02T00:00:00.000Z',
+          imported: false,
+          importedVlogId: null,
+          importedProcessingStatus: null,
+        },
+      ],
+    })
+  })
+
+  it('preview can resolve a single video by pasted YouTube URL', async () => {
+    const res = await previewVideoByUrl(
+      new NextRequest('http://localhost/api/creator/scan/preview', {
+        method: 'POST',
+        body: JSON.stringify({ videoUrl: 'https://www.youtube.com/watch?v=video-1' }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({
+      vlogLimit: 25,
+      remainingVlogSlots: 25,
+      video: {
+        videoId: 'video-1',
+        title: 'My Vlog',
+        description: 'Desc',
+        thumbnailUrl: 'https://img.example/1.jpg',
+        publishedAt: '2024-01-01T00:00:00.000Z',
+        imported: false,
+        importedVlogId: null,
+      },
+    })
+  })
+
+  it('imports only explicitly selected videos when videoIds are provided', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          json: async () => ({
+            items: [
+              {
+                contentDetails: {
+                  relatedPlaylists: { uploads: 'uploads-1' },
+                },
+              },
+            ],
+          }),
+        })
+        .mockResolvedValueOnce({
+          json: async () => ({
+            items: [
+              {
+                contentDetails: { videoId: 'video-1' },
+                snippet: {
+                  title: 'My Vlog',
+                  description: 'Desc',
+                  publishedAt: '2024-01-01T00:00:00.000Z',
+                  thumbnails: { high: { url: 'https://img.example/1.jpg' } },
+                },
+              },
+              {
+                contentDetails: { videoId: 'video-2' },
+                snippet: {
+                  title: 'Skip Me',
+                  description: 'Desc 2',
+                  publishedAt: '2024-01-02T00:00:00.000Z',
+                  thumbnails: { high: { url: 'https://img.example/2.jpg' } },
+                },
+              },
+            ],
+          }),
+        })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) }),
+    )
+
+    const res = await triggerScan(
+      new NextRequest('http://localhost/api/creator/scan', {
+        method: 'POST',
+        body: JSON.stringify({ videoIds: ['video-2'] }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({ status: 'COMPLETE', importedCount: 1 })
+    expect(mockVlogUpsert).toHaveBeenCalledTimes(1)
+    expect(mockVlogUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { platform_externalId: { platform: 'YOUTUBE', externalId: 'video-2' } },
+      }),
+    )
   })
 
   it('does not import new videos once the creator has reached the plan video cap', async () => {

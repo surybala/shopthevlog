@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma/client'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import StorefrontNavActions from '@/components/StorefrontNavActions'
 import { getStorefrontTheme } from '@/lib/storefrontThemes'
+import { resolveStorageAssetUrl } from '@/lib/storageAssets'
 
 function navDisplayName(user: Awaited<ReturnType<ReturnType<typeof createSupabaseServer>['auth']['getUser']>>['data']['user']) {
   if (!user) return null

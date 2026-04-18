@@ -351,6 +351,24 @@ class StatefulPipelinePgClient:
                     }
                 )
             return
+        if statement.startswith('SELECT id, "candidateEntityId", "opportunityType", title, description, confidence, "reviewState", "publishState", "metadataJson" FROM "Opportunity"'):
+            vlog_id = params[0]
+            self._selected_rows = [
+                {
+                    "id": row["id"],
+                    "candidateEntityId": row["candidateEntityId"],
+                    "opportunityType": row["opportunityType"],
+                    "title": row["title"],
+                    "description": row["description"],
+                    "confidence": row["confidence"],
+                    "reviewState": row["reviewState"],
+                    "publishState": row["publishState"],
+                    "metadataJson": deepcopy(row["metadataJson"]),
+                }
+                for row in self.tables["Opportunity"]
+                if row["vlogId"] == vlog_id
+            ]
+            return
         if statement.startswith('SELECT "memoryType", key, "valueJson" FROM "CreatorMemory" WHERE "creatorId" = %s'):
             creator_id = params[0]
             self._selected_rows = [
@@ -399,6 +417,19 @@ class StatefulPipelinePgClient:
             row["reviewState"] = params[1]
             row["metadataJson"] = json.loads(params[2]) if isinstance(params[2], str) else params[2]
             return
+        if statement.startswith('UPDATE "Opportunity" SET confidence = %s, "metadataJson" = %s::jsonb, "updatedAt" = NOW() WHERE id = %s'):
+            row = self._find_by_id("Opportunity", params[2])
+            row["confidence"] = params[0]
+            row["metadataJson"] = json.loads(params[1]) if isinstance(params[1], str) else params[1]
+            return
+        if statement.startswith('UPDATE "OpportunityEvidence" SET "opportunityId" = %s WHERE "opportunityId" = %s'):
+            for row in self.tables["OpportunityEvidence"]:
+                if row["opportunityId"] == params[1]:
+                    row["opportunityId"] = params[0]
+            return
+        if statement.startswith('DELETE FROM "Opportunity" WHERE id = %s'):
+            self.tables["Opportunity"] = [row for row in self.tables["Opportunity"] if row["id"] != params[0]]
+            return
         if statement.startswith('UPDATE "Vlog" SET "reviewReadyAt" = CASE WHEN %s > 0 THEN NOW() ELSE "reviewReadyAt" END, "lastPipelineRunAt" = NOW() WHERE id = %s'):
             row = self._find_by_id("Vlog", params[1])
             if params[0] > 0:
@@ -415,7 +446,6 @@ class StatefulPipelinePgClient:
 def _store_frame_asset_stub(*, creator_id: str, vlog_id: str, timestamp_sec: float, **_kwargs):
     return SimpleNamespace(
         path=f"creators/{creator_id}/vlogs/{vlog_id}/frames/frame-{int(timestamp_sec):06d}.jpg",
-        public_url=f"https://storage.example.com/{creator_id}/{vlog_id}/frame-{int(timestamp_sec):06d}.jpg",
         content_type="image/jpeg",
         size_bytes=1024,
     )
@@ -460,6 +490,13 @@ def test_synthetic_pipeline_cases(case):
         patch("app.services.visual_evidence_service.extract_video_frames", return_value=extracted_frames),
         patch("app.services.visual_evidence_service.store_frame_asset", side_effect=_store_frame_asset_stub),
         patch("app.services.visual_evidence_service.write_frame_manifest"),
+        patch(
+            "app.services.visual_enrichment_service.download_frame_asset_bytes",
+            side_effect=lambda value: (
+                f"frame-for-{value}".encode("utf-8"),
+                "image/jpeg",
+            ),
+        ),
         patch(
             "app.services.visual_enrichment_service.extract_visual_opportunities_batch",
             side_effect=_extract_visual_batch_stub(case["visualSignalsByFrameIndex"]),

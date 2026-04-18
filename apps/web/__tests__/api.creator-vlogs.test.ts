@@ -16,6 +16,11 @@ const mockCreatorFindUnique = vi.fn();
 const mockCreatorUpdate = vi.fn();
 const mockVlogFindMany = vi.fn();
 const mockVlogFindFirst = vi.fn();
+const mockVlogUpdate = vi.fn();
+const mockVlogDelete = vi.fn();
+const mockTripKitDeleteMany = vi.fn();
+const mockTripKitsOnVlogsDeleteMany = vi.fn();
+const mockTransaction = vi.fn();
 vi.mock('@/lib/prisma/client', () => ({
   default: {
     creator: {
@@ -25,13 +30,23 @@ vi.mock('@/lib/prisma/client', () => ({
     vlog: {
       findMany: (...args: unknown[]) => mockVlogFindMany(...args),
       findFirst: (...args: unknown[]) => mockVlogFindFirst(...args),
+      update: (...args: unknown[]) => mockVlogUpdate(...args),
+      delete: (...args: unknown[]) => mockVlogDelete(...args),
     },
+    tripKit: {
+      deleteMany: (...args: unknown[]) => mockTripKitDeleteMany(...args),
+    },
+    tripKitsOnVlogs: {
+      deleteMany: (...args: unknown[]) => mockTripKitsOnVlogsDeleteMany(...args),
+    },
+    $transaction: (...args: unknown[]) => mockTransaction(...args),
   },
 }));
 
 import { GET as getVlogs } from '../app/api/vlogs/route';
 import { GET as getScanStatus } from '../app/api/creator/scan/status/route';
 import { POST as processVlog } from '../app/api/vlogs/[id]/process/route';
+import { DELETE as deleteVlog } from '../app/api/vlogs/[id]/route';
 
 describe('creator vlog routes', () => {
   beforeEach(() => {
@@ -39,9 +54,20 @@ describe('creator vlog routes', () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
     mockGetSession.mockResolvedValue({ data: { session: { access_token: 'session-token' } } });
     mockRateLimit.mockReturnValue(false);
-    mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1', plan: 'PRO', catalogScanStatus: 'COMPLETE', lastCatalogScan: '2025-01-01', _count: { vlogs: 2 } });
+    mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1', plan: 'PRO', processingCreditsUsed: 2, processingCreditsResetAt: '2026-04-01T00:00:00.000Z', catalogScanStatus: 'COMPLETE', lastCatalogScan: '2025-01-01', _count: { vlogs: 2 } });
     mockVlogFindMany.mockResolvedValue([{ id: 'vlog-1', pipelineError: null }]);
-    mockVlogFindFirst.mockResolvedValue({ id: 'vlog-1', creatorId: 'creator-1', processingStatus: 'PENDING' });
+    mockVlogFindFirst.mockResolvedValue({ id: 'vlog-1', creatorId: 'creator-1', processingStatus: 'PENDING', processingCreditsConsumed: false });
+    mockVlogUpdate.mockResolvedValue({});
+    mockVlogDelete.mockResolvedValue({});
+    mockTripKitDeleteMany.mockResolvedValue({});
+    mockTripKitsOnVlogsDeleteMany.mockResolvedValue({});
+    mockTransaction.mockImplementation(async (callback: (tx: unknown) => unknown) =>
+      callback({
+        tripKit: { deleteMany: mockTripKitDeleteMany },
+        tripKitsOnVlogs: { deleteMany: mockTripKitsOnVlogsDeleteMany },
+        vlog: { delete: mockVlogDelete },
+      }),
+    );
     process.env.AI_PIPELINE_URL = 'http://ai.example.com';
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 })));
   });
@@ -68,6 +94,10 @@ describe('creator vlog routes', () => {
       vlogLimit: 25,
       remainingVlogSlots: 23,
       limitReached: false,
+      processingCreditsUsed: 2,
+      processingCreditsLimit: 20,
+      remainingProcessingCredits: 18,
+      processingCreditsResetAt: new Date('2026-05-01T00:00:00.000Z').toJSON(),
     });
   });
 
@@ -119,9 +149,25 @@ describe('creator vlog routes', () => {
   });
 
   it('process route returns already processing for in-flight vlogs', async () => {
-    mockVlogFindFirst.mockResolvedValue({ id: 'vlog-1', creatorId: 'creator-1', processingStatus: 'TRANSCRIBING' });
+    mockVlogFindFirst.mockResolvedValue({ id: 'vlog-1', creatorId: 'creator-1', processingStatus: 'TRANSCRIBING', processingCreditsConsumed: true });
     const res = await processVlog(new NextRequest('http://localhost/api/vlogs/vlog-1/process', { method: 'POST' }), { params: { id: 'vlog-1' } });
     await expect(res.json()).resolves.toEqual({ status: 'TRANSCRIBING', message: 'Already processing' });
+  });
+
+  it('process route blocks first-time processing when monthly credits are exhausted', async () => {
+    mockCreatorFindUnique.mockResolvedValue({
+      id: 'creator-1',
+      plan: 'FREE',
+      processingCreditsUsed: 3,
+      processingCreditsResetAt: '2026-04-01T00:00:00.000Z',
+    });
+
+    const res = await processVlog(new NextRequest('http://localhost/api/vlogs/vlog-1/process', { method: 'POST' }), { params: { id: 'vlog-1' } });
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toEqual({
+      error: 'You have used all of your video processing credits for this month.',
+    });
   });
 
   it('process route returns 503 when the AI pipeline is not configured', async () => {
@@ -148,6 +194,18 @@ describe('creator vlog routes', () => {
 
   it('process route forwards the request to the AI pipeline with the session token', async () => {
     const res = await processVlog(new NextRequest('http://localhost/api/vlogs/vlog-1/process', { method: 'POST' }), { params: { id: 'vlog-1' } });
+    expect(mockCreatorUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'creator-1' },
+        data: expect.objectContaining({ processingCreditsUsed: { increment: 1 } }),
+      }),
+    );
+    expect(mockVlogUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'vlog-1' },
+        data: expect.objectContaining({ processingCreditsConsumed: true }),
+      }),
+    );
     expect(fetch).toHaveBeenCalledWith(
       'http://ai.example.com/api/v1/vlogs/vlog-1/process',
       expect.objectContaining({
@@ -156,5 +214,48 @@ describe('creator vlog routes', () => {
       }),
     );
     expect(res.status).toBe(200);
+  });
+
+  it('does not consume an additional credit when reprocessing an already-counted vlog', async () => {
+    mockVlogFindFirst.mockResolvedValue({ id: 'vlog-1', creatorId: 'creator-1', processingStatus: 'FAILED', processingCreditsConsumed: true });
+
+    const res = await processVlog(new NextRequest('http://localhost/api/vlogs/vlog-1/process', { method: 'POST' }), { params: { id: 'vlog-1' } });
+
+    expect(res.status).toBe(200);
+    expect(mockVlogUpdate).not.toHaveBeenCalled();
+  });
+
+  it('delete route removes a vlog and any linked draft kits', async () => {
+    mockVlogFindFirst.mockResolvedValue({
+      id: 'vlog-1',
+      creatorId: 'creator-1',
+      tripKits: [{ tripKit: { id: 'kit-draft', title: 'Draft kit', isPublished: false } }],
+    });
+
+    const res = await deleteVlog(new NextRequest('http://localhost/api/vlogs/vlog-1', { method: 'DELETE' }), {
+      params: { id: 'vlog-1' },
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockTripKitDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ['kit-draft'] } } });
+    expect(mockTripKitsOnVlogsDeleteMany).toHaveBeenCalledWith({ where: { vlogId: 'vlog-1' } });
+    expect(mockVlogDelete).toHaveBeenCalledWith({ where: { id: 'vlog-1' } });
+  });
+
+  it('delete route blocks removing a vlog that powers a published kit', async () => {
+    mockVlogFindFirst.mockResolvedValue({
+      id: 'vlog-1',
+      creatorId: 'creator-1',
+      tripKits: [{ tripKit: { id: 'kit-live', title: 'Live kit', isPublished: true } }],
+    });
+
+    const res = await deleteVlog(new NextRequest('http://localhost/api/vlogs/vlog-1', { method: 'DELETE' }), {
+      params: { id: 'vlog-1' },
+    });
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toEqual({
+      error: 'This video powers a published Trip Kit. Unpublish or delete the kit first.',
+    });
   });
 });

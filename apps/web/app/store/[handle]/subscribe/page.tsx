@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma/client'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import FollowButton from '@/components/FollowButton'
 import { getStorefrontTheme } from '@/lib/storefrontThemes'
+import { resolveStorageAssetUrl } from '@/lib/storageAssets'
 
 export async function generateMetadata({ params }: { params: { handle: string } }) {
   const creator = await prisma.creator.findUnique({ where: { handle: params.handle }, select: { displayName: true } })
@@ -47,7 +48,7 @@ export default async function SubscribePage({ params }: { params: { handle: stri
       <div className="mb-12 text-center">
         {creator.avatarUrl && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={creator.avatarUrl} alt="" className="mx-auto mb-4 h-16 w-16 rounded-full object-cover" />
+          <img src={resolveStorageAssetUrl(creator.avatarUrl) ?? ''} alt="" className="mx-auto mb-4 h-16 w-16 rounded-full object-cover" />
         )}
         <h1 className="storefront-heading text-3xl font-bold">Subscribe to {creator.displayName}</h1>
         <p className="storefront-muted mt-2">Unlock exclusive Trip Kits and travel guides</p>

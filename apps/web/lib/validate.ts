@@ -53,6 +53,28 @@ export function optionalUrl(value: unknown, field: string): string | null {
   }
 }
 
+export function optionalStorageAssetRef(value: unknown, field: string): string | null {
+  const s = optionalString(value, field, { max: 2048 })
+  if (s === null) return null
+  if (s.startsWith('creators/')) return s
+  return optionalUrl(s, field)
+}
+
+export function optionalStorageAssetRefArray(
+  value: unknown,
+  field: string,
+  { maxItems = 12 }: { maxItems?: number } = {}
+): string[] {
+  if (value === undefined || value === null) return []
+  if (!Array.isArray(value)) throw new ValidationError(field, `${field} must be an array`)
+  if (value.length > maxItems) throw new ValidationError(field, `${field} must have at most ${maxItems} items`)
+  return value.map((entry, index) => {
+    const assetRef = optionalStorageAssetRef(entry, `${field}[${index}]`)
+    if (!assetRef) throw new ValidationError(field, `${field}[${index}] is required`)
+    return assetRef
+  })
+}
+
 export function optionalUrlArray(
   value: unknown,
   field: string,

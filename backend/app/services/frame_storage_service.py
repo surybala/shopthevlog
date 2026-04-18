@@ -29,7 +29,6 @@ PLACEHOLDER_PNG_BYTES = base64.b64decode(
 @dataclass
 class StoredFrameAsset:
     path: str
-    public_url: str
     content_type: str
     size_bytes: int
 
@@ -68,6 +67,10 @@ def _coerce_downloaded_bytes(payload) -> bytes:
     raise TypeError("Unsupported storage payload")
 
 
+def _is_storage_path(value: str | None) -> bool:
+    return bool(value) and not str(value).startswith(("http://", "https://", "data:", "vlog://"))
+
+
 def fetch_frame_bytes(source_url: str | None) -> tuple[bytes, str]:
     if not source_url:
         return PLACEHOLDER_PNG_BYTES, "image/png"
@@ -76,6 +79,20 @@ def fetch_frame_bytes(source_url: str | None) -> tuple[bytes, str]:
     response.raise_for_status()
     content_type = _infer_content_type(source_url, response.headers.get("content-type"))
     return response.content, content_type
+
+
+def download_frame_asset_bytes(storage_path_or_url: str | None) -> tuple[bytes, str] | None:
+    if not storage_path_or_url:
+        return None
+    if not _is_storage_path(storage_path_or_url):
+        return fetch_frame_bytes(storage_path_or_url)
+
+    supabase = get_supabase()
+    bucket = supabase.storage.from_(settings.SUPABASE_STORAGE_BUCKET)
+    payload = bucket.download(storage_path_or_url)
+    content = _coerce_downloaded_bytes(payload)
+    content_type = _infer_content_type(storage_path_or_url, None)
+    return content, content_type
 
 
 def _download_video_for_frame_extraction(video_url: str, output_template: str) -> str:
@@ -164,7 +181,6 @@ def load_cached_frame_assets(
         path = manifest_entry["path"]
         cached_assets[timestamp_sec] = StoredFrameAsset(
             path=path,
-            public_url=bucket.get_public_url(path),
             content_type=manifest_entry.get("contentType", "image/jpeg"),
             size_bytes=int(manifest_entry.get("sizeBytes", 0)),
         )
@@ -227,11 +243,8 @@ def store_frame_asset(
         content,
         {"content-type": content_type, "upsert": "true"},
     )
-    public_url = bucket.get_public_url(storage_path)
-
     return StoredFrameAsset(
         path=storage_path,
-        public_url=public_url,
         content_type=content_type,
         size_bytes=len(content),
     )

@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
+import { resolveStorageAssetUrl } from '@/lib/storageAssets'
 
 export default async function DashboardKitsPage() {
   const supabase = createSupabaseServer()
@@ -70,7 +71,7 @@ export default async function DashboardKitsPage() {
               <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-[#17332d]/8">
                 {kit.coverImageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={kit.coverImageUrl} alt="" className="h-full w-full object-cover" />
+                  <img src={resolveStorageAssetUrl(kit.coverImageUrl) ?? ''} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-[#17332d]/82">
                     KIT

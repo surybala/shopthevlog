@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
+import { resolveStorageAssetUrl } from '@/lib/storageAssets'
 
 export default async function DashboardSubscribersPage() {
   const supabase = createSupabaseServer()
@@ -80,7 +81,7 @@ export default async function DashboardSubscribersPage() {
                 <div className="flex items-center gap-3">
                   {subscription.subscriber.avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={subscription.subscriber.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
+                    <img src={resolveStorageAssetUrl(subscription.subscriber.avatarUrl) ?? ''} alt="" className="h-9 w-9 rounded-full object-cover" />
                   ) : (
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/12 text-xs font-semibold text-white/85">
                       {subscription.subscriber.displayName[0]}

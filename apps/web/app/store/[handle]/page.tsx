@@ -11,6 +11,7 @@ import {
 import { createSupabaseServer } from '@/lib/supabase/server'
 import AccessBadge from '@/components/AccessBadge'
 import { getStorefrontTheme } from '@/lib/storefrontThemes'
+import { resolveAbsoluteStorageAssetUrl, resolveStorageAssetUrl } from '@/lib/storageAssets'
 
 export async function generateMetadata({ params }: { params: { handle: string } }) {
   const creator = await prisma.creator.findUnique({
@@ -24,7 +25,7 @@ export async function generateMetadata({ params }: { params: { handle: string } 
     openGraph: {
       title: creator.displayName,
       description: creator.bio ?? '',
-      images: creator.avatarUrl ? [creator.avatarUrl] : [],
+      images: creator.avatarUrl ? [resolveAbsoluteStorageAssetUrl(creator.avatarUrl) ?? creator.avatarUrl] : [],
     },
   }
 }
@@ -121,7 +122,7 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
     creator.coverImageUrl,
     creator.storefrontMoodImageUrl,
     ...creator.storefrontGalleryImages,
-  ].filter(Boolean) as string[]
+  ].map((image) => resolveStorageAssetUrl(image)).filter(Boolean) as string[]
   const heroTitle = creator.storefrontTagline || theme.headline
   const heroBody = creator.storefrontIntro || creator.bio || theme.subheadline
 
@@ -143,7 +144,7 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
                 {creator.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={creator.avatarUrl}
+                    src={resolveStorageAssetUrl(creator.avatarUrl) ?? ''}
                     alt={creator.displayName}
                     className="h-20 w-20 shrink-0 rounded-full object-cover ring-2 ring-[color:var(--storefront-border)]"
                   />
@@ -313,7 +314,7 @@ function KitCard({
         {kit.coverImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={kit.coverImageUrl}
+            src={resolveStorageAssetUrl(kit.coverImageUrl) ?? ''}
             alt={kit.title}
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />

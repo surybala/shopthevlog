@@ -4,28 +4,7 @@ import prisma from '@/lib/prisma/client'
 import { rateLimit } from '@/lib/rateLimit'
 import { getCreatorPlanConfig } from '@/lib/creatorPlans'
 import { recordApiObservation } from '@/lib/observability'
-
-async function refreshYouTubeToken(token: { refreshToken: string; creatorId: string }) {
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: process.env.YOUTUBE_CLIENT_ID!,
-      client_secret: process.env.YOUTUBE_CLIENT_SECRET!,
-      refresh_token: token.refreshToken,
-      grant_type: 'refresh_token',
-    }),
-  })
-  const data = await res.json()
-  if (!data.access_token) throw new Error('Token refresh failed')
-
-  const tokenExpiry = new Date(Date.now() + (data.expires_in ?? 3600) * 1000)
-  await prisma.creatorChannelToken.update({
-    where: { creatorId_platform: { creatorId: token.creatorId, platform: 'YOUTUBE' } },
-    data: { accessToken: data.access_token, tokenExpiry },
-  })
-  return data.access_token as string
-}
+import { fetchYouTubeCatalog, getYouTubeAccessToken } from '@/lib/youtubeCatalog'
 
 export async function POST(req: NextRequest) {
   const startedAt = Date.now()
@@ -46,6 +25,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
 
+  const body = await req.json().catch(() => ({}))
+  const requestedVideoIds = Array.isArray(body.videoIds)
+    ? body.videoIds.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+    : null
+
   const creator = await prisma.creator.findUnique({ where: { userId: user.id } })
   if (!creator) {
     record(404, 'creator_missing')
@@ -61,8 +45,27 @@ export async function POST(req: NextRequest) {
     data: { catalogScanStatus: 'SCANNING' },
   })
 
+  if (requestedVideoIds?.length) {
+    try {
+      const result = await runScan(creator.id, creator.youtubeChannelId, creator.plan, requestedVideoIds)
+      record(200, 'selected_import_complete')
+      return NextResponse.json({
+        status: 'COMPLETE',
+        importedCount: result.importedCount,
+      })
+    } catch (e) {
+      console.error('Selected import failed:', e)
+      await prisma.creator.update({
+        where: { id: creator.id },
+        data: { catalogScanStatus: 'FAILED' },
+      })
+      record(500, 'selected_import_failed')
+      return NextResponse.json({ error: 'Could not import those videos right now.' }, { status: 500 })
+    }
+  }
+
   // Run in background — don't await
-  runScan(creator.id, creator.youtubeChannelId, creator.plan).catch(async (e) => {
+  runScan(creator.id, creator.youtubeChannelId, creator.plan, null).catch(async (e) => {
     console.error('Scan failed:', e)
     await prisma.creator.update({
       where: { id: creator.id },
@@ -74,91 +77,53 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ status: 'SCANNING' })
 }
 
-async function runScan(creatorId: string, channelId: string, plan: string) {
+async function runScan(creatorId: string, channelId: string, plan: string, selectedVideoIds?: string[] | null) {
   const { maxImportedVlogs } = getCreatorPlanConfig(plan)
-  // Get stored token
-  const tokenRecord = await prisma.creatorChannelToken.findUnique({
-    where: { creatorId_platform: { creatorId, platform: 'YOUTUBE' } },
-  })
-  if (!tokenRecord) throw new Error('No YouTube token found')
-
-  // Refresh if expired
-  let accessToken = tokenRecord.accessToken
-  if (tokenRecord.tokenExpiry < new Date()) {
-    accessToken = await refreshYouTubeToken({ refreshToken: tokenRecord.refreshToken, creatorId })
-  }
-
-  // Fetch all videos via uploads playlist
-  // First get the uploads playlist ID
-  const channelRes = await fetch(
-    `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  )
-  const channelData = await channelRes.json()
-  const uploadsPlaylistId = channelData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads
-  if (!uploadsPlaylistId) throw new Error('Could not find uploads playlist')
-
-  // Paginate through all videos (max 50 per page)
-  let pageToken: string | undefined
-  let totalImported = 0
+  const accessToken = await getYouTubeAccessToken(creatorId)
+  const catalog = await fetchYouTubeCatalog(channelId, accessToken)
+  const selectedSet = selectedVideoIds?.length ? new Set(selectedVideoIds) : null
   const existingVlogs = await prisma.vlog.findMany({
     where: { creatorId },
     select: { externalId: true },
   })
   const importedExternalIds = new Set(existingVlogs.map((vlog) => vlog.externalId))
   let limitReached = importedExternalIds.size >= maxImportedVlogs
+  const videosToConsider = selectedSet
+    ? catalog.filter((item) => selectedSet.has(item.videoId))
+    : catalog
+  let importedCount = 0
 
-  while (!limitReached) {
-    const params = new URLSearchParams({
-      part: 'snippet,contentDetails',
-      playlistId: uploadsPlaylistId,
-      maxResults: '50',
-      ...(pageToken && { pageToken }),
-    })
-    const playlistRes = await fetch(
-      `https://www.googleapis.com/youtube/v3/playlistItems?${params}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    )
-    const playlistData = await playlistRes.json()
-
-    const items = playlistData.items ?? []
-    for (const item of items) {
-      const videoId = item.contentDetails?.videoId as string
-      const snippet = item.snippet
-      if (!videoId) continue
-      const isExisting = importedExternalIds.has(videoId)
-      if (!isExisting && importedExternalIds.size >= maxImportedVlogs) {
-        limitReached = true
-        break
-      }
-
-      await prisma.vlog.upsert({
-        where: { platform_externalId: { platform: 'YOUTUBE', externalId: videoId } },
-        create: {
-          creatorId,
-          platform: 'YOUTUBE',
-          externalId: videoId,
-          externalUrl: `https://www.youtube.com/watch?v=${videoId}`,
-          title: snippet?.title ?? 'Untitled',
-          description: snippet?.description ?? null,
-          thumbnailUrl: snippet?.thumbnails?.high?.url ?? snippet?.thumbnails?.default?.url ?? null,
-          publishedAt: snippet?.publishedAt ? new Date(snippet.publishedAt) : null,
-          processingStatus: 'PENDING',
-        },
-        update: {
-          title: snippet?.title ?? 'Untitled',
-          description: snippet?.description ?? null,
-          thumbnailUrl: snippet?.thumbnails?.high?.url ?? snippet?.thumbnails?.default?.url ?? null,
-        },
-      })
-      if (!isExisting) {
-        importedExternalIds.add(videoId)
-        totalImported++
-      }
+  for (const item of videosToConsider) {
+    const isExisting = importedExternalIds.has(item.videoId)
+    if (!isExisting && importedExternalIds.size >= maxImportedVlogs) {
+      limitReached = true
+      break
     }
 
-    pageToken = playlistData.nextPageToken
-    if (!pageToken) break
+    await prisma.vlog.upsert({
+      where: { platform_externalId: { platform: 'YOUTUBE', externalId: item.videoId } },
+      create: {
+        creatorId,
+        platform: 'YOUTUBE',
+        externalId: item.videoId,
+        externalUrl: `https://www.youtube.com/watch?v=${item.videoId}`,
+        title: item.title,
+        description: item.description,
+        thumbnailUrl: item.thumbnailUrl,
+        publishedAt: item.publishedAt ? new Date(item.publishedAt) : null,
+        processingStatus: 'PENDING',
+      },
+      update: {
+        title: item.title,
+        description: item.description,
+        thumbnailUrl: item.thumbnailUrl,
+      },
+    })
+
+    if (!isExisting) {
+      importedExternalIds.add(item.videoId)
+      importedCount += 1
+    }
   }
 
   await prisma.creator.update({
@@ -178,4 +143,6 @@ async function runScan(creatorId: string, channelId: string, plan: string) {
       body: JSON.stringify({ creator_id: creatorId }),
     }).catch(() => {})
   }
+
+  return { importedCount }
 }

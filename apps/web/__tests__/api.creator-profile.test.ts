@@ -68,8 +68,8 @@ describe('creator profile route', () => {
         storefrontTheme: 'BEACH_RETREAT',
         storefrontTagline: 'Salt, sun, and soft landings',
         storefrontIntro: 'Come for the beaches, stay for the food.',
-        storefrontMoodImageUrl: 'https://example.com/mood.jpg',
-        storefrontGalleryImages: ['https://example.com/one.jpg', 'https://example.com/two.jpg'],
+        storefrontMoodImageUrl: 'creators/creator-1/storefront/mood/mood.jpg',
+        storefrontGalleryImages: ['creators/creator-1/storefront/gallery/one.jpg', 'creators/creator-1/storefront/gallery/two.jpg'],
       }),
     }));
     expect(mockCreate).toHaveBeenCalledWith({
@@ -83,8 +83,8 @@ describe('creator profile route', () => {
         storefrontTheme: 'BEACH_RETREAT',
         storefrontTagline: 'Salt, sun, and soft landings',
         storefrontIntro: 'Come for the beaches, stay for the food.',
-        storefrontMoodImageUrl: 'https://example.com/mood.jpg',
-        storefrontGalleryImages: ['https://example.com/one.jpg', 'https://example.com/two.jpg'],
+        storefrontMoodImageUrl: 'creators/creator-1/storefront/mood/mood.jpg',
+        storefrontGalleryImages: ['creators/creator-1/storefront/gallery/one.jpg', 'creators/creator-1/storefront/gallery/two.jpg'],
       },
     });
     expect(res.status).toBe(201);
@@ -133,7 +133,7 @@ describe('creator profile route', () => {
         isPublished: true,
         storefrontTheme: 'FOOD_TRAIL',
         storefrontTagline: 'Eat first, plan later',
-        storefrontGalleryImages: ['https://example.com/gallery.jpg'],
+        storefrontGalleryImages: ['creators/creator-1/storefront/gallery/gallery.jpg'],
       }),
     }));
     expect(mockUpdate).toHaveBeenCalledWith({
@@ -143,7 +143,7 @@ describe('creator profile route', () => {
         isPublished: true,
         storefrontTheme: 'FOOD_TRAIL',
         storefrontTagline: 'Eat first, plan later',
-        storefrontGalleryImages: ['https://example.com/gallery.jpg'],
+        storefrontGalleryImages: ['creators/creator-1/storefront/gallery/gallery.jpg'],
       },
     });
     expect(res.status).toBe(200);

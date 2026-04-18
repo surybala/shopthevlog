@@ -7,6 +7,9 @@ describe('creator plan config', () => {
     expect(CREATOR_PLAN_CONFIG.FREE.maxImportedVlogs).toBe(5)
     expect(CREATOR_PLAN_CONFIG.PRO.maxImportedVlogs).toBe(25)
     expect(CREATOR_PLAN_CONFIG.STUDIO.maxImportedVlogs).toBe(100)
+    expect(CREATOR_PLAN_CONFIG.FREE.monthlyProcessingCredits).toBe(3)
+    expect(CREATOR_PLAN_CONFIG.PRO.monthlyProcessingCredits).toBe(20)
+    expect(CREATOR_PLAN_CONFIG.STUDIO.monthlyProcessingCredits).toBe(75)
   })
 
   it('falls back to the free plan for unknown values', () => {

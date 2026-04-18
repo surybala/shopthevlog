@@ -10,7 +10,6 @@ from typing import Optional
 
 from google import genai
 from google.genai import types
-import httpx
 
 from app.core.config import settings
 from app.db.pg_client import PgClient
@@ -584,20 +583,32 @@ def extract_transcript_graph_payload(transcript: str, title: str) -> dict:
     }
 
 
-def extract_visual_opportunities(frame_image_url: str, title: str, scene_summary: str | None = None) -> list[dict]:
-    """Extract structured visual evidence from a stored frame URL."""
+def extract_visual_opportunities(
+    frame_image_bytes: bytes,
+    title: str,
+    scene_summary: str | None = None,
+    content_type: str = "image/jpeg",
+) -> list[dict]:
+    """Extract structured visual evidence from a stored frame payload."""
     batched = extract_visual_opportunities_batch(
-        [{"frame_id": "frame-0", "image_url": frame_image_url, "scene_summary": scene_summary}],
+        [
+            {
+                "frame_id": "frame-0",
+                "image_bytes": frame_image_bytes,
+                "content_type": content_type,
+                "scene_summary": scene_summary,
+            }
+        ],
         title,
     )
     return batched.get("frame-0", [])
 
 
 def extract_visual_opportunities_batch(frames: list[dict], title: str) -> dict[str, list[dict]]:
-    """Extract structured visual evidence from a small batch of stored frame URLs."""
+    """Extract structured visual evidence from a small batch of frame payloads."""
     valid_frames = [
         frame for frame in frames
-        if isinstance(frame, dict) and frame.get("frame_id") and frame.get("image_url")
+        if isinstance(frame, dict) and frame.get("frame_id") and frame.get("image_bytes")
     ]
     if not valid_frames:
         return {}
@@ -606,10 +617,8 @@ def extract_visual_opportunities_batch(frames: list[dict], title: str) -> dict[s
         prompt_lines = [f"Vlog title: {title}", "Frame context:"]
         contents: list[types.Part] = []
         for frame in valid_frames:
-            response = httpx.get(frame["image_url"], timeout=10.0)
-            response.raise_for_status()
-            content_type = response.headers.get("content-type", "image/jpeg").split(";")[0].strip() or "image/jpeg"
-            contents.append(types.Part.from_bytes(data=response.content, mime_type=content_type))
+            content_type = str(frame.get("content_type") or "image/jpeg").split(";")[0].strip() or "image/jpeg"
+            contents.append(types.Part.from_bytes(data=frame["image_bytes"], mime_type=content_type))
             prompt_lines.append(
                 f'- frame_id="{frame["frame_id"]}"; scene_summary="{frame.get("scene_summary") or "Unknown"}"'
             )

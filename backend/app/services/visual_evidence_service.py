@@ -182,7 +182,7 @@ def sync_visual_evidence(
                     vlog_id,
                     scene.id,
                     midpoint,
-                    stored_frame.public_url,
+                    stored_frame.path,
                     None,
                     None,
                 ),

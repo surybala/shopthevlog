@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { isAdminUser } from '@/lib/admin'
 import prisma from '@/lib/prisma/client'
+import { resolveStorageAssetUrl } from '@/lib/storageAssets'
 import DashboardNav from './DashboardNav'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -32,7 +33,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <div className="flex items-center gap-3">
             {creator?.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={creator.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
+              <img src={resolveStorageAssetUrl(creator.avatarUrl) ?? ''} alt="" className="w-8 h-8 rounded-full object-cover" />
             ) : (
               <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[#17332d]/12 bg-[#17332d]/8 text-xs font-semibold text-[#17332d]/85">
                 {creator?.displayName?.[0]?.toUpperCase() ?? user.email?.[0]?.toUpperCase()}

@@ -17,6 +17,7 @@ import logging
 from uuid import uuid4
 
 from app.db.pg_client import PgClient
+from app.services.frame_storage_service import download_frame_asset_bytes
 from app.services.gemini_service import extract_visual_opportunities_batch
 
 logger = logging.getLogger(__name__)
@@ -148,17 +149,22 @@ def enrich_visual_graph(vlog_id: str, creator_id: str, title: str) -> dict:
 
         _delete_existing_visual_enrichment_rows(db, vlog_id)
 
-        signals_by_frame = extract_visual_opportunities_batch(
-            [
+        model_frames = []
+        for frame in frames:
+            asset = download_frame_asset_bytes(frame["imageUri"])
+            if not asset:
+                continue
+            image_bytes, content_type = asset
+            model_frames.append(
                 {
                     "frame_id": frame["id"],
-                    "image_url": frame["imageUri"],
+                    "image_bytes": image_bytes,
+                    "content_type": content_type,
                     "scene_summary": frame.get("summary"),
                 }
-                for frame in frames
-            ],
-            title,
-        )
+            )
+
+        signals_by_frame = extract_visual_opportunities_batch(model_frames, title)
 
         for frame in frames:
             signals = signals_by_frame.get(frame["id"], [])
