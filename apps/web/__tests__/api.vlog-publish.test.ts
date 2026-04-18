@@ -4,6 +4,17 @@ const mockGetUser = vi.fn()
 const mockCreatorFindUnique = vi.fn()
 const mockVlogFindFirst = vi.fn()
 const mockTransaction = vi.fn()
+const mockItineraryDayFindMany = vi.fn()
+const mockAffiliateFindUnique = vi.fn()
+const mockAffiliateFindFirst = vi.fn()
+const mockAffiliateCreate = vi.fn()
+const mockAffiliateUpdate = vi.fn()
+const mockDayActivityUpdate = vi.fn()
+const mockCreateStay22Link = vi.fn()
+const mockBuildStay22FallbackUrl = vi.fn()
+const mockFindGYGActivity = vi.fn()
+const mockBuildGYGFallbackUrl = vi.fn()
+const mockFindViatorProduct = vi.fn()
 
 const txTripKitUpdate = vi.fn()
 const txDayActivityDeleteMany = vi.fn()
@@ -25,12 +36,36 @@ vi.mock('@/lib/prisma/client', () => ({
   default: {
     creator: { findUnique: (...args: unknown[]) => mockCreatorFindUnique(...args) },
     vlog: { findFirst: (...args: unknown[]) => mockVlogFindFirst(...args) },
+    itineraryDay: { findMany: (...args: unknown[]) => mockItineraryDayFindMany(...args) },
+    affiliateLink: {
+      findUnique: (...args: unknown[]) => mockAffiliateFindUnique(...args),
+      findFirst: (...args: unknown[]) => mockAffiliateFindFirst(...args),
+      create: (...args: unknown[]) => mockAffiliateCreate(...args),
+      update: (...args: unknown[]) => mockAffiliateUpdate(...args),
+    },
+    dayActivity: {
+      update: (...args: unknown[]) => mockDayActivityUpdate(...args),
+    },
     $transaction: (...args: unknown[]) => mockTransaction(...args),
   },
 }))
 
 vi.mock('@/lib/observability', () => ({
   recordApiObservation: (...args: unknown[]) => mockRecordApiObservation(...args),
+}))
+
+vi.mock('@/lib/affiliates/stay22', () => ({
+  createStay22Link: (...args: unknown[]) => mockCreateStay22Link(...args),
+  buildStay22FallbackUrl: (...args: unknown[]) => mockBuildStay22FallbackUrl(...args),
+}))
+
+vi.mock('@/lib/affiliates/gyg', () => ({
+  findGYGActivity: (...args: unknown[]) => mockFindGYGActivity(...args),
+  buildGYGFallbackUrl: (...args: unknown[]) => mockBuildGYGFallbackUrl(...args),
+}))
+
+vi.mock('@/lib/affiliates/viator', () => ({
+  findViatorProduct: (...args: unknown[]) => mockFindViatorProduct(...args),
 }))
 
 import { POST as publishVlog } from '../app/api/vlogs/[id]/publish/route'
@@ -51,6 +86,17 @@ describe('vlog publish route', () => {
     txOpportunityUpdateMany.mockResolvedValue({ count: 0 })
     txVlogUpdate.mockResolvedValue({})
     txTripKitFindUnique.mockResolvedValue({ id: 'kit-1', title: '5 Days in Tokyo', slug: '5-days-in-tokyo-abc123', isPublished: true })
+    mockItineraryDayFindMany.mockResolvedValue([])
+    mockAffiliateFindUnique.mockResolvedValue(null)
+    mockAffiliateFindFirst.mockResolvedValue(null)
+    mockAffiliateCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'aff-1', ...data }))
+    mockAffiliateUpdate.mockResolvedValue({})
+    mockDayActivityUpdate.mockResolvedValue({})
+    mockCreateStay22Link.mockResolvedValue(null)
+    mockBuildStay22FallbackUrl.mockReturnValue('https://stay22.example/search')
+    mockFindGYGActivity.mockResolvedValue(null)
+    mockBuildGYGFallbackUrl.mockReturnValue('https://gyg.example/search')
+    mockFindViatorProduct.mockResolvedValue(null)
 
     mockTransaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({
       tripKit: {
@@ -76,6 +122,8 @@ describe('vlog publish route', () => {
         update: txVlogUpdate,
       },
     }))
+
+    mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1', userId: 'user-1' })
   })
 
   it('returns 401 when unauthenticated', async () => {
@@ -127,6 +175,25 @@ describe('vlog publish route', () => {
       ],
       tripKits: [],
     })
+    mockItineraryDayFindMany.mockResolvedValue([
+      {
+        id: 'day-1',
+        dayNumber: 1,
+        city: 'Tokyo',
+        country: 'Japan',
+        activities: [
+          {
+            id: 'act-1',
+            affiliateLinkId: null,
+            type: 'ACCOMMODATION',
+            title: 'Park Hyatt Tokyo',
+            description: null,
+            latitude: null,
+            longitude: null,
+          },
+        ],
+      },
+    ])
 
     const res = await publishVlog(new Request('http://localhost/api/vlogs/vlog-1/publish', { method: 'POST' }), {
       params: { id: 'vlog-1' },
@@ -147,6 +214,16 @@ describe('vlog publish route', () => {
       data: { tripKitId: 'kit-1', vlogId: 'vlog-1' },
     })
     expect(txItineraryDayCreate).toHaveBeenCalled()
+    expect(mockAffiliateCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          creatorId: 'creator-1',
+          targetName: 'Park Hyatt Tokyo',
+          provider: 'STAY22',
+          type: 'HOTEL',
+        }),
+      }),
+    )
     expect(txOpportunityUpdate).toHaveBeenCalledWith({
       where: { id: 'opp-1' },
       data: { publishState: 'PUBLISHED' },
@@ -256,5 +333,115 @@ describe('vlog publish route', () => {
 
     expect(res.status).toBe(409)
     expect(mockTransaction).not.toHaveBeenCalled()
+  })
+
+  it('auto-resolves experience and flight-style transport activities after publish', async () => {
+    mockVlogFindFirst.mockResolvedValue({
+      id: 'vlog-1',
+      creatorId: 'creator-1',
+      opportunities: [
+        {
+          id: 'opp-1',
+          title: 'Bangkok itinerary',
+          description: 'A fast weekend route.',
+          reviewState: 'APPROVED',
+          publishState: 'DRAFT',
+          metadataJson: {
+            itinerary: {
+              title: 'Bangkok Weekend',
+              total_days: 1,
+              destinations: ['Bangkok'],
+              countries: ['Thailand'],
+              primary_city: 'Bangkok',
+              days: [
+                {
+                  day_number: 1,
+                  title: 'Arrival',
+                  city: 'Bangkok',
+                  country: 'Thailand',
+                  activities: [
+                    { type: 'TOUR', title: 'Floating Market Tour' },
+                    { type: 'TRANSPORT', title: 'Flight to Bangkok' },
+                    { type: 'FOOD', title: 'Pad Thai dinner' },
+                  ],
+                },
+              ],
+            },
+          },
+          createdAt: new Date('2026-04-09T00:00:00.000Z'),
+          updatedAt: new Date('2026-04-09T00:00:00.000Z'),
+        },
+      ],
+      tripKits: [],
+    })
+    mockItineraryDayFindMany.mockResolvedValue([
+      {
+        id: 'day-1',
+        dayNumber: 1,
+        city: 'Bangkok',
+        country: 'Thailand',
+        activities: [
+          {
+            id: 'act-tour',
+            affiliateLinkId: null,
+            type: 'TOUR',
+            title: 'Floating Market Tour',
+            description: null,
+            latitude: null,
+            longitude: null,
+          },
+          {
+            id: 'act-flight',
+            affiliateLinkId: null,
+            type: 'TRANSPORT',
+            title: 'Flight to Bangkok',
+            description: null,
+            latitude: null,
+            longitude: null,
+          },
+          {
+            id: 'act-food',
+            affiliateLinkId: null,
+            type: 'FOOD',
+            title: 'Pad Thai dinner',
+            description: null,
+            latitude: null,
+            longitude: null,
+          },
+        ],
+      },
+    ])
+
+    const res = await publishVlog(new Request('http://localhost/api/vlogs/vlog-1/publish', { method: 'POST' }), {
+      params: { id: 'vlog-1' },
+    })
+
+    expect(res.status).toBe(200)
+    expect(mockItineraryDayFindMany).toHaveBeenCalled()
+    expect(mockAffiliateCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          targetName: 'Floating Market Tour',
+          provider: 'GETYOURGUIDE',
+          type: 'EXPERIENCE_TOUR',
+        }),
+      }),
+    )
+    expect(mockAffiliateCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          targetName: 'Flight to Bangkok',
+          provider: 'SKYSCANNER',
+          type: 'FLIGHT_SEARCH',
+        }),
+      }),
+    )
+    expect(mockAffiliateCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          targetName: 'Pad Thai dinner',
+        }),
+      }),
+    )
   })
 })

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma/client'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { resolveAffiliateLink } from '@/lib/affiliateLinkResolver'
 import {
   buildTripKitPublishSummary,
   getItineraryBlueprint,
@@ -11,6 +12,100 @@ import { recordApiObservation } from '@/lib/observability'
 
 function hasItineraryBlueprint(metadataJson: unknown) {
   return Boolean(getItineraryBlueprint({ metadataJson }))
+}
+
+function inferAffiliateResolveType(activity: {
+  type: string
+  title: string
+  description: string | null
+}) {
+  if (activity.type === 'ACCOMMODATION') return 'accommodation' as const
+
+  if (['TOUR', 'ADVENTURE', 'CULTURAL', 'ATTRACTION', 'WELLNESS', 'NIGHTLIFE'].includes(activity.type)) {
+    return 'experience' as const
+  }
+
+  if (activity.type === 'TRANSPORT') {
+    const haystack = `${activity.title} ${activity.description ?? ''}`.toLowerCase()
+    if (/\b(flight|airport|airline|terminal|depart|arrival|arrivals)\b/.test(haystack)) {
+      return 'flight' as const
+    }
+  }
+
+  return null
+}
+
+async function autoAttachAffiliateLinksForTripKit(input: {
+  creatorId: string
+  tripKitId: string
+  primaryCity: string | null
+  countries: string[]
+}) {
+  const days = await prisma.itineraryDay.findMany({
+    where: { tripKitId: input.tripKitId },
+    orderBy: { dayNumber: 'asc' },
+    include: {
+      activities: {
+        orderBy: { sortOrder: 'asc' },
+      },
+    },
+  })
+
+  const resolvedCache = new Map<string, string>()
+
+  for (const day of days) {
+    for (const activity of day.activities) {
+      if (activity.affiliateLinkId) continue
+
+      const resolveType = inferAffiliateResolveType(activity)
+      if (!resolveType) continue
+
+      const city = day.city ?? input.primaryCity
+      const country = day.country ?? input.countries[0] ?? null
+      if (!city) continue
+
+      const cacheKey = [
+        resolveType,
+        activity.title.trim().toLowerCase(),
+        city.trim().toLowerCase(),
+        (country ?? '').trim().toLowerCase(),
+      ].join('|')
+
+      if (resolvedCache.has(cacheKey)) {
+        await prisma.dayActivity.update({
+          where: { id: activity.id },
+          data: { affiliateLinkId: resolvedCache.get(cacheKey)! },
+        })
+        continue
+      }
+
+      try {
+        const link = await resolveAffiliateLink({
+          creatorId: input.creatorId,
+          name: activity.title,
+          city,
+          country,
+          type: resolveType,
+          lat: activity.latitude,
+          lng: activity.longitude,
+          kitId: input.tripKitId,
+          activityId: activity.id,
+        })
+
+        if (link?.id) {
+          resolvedCache.set(cacheKey, link.id)
+        }
+      } catch (error) {
+        console.warn('[publish] affiliate auto-resolution failed', {
+          tripKitId: input.tripKitId,
+          activityId: activity.id,
+          title: activity.title,
+          resolveType,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+  }
 }
 
 async function getOwnedVlogForPublish(vlogId: string, userId: string) {
@@ -237,6 +332,15 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       opportunityId: sourceOpportunity.id,
     }
   })
+
+  if (result.tripKit?.id) {
+    await autoAttachAffiliateLinksForTripKit({
+      creatorId: owned.creator.id,
+      tripKitId: result.tripKit.id,
+      primaryCity: summary.itinerary?.primaryCity ?? null,
+      countries: summary.itinerary?.countries ?? [],
+    })
+  }
 
   record(200, existingTripKit ? 'republished' : 'published')
   return NextResponse.json({

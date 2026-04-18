@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { randomBytes } from 'crypto'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 import { rateLimit } from '@/lib/rateLimit'
 import { requireString, optionalString, validationErrorResponse } from '@/lib/validate'
-import { createStay22Link, buildStay22FallbackUrl } from '@/lib/affiliates/stay22'
-import { findGYGActivity, buildGYGFallbackUrl } from '@/lib/affiliates/gyg'
-import { findViatorProduct, buildViatorFallbackUrl } from '@/lib/affiliates/viator'
+import { resolveAffiliateLink } from '@/lib/affiliateLinkResolver'
 
 // POST /api/affiliate-links/resolve
 //
@@ -20,20 +17,6 @@ import { findViatorProduct, buildViatorFallbackUrl } from '@/lib/affiliates/viat
 //
 // If the provider API fails or is unconfigured, falls back to a search URL
 // so there's always a clickable link.
-
-function generateShortCode(): string {
-  return randomBytes(6).toString('base64url').substring(0, 7).toUpperCase()
-}
-
-async function uniqueShortCode(): Promise<string> {
-  let code = generateShortCode()
-  for (let i = 0; i < 5; i++) {
-    const exists = await prisma.affiliateLink.findUnique({ where: { shortCode: code } })
-    if (!exists) return code
-    code = generateShortCode()
-  }
-  return code
-}
 
 export async function POST(req: NextRequest) {
   const supabase = createSupabaseServer()
@@ -68,95 +51,21 @@ export async function POST(req: NextRequest) {
   }
 
   const normalizedType = type.toLowerCase()
-
-  let provider: string
-  let linkType: string
-  let affiliateUrl: string
-  let providerProductId: string | null = null
-  let resolvedName = name
-  let priceFrom: string | undefined
-
-  if (normalizedType === 'accommodation') {
-    provider = 'STAY22'
-    linkType = 'HOTEL'
-
-    const result = await createStay22Link({
-      name, city, country: country ?? '', lat: lat ?? undefined, lng: lng ?? undefined,
-    })
-
-    if (result) {
-      affiliateUrl = result.affiliateUrl
-      providerProductId = result.providerProductId
-      resolvedName = result.hotelName
-    } else {
-      // Fallback: Stay22 search URL
-      affiliateUrl = buildStay22FallbackUrl({ name, city, country: country ?? '' })
-    }
-  } else if (normalizedType === 'experience' || normalizedType === 'tour') {
-    // Try GYG first, fall back to Viator
-    const gyg = await findGYGActivity(name, city)
-    if (gyg) {
-      provider = 'GETYOURGUIDE'
-      linkType = 'EXPERIENCE_TOUR'
-      affiliateUrl = gyg.affiliateUrl
-      providerProductId = gyg.providerProductId
-      resolvedName = gyg.title
-    } else {
-      const viator = await findViatorProduct(name, city)
-      if (viator) {
-        provider = 'VIATOR'
-        linkType = 'EXPERIENCE_TOUR'
-        affiliateUrl = viator.affiliateUrl
-        providerProductId = viator.providerProductId
-        resolvedName = viator.title
-        priceFrom = viator.priceFrom
-      } else {
-        // Fallback: GYG search URL
-        provider = 'GETYOURGUIDE'
-        linkType = 'EXPERIENCE_TOUR'
-        affiliateUrl = buildGYGFallbackUrl(name, city)
-      }
-    }
-  } else if (normalizedType === 'flight') {
-    const skyscannerId = process.env.SKYSCANNER_AFFILIATE_ID ?? ''
-    provider = 'SKYSCANNER'
-    linkType = 'FLIGHT_SEARCH'
-    const q = encodeURIComponent(`flights to ${city}`)
-    affiliateUrl = `https://www.skyscanner.com/flights?query=${q}&associateId=${skyscannerId}`
-  } else {
+  if (!['accommodation', 'experience', 'tour', 'flight'].includes(normalizedType)) {
     return NextResponse.json({ error: 'type must be accommodation | experience | flight' }, { status: 422 })
   }
 
-  const shortCode = await uniqueShortCode()
-
-  const link = await prisma.affiliateLink.create({
-    data: {
-      creatorId: creator.id,
-      type: linkType as never,
-      targetName: resolvedName,
-      targetUrl: affiliateUrl,
-      affiliateUrl,
-      shortCode,
-      provider: provider as never,
-      providerProductId,
-      city,
-      country,
-      priceFrom,
-      ...(kitId && {
-        tripKits: { connect: { id: kitId } },
-      }),
-    },
+  const link = await resolveAffiliateLink({
+    creatorId: creator.id,
+    name,
+    city,
+    country,
+    type: normalizedType === 'tour' ? 'experience' : normalizedType as 'accommodation' | 'experience' | 'flight',
+    lat,
+    lng,
+    kitId,
+    activityId,
   })
-
-  // If an activityId was provided, wire the link to that DayActivity
-  if (activityId) {
-    await prisma.dayActivity.update({
-      where: { id: activityId },
-      data: { affiliateLinkId: link.id },
-    }).catch(() => {
-      // Non-fatal: activity may not exist or link already set
-    })
-  }
 
   return NextResponse.json(link, { status: 201 })
 }

@@ -13,8 +13,10 @@ vi.mock('@/lib/rateLimit', () => ({
 
 const mockCreatorFindUnique = vi.fn()
 const mockAffiliateFindUnique = vi.fn()
+const mockAffiliateFindFirst = vi.fn()
 const mockAffiliateCreate = vi.fn()
 const mockAffiliateFindMany = vi.fn()
+const mockAffiliateUpdate = vi.fn()
 const mockDayActivityUpdate = vi.fn()
 
 vi.mock('@/lib/prisma/client', () => ({
@@ -22,8 +24,10 @@ vi.mock('@/lib/prisma/client', () => ({
     creator: { findUnique: (...args: unknown[]) => mockCreatorFindUnique(...args) },
     affiliateLink: {
       findUnique: (...args: unknown[]) => mockAffiliateFindUnique(...args),
+      findFirst: (...args: unknown[]) => mockAffiliateFindFirst(...args),
       create: (...args: unknown[]) => mockAffiliateCreate(...args),
       findMany: (...args: unknown[]) => mockAffiliateFindMany(...args),
+      update: (...args: unknown[]) => mockAffiliateUpdate(...args),
     },
     dayActivity: {
       update: (...args: unknown[]) => mockDayActivityUpdate(...args),
@@ -63,11 +67,13 @@ describe('affiliate link routes', () => {
     mockRateLimit.mockReturnValue(false)
     mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1', userId: 'user-1' })
     mockAffiliateFindUnique.mockResolvedValue(null)
+    mockAffiliateFindFirst.mockResolvedValue(null)
     mockAffiliateCreate.mockImplementation(async ({ data }) => ({
       id: 'link-1',
       ...data,
     }))
     mockAffiliateFindMany.mockResolvedValue([{ id: 'link-1', targetName: 'Hotel Azul' }])
+    mockAffiliateUpdate.mockResolvedValue({})
     mockDayActivityUpdate.mockResolvedValue({})
     mockCreateStay22Link.mockResolvedValue(null)
     mockBuildStay22FallbackUrl.mockReturnValue('https://stay22.example/search')
@@ -158,6 +164,14 @@ describe('affiliate link routes', () => {
     expect(mockDayActivityUpdate).toHaveBeenCalledWith({
       where: { id: 'act-1' },
       data: { affiliateLinkId: 'link-1' },
+    })
+    expect(mockAffiliateUpdate).toHaveBeenCalledWith({
+      where: { id: 'link-1' },
+      data: {
+        tripKits: {
+          connect: { id: 'kit-1' },
+        },
+      },
     })
   })
 
