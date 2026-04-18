@@ -182,7 +182,7 @@ describe('creator scan trigger route', () => {
       vlogLimit: 25,
       remainingVlogSlots: 24,
       videos: [
-        {
+        expect.objectContaining({
           videoId: 'video-1',
           title: 'My Vlog',
           description: 'Desc',
@@ -191,7 +191,14 @@ describe('creator scan trigger route', () => {
           imported: true,
           importedVlogId: 'vlog-1',
           importedProcessingStatus: 'PENDING',
-        },
+          insights: expect.objectContaining({
+            score: expect.any(Number),
+            recommendation: expect.any(String),
+            headline: expect.any(String),
+            primaryFit: expect.any(String),
+            reasons: expect.any(Array),
+          }),
+        }),
       ],
     })
   })
@@ -246,7 +253,7 @@ describe('creator scan trigger route', () => {
       vlogLimit: 25,
       remainingVlogSlots: 24,
       videos: [
-        {
+        expect.objectContaining({
           videoId: 'video-2',
           title: 'Iceland Road Trip',
           description: 'Desc 2',
@@ -255,7 +262,13 @@ describe('creator scan trigger route', () => {
           imported: false,
           importedVlogId: null,
           importedProcessingStatus: null,
-        },
+          insights: expect.objectContaining({
+            score: expect.any(Number),
+            recommendation: expect.any(String),
+            primaryFit: expect.any(String),
+            reasons: expect.any(Array),
+          }),
+        }),
       ],
     })
   })
@@ -273,7 +286,7 @@ describe('creator scan trigger route', () => {
     await expect(res.json()).resolves.toEqual({
       vlogLimit: 25,
       remainingVlogSlots: 25,
-      video: {
+      video: expect.objectContaining({
         videoId: 'video-1',
         title: 'My Vlog',
         description: 'Desc',
@@ -281,7 +294,13 @@ describe('creator scan trigger route', () => {
         publishedAt: '2024-01-01T00:00:00.000Z',
         imported: false,
         importedVlogId: null,
-      },
+        insights: expect.objectContaining({
+          score: expect.any(Number),
+          recommendation: expect.any(String),
+          primaryFit: expect.any(String),
+          reasons: expect.any(Array),
+        }),
+      }),
     })
   })
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 import { getCreatorPlanConfig } from '@/lib/creatorPlans'
+import { buildCatalogVideoInsight } from '@/lib/vlogInsights'
 import { fetchYouTubeCatalog, getYouTubeAccessToken } from '@/lib/youtubeCatalog'
 
 function extractYouTubeVideoId(rawUrl: string) {
@@ -61,6 +62,11 @@ export async function GET(req: NextRequest) {
     if (!showImported && imported) return false
     if (!query) return true
     return item.title.toLowerCase().includes(query) || (item.description ?? '').toLowerCase().includes(query)
+  }).sort((left, right) => {
+    const leftInsight = buildCatalogVideoInsight(left)
+    const rightInsight = buildCatalogVideoInsight(right)
+    if (leftInsight.score !== rightInsight.score) return rightInsight.score - leftInsight.score
+    return new Date(right.publishedAt ?? 0).getTime() - new Date(left.publishedAt ?? 0).getTime()
   })
 
   return NextResponse.json({
@@ -73,6 +79,7 @@ export async function GET(req: NextRequest) {
         imported: !!imported,
         importedVlogId: imported?.id ?? null,
         importedProcessingStatus: imported?.processingStatus ?? null,
+        insights: buildCatalogVideoInsight(item),
       }
     }),
   })
@@ -128,6 +135,7 @@ export async function POST(req: NextRequest) {
       ...matched,
       imported: !!existing && existing.creatorId === creator.id,
       importedVlogId: existing?.creatorId === creator.id ? existing.id : null,
+      insights: buildCatalogVideoInsight(matched),
     },
   })
 }

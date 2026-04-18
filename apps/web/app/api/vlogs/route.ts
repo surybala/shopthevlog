@@ -21,6 +21,13 @@ export async function GET() {
           },
         },
       },
+      opportunities: {
+        select: {
+          reviewState: true,
+          publishState: true,
+          opportunityType: true,
+        },
+      },
     },
   })
 

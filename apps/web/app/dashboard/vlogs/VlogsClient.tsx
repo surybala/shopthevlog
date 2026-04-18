@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { buildImportedVlogInsight, type ProcessingInsight } from '@/lib/vlogInsights'
 import { formatVlogPipelineErrorMessage } from '@/lib/vlogProcessing'
 
 type TripKitRef = {
@@ -23,6 +24,11 @@ type Vlog = {
   pipelineError?: string | null
   processedAt: string | null
   tripKits: { tripKit: TripKitRef }[]
+  opportunities?: {
+    reviewState?: string
+    publishState?: string
+    opportunityType?: string
+  }[]
 }
 
 type CatalogVideo = {
@@ -34,6 +40,7 @@ type CatalogVideo = {
   imported: boolean
   importedVlogId: string | null
   importedProcessingStatus: string | null
+  insights?: ProcessingInsight
 }
 
 interface Props {
@@ -65,6 +72,19 @@ const STATUS_LABELS: Record<string, string> = {
 
 const IN_PROGRESS = new Set(['QUEUED', 'TRANSCRIBING', 'EXTRACTING', 'EMBEDDING'])
 
+function insightChipClasses(tone: ProcessingInsight['chips'][number]['tone']) {
+  switch (tone) {
+    case 'emerald':
+      return 'bg-emerald-500/14 text-emerald-950'
+    case 'amber':
+      return 'bg-amber-500/16 text-amber-950'
+    case 'rose':
+      return 'bg-rose-500/16 text-rose-950'
+    default:
+      return 'bg-[#17332d]/8 text-[#17332d]/76'
+  }
+}
+
 export default function VlogsClient({ initialVlogs, youtubeConnected, remainingVlogSlots }: Props) {
   const router = useRouter()
   const [vlogs, setVlogs] = useState<Vlog[]>(initialVlogs)
@@ -84,6 +104,15 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
   const [urlLookupLoading, setUrlLookupLoading] = useState(false)
 
   const anyInProgress = vlogs.some((vlog) => IN_PROGRESS.has(vlog.processingStatus))
+  const recommendedImportedVlogs = useMemo(
+    () =>
+      vlogs
+        .map((vlog) => ({ vlog, insight: buildImportedVlogInsight(vlog) }))
+        .filter(({ vlog }) => ['PENDING', 'FAILED'].includes(vlog.processingStatus))
+        .sort((left, right) => right.insight.score - left.insight.score)
+        .slice(0, 2),
+    [vlogs],
+  )
 
   useEffect(() => {
     setVlogs(initialVlogs)
@@ -276,6 +305,34 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
         ) : null}
       </div>
 
+      {recommendedImportedVlogs.length > 0 ? (
+        <div className="mb-5 grid gap-3 md:grid-cols-2">
+          {recommendedImportedVlogs.map(({ vlog, insight }) => (
+            <div key={vlog.id} className="dashboard-mirror-card p-4">
+              <p className="dashboard-mirror-kicker text-[11px]">Suggested next</p>
+              <p className="mt-2 line-clamp-2 text-sm font-semibold text-[#17332d]">{vlog.title}</p>
+              <p className="mt-2 text-xs font-semibold uppercase tracking-[0.22em] text-[rgba(23,51,45,0.52)]">
+                {insight.primaryFit}
+              </p>
+              <p className="mt-2 text-sm text-[rgba(23,51,45,0.68)]">{insight.headline}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="rounded-full bg-[rgba(23,51,45,0.08)] px-2.5 py-1 text-xs font-medium text-[#17332d]">
+                  {insight.recommendation}
+                </span>
+                <span className="rounded-full bg-[rgba(23,51,45,0.06)] px-2.5 py-1 text-xs text-[rgba(23,51,45,0.72)]">
+                  Score {insight.score}
+                </span>
+              </div>
+              <ul className="mt-3 space-y-1 text-xs text-[rgba(23,51,45,0.6)]">
+                {insight.reasons.map((reason) => (
+                  <li key={reason}>• {reason}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {vlogs.length === 0 ? (
         <div className="dashboard-mirror-card p-12 text-center">
           <p className="mb-4 text-sm font-semibold tracking-[0.3em] text-[#17332d]/58">VIDEO</p>
@@ -300,6 +357,7 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
             const tripKit = vlog.tripKits[0]?.tripKit ?? null
             const inProgress = IN_PROGRESS.has(vlog.processingStatus)
             const canProcess = vlog.processingStatus === 'PENDING' || vlog.processingStatus === 'FAILED'
+            const insight = buildImportedVlogInsight(vlog)
 
             return (
               <div key={vlog.id} className="dashboard-mirror-card p-4">
@@ -344,6 +402,29 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
                     {errors[vlog.id] ? <p className="mt-1 text-xs text-red-700">{errors[vlog.id]}</p> : null}
                     {!errors[vlog.id] && vlog.processingStatus === 'FAILED' && vlog.pipelineError ? (
                       <p className="mt-1 text-xs text-red-700">{formatVlogPipelineErrorMessage(vlog.pipelineError)}</p>
+                    ) : null}
+                    {!errors[vlog.id] ? (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[rgba(23,51,45,0.52)]">
+                          {insight.primaryFit}
+                        </p>
+                        <p className="text-sm text-[rgba(23,51,45,0.68)]">{insight.headline}</p>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="rounded-full bg-[rgba(23,51,45,0.08)] px-2.5 py-1 text-xs font-medium text-[#17332d]">
+                            {insight.recommendation}
+                          </span>
+                          {insight.chips.map((chip) => (
+                            <span key={chip.label} className={`rounded-full px-2.5 py-1 text-xs ${insightChipClasses(chip.tone)}`}>
+                              {chip.label}
+                            </span>
+                          ))}
+                        </div>
+                        <ul className="space-y-1 text-xs text-[rgba(23,51,45,0.6)]">
+                          {insight.reasons.map((reason) => (
+                            <li key={reason}>• {reason}</li>
+                          ))}
+                        </ul>
+                      </div>
                     ) : null}
                   </div>
 
@@ -484,6 +565,32 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
                             {video.imported ? <span>Already imported</span> : null}
                             {video.importedProcessingStatus ? <span>{STATUS_LABELS[video.importedProcessingStatus] ?? video.importedProcessingStatus}</span> : null}
                           </div>
+                          {video.insights ? (
+                            <div className="mt-3">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[rgba(23,51,45,0.52)]">
+                                {video.insights.primaryFit}
+                              </p>
+                              <p className="text-sm text-[rgba(23,51,45,0.68)]">{video.insights.headline}</p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <span className="rounded-full bg-[rgba(23,51,45,0.08)] px-2.5 py-1 text-xs font-medium text-[#17332d]">
+                                  {video.insights.recommendation}
+                                </span>
+                                <span className="rounded-full bg-[rgba(23,51,45,0.06)] px-2.5 py-1 text-xs text-[rgba(23,51,45,0.72)]">
+                                  Score {video.insights.score}
+                                </span>
+                                {video.insights.chips.map((chip) => (
+                                  <span key={chip.label} className={`rounded-full px-2.5 py-1 text-xs ${insightChipClasses(chip.tone)}`}>
+                                    {chip.label}
+                                  </span>
+                                ))}
+                              </div>
+                              <ul className="mt-2 space-y-1 text-xs text-[rgba(23,51,45,0.6)]">
+                                {video.insights.reasons.map((reason) => (
+                                  <li key={reason}>• {reason}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
                         </div>
                       </label>
                     )

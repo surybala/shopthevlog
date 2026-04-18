@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mockGetUser = vi.fn()
 const mockCreatorFindUnique = vi.fn()
 const mockAffiliateLinkFindMany = vi.fn()
+const mockCommissionFindMany = vi.fn()
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) =>
@@ -33,6 +34,9 @@ vi.mock('@/lib/prisma/client', () => ({
     affiliateLink: {
       findMany: (...args: unknown[]) => mockAffiliateLinkFindMany(...args),
     },
+    commission: {
+      findMany: (...args: unknown[]) => mockCommissionFindMany(...args),
+    },
   },
 }))
 
@@ -56,18 +60,32 @@ describe('DashboardAffiliatesPage', () => {
         priceFrom: '$48',
         affiliateUrl: 'https://example.com',
         isActive: true,
+        tripKits: [{ id: 'kit-1', title: 'Tokyo Stay Guide' }],
+      },
+    ])
+    mockCommissionFindMany.mockResolvedValue([
+      {
+        id: 'comm-1',
+        provider: 'GETYOURGUIDE',
+        status: 'CONFIRMED',
+        creatorEarnings: 21550,
+        affiliateLink: { targetName: 'Park Hyatt Tokyo' },
+        attributedTripKit: { title: 'Tokyo Stay Guide' },
       },
     ])
   })
 
-  it('renders the refreshed affiliates dashboard shell', async () => {
+  it('renders the richer affiliates dashboard shell', async () => {
     const page = await DashboardAffiliatesPage()
     const html = renderToStaticMarkup(page)
 
     expect(html).toContain('Revenue links')
-    expect(html).toContain('Track what your audience taps, books, and buys.')
+    expect(html).toContain('Track what subscribers tap, book, and buy across every storefront surface.')
+    expect(html).toContain('Provider earnings mix')
+    expect(html).toContain('Top earning kits')
+    expect(html).toContain('Recent commission activity')
+    expect(html).toContain('Tokyo Stay Guide')
     expect(html).toContain('Park Hyatt Tokyo')
-    expect(html).toContain('GETYOURGUIDE')
-    expect(html).toContain('Total Clicks')
+    expect(html).toContain('Confirmed Earnings')
   })
 })

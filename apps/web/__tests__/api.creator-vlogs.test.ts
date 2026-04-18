@@ -55,7 +55,7 @@ describe('creator vlog routes', () => {
     mockGetSession.mockResolvedValue({ data: { session: { access_token: 'session-token' } } });
     mockRateLimit.mockReturnValue(false);
     mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1', plan: 'PRO', processingCreditsUsed: 2, processingCreditsResetAt: '2026-04-01T00:00:00.000Z', catalogScanStatus: 'COMPLETE', lastCatalogScan: '2025-01-01', _count: { vlogs: 2 } });
-    mockVlogFindMany.mockResolvedValue([{ id: 'vlog-1', pipelineError: null }]);
+    mockVlogFindMany.mockResolvedValue([{ id: 'vlog-1', pipelineError: null, opportunities: [] }]);
     mockVlogFindFirst.mockResolvedValue({ id: 'vlog-1', creatorId: 'creator-1', processingStatus: 'PENDING', processingCreditsConsumed: false });
     mockVlogUpdate.mockResolvedValue({});
     mockVlogDelete.mockResolvedValue({});
@@ -115,7 +115,7 @@ describe('creator vlog routes', () => {
 
   it('vlogs list returns the creator vlogs ordered by publish date', async () => {
     const res = await getVlogs();
-    await expect(res.json()).resolves.toEqual({ vlogs: [{ id: 'vlog-1', pipelineError: null }] });
+    await expect(res.json()).resolves.toEqual({ vlogs: [{ id: 'vlog-1', pipelineError: null, opportunities: [] }] });
     expect(mockVlogFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { creatorId: 'creator-1' },
       orderBy: { publishedAt: 'desc' },
@@ -123,10 +123,10 @@ describe('creator vlog routes', () => {
   });
 
   it('vlogs list includes pipeline errors for failed rows', async () => {
-    mockVlogFindMany.mockResolvedValue([{ id: 'vlog-1', processingStatus: 'FAILED', pipelineError: 'no_opportunities_extracted' }]);
+    mockVlogFindMany.mockResolvedValue([{ id: 'vlog-1', processingStatus: 'FAILED', pipelineError: 'no_opportunities_extracted', opportunities: [] }]);
     const res = await getVlogs();
     await expect(res.json()).resolves.toEqual({
-      vlogs: [{ id: 'vlog-1', processingStatus: 'FAILED', pipelineError: 'no_opportunities_extracted' }],
+      vlogs: [{ id: 'vlog-1', processingStatus: 'FAILED', pipelineError: 'no_opportunities_extracted', opportunities: [] }],
     });
   });
 

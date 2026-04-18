@@ -11,7 +11,7 @@ interface Creator {
   id: string; handle: string; displayName: string; bio: string | null; coverImageUrl: string | null; location: string | null; websiteUrl: string | null; avatarUrl: string | null;
   storefrontTheme: StorefrontThemeId; storefrontTagline: string | null; storefrontIntro: string | null; storefrontMoodImageUrl: string | null; storefrontGalleryImages: string[];
   youtubeChannelId: string | null; youtubeHandle: string | null; tiktokUserId: string | null; tiktokHandle: string | null; stripeAccountId: string | null;
-  plan: 'FREE' | 'PRO' | 'STUDIO'; isPublished: boolean; catalogScanStatus: string; tiers: Tier[]
+  payoutsEnabled: boolean; plan: 'FREE' | 'PRO' | 'STUDIO'; isPublished: boolean; catalogScanStatus: string; tiers: Tier[]
 }
 interface Props { userId: string; email: string; creator: Creator | null }
 
@@ -48,6 +48,9 @@ export default function SettingsForm({ userId, creator }: Props) {
     if (t && tabs.includes(t)) setTab(t)
     const connected = params.get('connected')
     if (connected) setSuccess(`${connected.charAt(0).toUpperCase() + connected.slice(1)} connected successfully!`)
+    const stripe = params.get('stripe')
+    if (stripe === 'connected') setSuccess('Stripe onboarding completed. If more details are needed, you can resume setup from billing.')
+    if (stripe === 'missing') setError('Connect Stripe first before opening the Stripe dashboard.')
     const err = params.get('error')
     if (err) setError(`Connection failed: ${err.replace(/_/g, ' ')}`)
   }, [])
@@ -130,6 +133,14 @@ export default function SettingsForm({ userId, creator }: Props) {
     const res = await fetch('/api/auth/youtube')
     const { url } = await res.json()
     window.location.href = url
+  }
+
+  function connectStripe() {
+    window.location.href = '/api/stripe/connect/onboard'
+  }
+
+  function openStripeDashboard() {
+    window.location.href = '/api/stripe/connect/dashboard'
   }
 
   async function uploadImages(kind: 'cover' | 'mood' | 'gallery', files: FileList | null) {
@@ -387,6 +398,42 @@ export default function SettingsForm({ userId, creator }: Props) {
 
       {tab === 'billing' ? <div className="space-y-4">
         <div className="dashboard-mirror-card p-6"><h2 className="mb-4 font-semibold text-[#17332d]">VlogShopper Plan</h2><div className="space-y-3">{(Object.entries(billingPlans) as [keyof typeof billingPlans, typeof billingPlans.FREE][]).map(([key, p]) => <div key={key} className={`flex items-center justify-between rounded-xl border p-4 ${creator?.plan === key ? 'border-[rgba(23,51,45,0.22)] bg-[rgba(255,255,255,0.5)]' : 'border-[rgba(23,51,45,0.1)]'}`}><div><p className="font-medium text-[#17332d]">{p.label}</p><p className={metaText}>{p.description}</p></div><div className="text-right"><p className="text-sm font-semibold text-[#17332d]">{p.price}</p>{creator?.plan === key ? <p className="text-xs text-green-400">Current plan</p> : null}</div></div>)}</div></div>
+        <div className="dashboard-mirror-card p-6">
+          <h2 className="mb-2 font-semibold text-[#17332d]">Creator payouts</h2>
+          <p className={sectionCopy}>
+            Connect Stripe Express so affiliate commissions and future subscriber payouts have somewhere to land.
+          </p>
+          <div className="mt-4 rounded-xl border border-[rgba(23,51,45,0.1)] bg-[rgba(255,255,255,0.58)] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="font-medium text-[#17332d]">
+                  {!creator?.stripeAccountId
+                    ? 'Stripe not connected'
+                    : creator.payoutsEnabled
+                      ? 'Stripe payouts enabled'
+                      : 'Stripe connected - onboarding incomplete'}
+                </p>
+                <p className="mt-1 text-xs text-[rgba(23,51,45,0.52)]">
+                  {!creator?.stripeAccountId
+                    ? 'Connect once to receive creator payouts and manage tax + banking details.'
+                    : creator.payoutsEnabled
+                      ? 'Open Stripe Express any time to review transfers and update payout details.'
+                      : 'Resume onboarding to finish account details and enable payouts.'}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button onClick={connectStripe} className="btn-primary text-sm">
+                  {!creator?.stripeAccountId ? 'Connect Stripe' : creator.payoutsEnabled ? 'Refresh Stripe setup' : 'Resume onboarding'}
+                </button>
+                {creator?.stripeAccountId ? (
+                  <button onClick={openStripeDashboard} className="btn-ghost text-sm">
+                    Open Stripe Dashboard
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
         <p className="text-xs text-[rgba(23,51,45,0.42)]">To upgrade your plan, contact us or use the in-app upgrade flow (coming soon).</p>
       </div> : null}
     </div>
