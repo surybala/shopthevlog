@@ -22,6 +22,7 @@ export default defineConfig({
     command: 'npm run dev -- --port 3001',
     cwd: __dirname,
     url: 'http://localhost:3001',
+    timeout: 120_000,
     reuseExistingServer: false,
     env: {
       ENABLE_E2E_AUTH: 'true',

@@ -3,8 +3,20 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
+const metadataBase = (() => {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+
+  try {
+    return new URL(baseUrl)
+  } catch {
+    return new URL('http://localhost:3000')
+  }
+})()
 
 export const metadata: Metadata = {
+  metadataBase,
   title: 'VlogShopper — Creator-first travel storefronts',
   description: 'Turn your vlog back-catalog into a shoppable travel storefront. AI-powered Trip Kits, affiliate income, subscriber subscriptions.',
   icons: {

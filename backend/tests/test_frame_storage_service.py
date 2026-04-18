@@ -100,7 +100,7 @@ def test_extract_video_frames_downloads_once_and_returns_all_requested_jpegs():
     temp_dir.mkdir(parents=True, exist_ok=True)
     video_path = temp_dir / "video.mp4"
     video_path.write_bytes(b"video-bytes")
-    frame_path_holder: dict[str, str] = {}
+    frame_path_holder: dict[str, object] = {}
     download_count = 0
 
     class FakeYoutubeDL:
@@ -133,8 +133,16 @@ def test_extract_video_frames_downloads_once_and_returns_all_requested_jpegs():
             return None
 
     class FakeStream:
-        def output(self, frame_path, **_kwargs):
+        def filter(self, filter_name, width, height, **kwargs):
+            frame_path_holder["filter_name"] = filter_name
+            frame_path_holder["filter_width"] = width
+            frame_path_holder["filter_height"] = height
+            frame_path_holder["filter_kwargs"] = kwargs
+            return self
+
+        def output(self, frame_path, **kwargs):
             frame_path_holder["path"] = frame_path
+            frame_path_holder["output_kwargs"] = kwargs
             return FakeOutput()
 
     fake_ffmpeg = types.SimpleNamespace(input=lambda *_args, **_kwargs: FakeStream())
@@ -160,6 +168,12 @@ def test_extract_video_frames_downloads_once_and_returns_all_requested_jpegs():
         24.0: (b"jpeg-frame", "image/jpeg"),
     }
     assert download_count == 1
+    assert frame_path_holder["filter_name"] == "scale"
+    assert frame_path_holder["filter_width"] == 1024
+    assert frame_path_holder["filter_height"] == 1024
+    assert frame_path_holder["filter_kwargs"] == {"force_original_aspect_ratio": "decrease"}
+    assert frame_path_holder["output_kwargs"]["q:v"] == 4
+    assert frame_path_holder["output_kwargs"]["vcodec"] == "mjpeg"
     shutil.rmtree(temp_dir)
 
 

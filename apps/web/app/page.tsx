@@ -57,7 +57,7 @@ function NavUserPill({
   return (
     <Link
       href="/account"
-      className="flex items-center gap-2 rounded-full border border-[#17332d]/10 bg-white/65 px-3 py-1.5 transition-colors hover:border-[#17332d]/20 hover:bg-white/90"
+      className="flex items-center gap-2 whitespace-nowrap rounded-full border border-[#17332d]/10 bg-white/65 px-3 py-1.5 transition-colors hover:border-[#17332d]/20 hover:bg-white/90"
     >
       <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#17332d]/10 text-xs font-semibold text-[#17332d]">
         {initial}
@@ -102,14 +102,14 @@ export default async function HomePage() {
             <Image src="/logo.png" alt="VlogShopper" width={34} height={34} className="rounded-xl shadow-[0_0_30px_rgba(23,51,45,0.08)]" />
             <div>
               <p className="text-base font-semibold tracking-tight text-[#17332d]">VlogShopper</p>
-              <p className="text-[10px] uppercase tracking-[0.32em] text-[#17332d]/35">Curated by creators for their fans</p>
+              <p className="text-[10px] uppercase tracking-[0.32em] text-[#17332d]/35">Curated by creators for their subscribers</p>
             </div>
           </Link>
 
           <div className="hidden items-center gap-6 text-sm text-[#17332d]/82 md:flex">
             <Link href="/discover" className="transition-colors hover:text-[#17332d]">Discover</Link>
             <a href="#creators" className="transition-colors hover:text-[#17332d]">For creators</a>
-            <a href="#fans" className="transition-colors hover:text-[#17332d]">For subscribers</a>
+            <a href="#subscribers" className="transition-colors hover:text-[#17332d]">For subscribers</a>
             <a href="#pipeline" className="transition-colors hover:text-[#17332d]">AI pipeline</a>
           </div>
 
@@ -146,7 +146,7 @@ export default async function HomePage() {
 
           <p className="mt-6 max-w-2xl text-lg leading-8 text-[#17332d]/82 sm:text-xl">
             VlogShopper scans each video, builds an evidence-backed opportunity graph, and turns hotels,
-            restaurants, routes, experiences, and travel gear into Trip Kits creators can approve and fans can unlock.
+            restaurants, routes, experiences, and travel gear into Trip Kits creators can approve and subscribers can unlock.
           </p>
 
           <div className="mt-10 flex flex-col gap-4 sm:flex-row">
@@ -239,12 +239,12 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section id="fans" className="border-y border-[#17332d]/8 bg-[rgba(255,248,240,0.56)] py-20">
+      <section id="subscribers" className="border-y border-[#17332d]/8 bg-[rgba(255,248,240,0.56)] py-20">
         <div className="mx-auto grid max-w-7xl gap-10 px-6 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
           <div>
             <p className="text-xs uppercase tracking-[0.28em] text-teal-800/80">For subscribers</p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[#17332d] sm:text-4xl">
-              Fans don’t just watch the trip. They can unlock it.
+              Subscribers don't just watch the trip. They can unlock it.
             </h2>
             <p className="mt-5 max-w-xl text-sm leading-7 text-[#17332d]/62 sm:text-base">
               Discover storefronts, save kits, follow creators, and subscribe when you want the full itinerary.
@@ -325,3 +325,4 @@ export default async function HomePage() {
     </main>
   )
 }
+

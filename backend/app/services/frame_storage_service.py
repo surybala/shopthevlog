@@ -24,6 +24,10 @@ from app.db.client import get_supabase
 PLACEHOLDER_PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnCYuoAAAAASUVORK5CYII="
 )
+AI_FRAME_MAX_EDGE_PX = 1024
+# Lower q:v means higher quality for MJPEG. 4 is a good balance for readable
+# signage and product details without keeping full-size frames around.
+AI_FRAME_JPEG_QSCALE = 4
 
 
 @dataclass
@@ -112,7 +116,8 @@ def _download_video_for_frame_extraction(video_url: str, output_template: str) -
 
 def extract_video_frames(video_url: str | None, timestamps_sec: list[float]) -> dict[float, tuple[bytes, str]]:
     """
-    Download the source video once and extract frames near the requested timestamps.
+    Download the source video once and extract resized JPEG frames near the
+    requested timestamps.
     """
     if not video_url or not timestamps_sec:
         return {}
@@ -130,7 +135,19 @@ def extract_video_frames(video_url: str | None, timestamps_sec: list[float]) -> 
                 frame_path = os.path.join(tmpdir, f"frame-{int(normalized_timestamp):06d}.jpg")
                 (
                     ffmpeg.input(downloaded_path, ss=normalized_timestamp)
-                    .output(frame_path, vframes=1, format="image2", vcodec="mjpeg")
+                    .filter(
+                        "scale",
+                        AI_FRAME_MAX_EDGE_PX,
+                        AI_FRAME_MAX_EDGE_PX,
+                        force_original_aspect_ratio="decrease",
+                    )
+                    .output(
+                        frame_path,
+                        vframes=1,
+                        format="image2",
+                        vcodec="mjpeg",
+                        **{"q:v": AI_FRAME_JPEG_QSCALE},
+                    )
                     .overwrite_output()
                     .run(quiet=True)
                 )

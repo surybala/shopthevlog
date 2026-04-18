@@ -260,7 +260,7 @@ export const STOREFRONT_THEMES: StorefrontThemeDefinition[] = [
     id: 'ISLAND_HOPPING',
     name: 'Island Hopping',
     vibe: 'Tropical, bright, playful',
-    headline: 'Ferry stops, beach clubs, and the spots fans actually ask about.',
+    headline: 'Ferry stops, beach clubs, and the spots subscribers actually ask about.',
     subheadline: 'For creators bouncing between islands, coves, ports, and sun-drenched stays.',
     chip: 'Island',
     pageClassName: 'editorial-shell text-[#17332d]',
