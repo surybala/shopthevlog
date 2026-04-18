@@ -16,15 +16,19 @@ export function getE2EUserIdFromCookies(cookieStore: CookieReader) {
 }
 
 export function buildE2EUser(userId: string) {
+  const isAdmin = /admin/i.test(userId)
   return {
     id: userId,
     email: `e2e+${userId}@vlogshopper.test`,
     app_metadata: {
       approved: true,
+      admin: isAdmin,
+      is_admin: isAdmin,
+      role: isAdmin ? 'admin' : undefined,
       provider: 'e2e',
     },
     user_metadata: {
-      full_name: 'E2E Creator',
+      full_name: isAdmin ? 'E2E Admin' : 'E2E Creator',
     },
   }
 }

@@ -68,6 +68,11 @@ const adminNavItems = [
     label: 'Waitlist',
     icon: <NavIcon><path d="M10 3.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Z" /><path d="M10 7v3.5" /><path d="M10 13.5h.01" /></NavIcon>,
   },
+  {
+    href: '/dashboard/payout-ops',
+    label: 'Payout Ops',
+    icon: <NavIcon><path d="M4.5 6.5h11" /><path d="M4.5 10h11" /><path d="M4.5 13.5h7" /><path d="M14 13.5h2.5" /><path d="M13.5 4.5v11" /></NavIcon>,
+  },
 ]
 
 export default function DashboardNav({ handle, isAdmin = false }: { handle: string | null; isAdmin?: boolean }) {

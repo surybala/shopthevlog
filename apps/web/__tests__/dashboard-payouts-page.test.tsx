@@ -56,6 +56,7 @@ import DashboardPayoutsPage from '../app/dashboard/payouts/page'
 describe('DashboardPayoutsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    process.env.STRIPE_SECRET_KEY = 'sk_test_123'
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
     mockCreatorFindUnique.mockResolvedValue({
       id: 'creator-1',

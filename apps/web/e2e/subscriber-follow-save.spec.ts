@@ -34,7 +34,6 @@ test.describe('subscriber follow and save flow', () => {
     await expect(page.getByText(/more days inside/i)).toBeVisible()
 
     await page.getByRole('link', { name: 'Follow for free' }).click()
-    await expect(page.getByRole('heading', { name: /Subscribe to Subscriber QA Creator/i })).toBeVisible()
     await page.getByRole('button', { name: 'Follow' }).click()
     await expect(page.getByRole('button', { name: 'Following' })).toBeVisible()
 

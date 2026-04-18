@@ -41,7 +41,15 @@ test.describe('creator review publish flow', () => {
     await expect(page.getByText('Backed by Transcript + Ocr')).toBeVisible()
     await expect(page.getByText('Older Tokyo Cut')).toBeVisible()
 
-    await page.getByRole('button', { name: 'Publish Trip Kit' }).click()
+    await Promise.all([
+      page.waitForResponse((response) =>
+        response.url().includes(`/api/vlogs/${seed.reviewUrl.split('/').pop()}/publish`) &&
+        response.request().method() === 'POST' &&
+        response.status() === 200,
+      ),
+      page.getByRole('button', { name: 'Publish Trip Kit' }).click(),
+    ])
+    await page.goto(seed.reviewUrl)
 
     await expect(page.getByText('Current Trip Kit')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Republish Trip Kit' })).toBeVisible()

@@ -30,6 +30,7 @@ describe('DashboardNav', () => {
     expect(html).not.toContain('[K]');
     expect(html).not.toContain('[!]');
     expect(html).toContain('Waitlist');
+    expect(html).toContain('Payout Ops');
     expect(html).toContain('text-[#17332d]/76');
     expect(html).toContain('bg-[#17332d]/10 text-[#17332d] font-semibold');
   });

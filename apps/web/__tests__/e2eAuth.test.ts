@@ -43,4 +43,17 @@ describe('e2e auth helpers', () => {
       },
     })
   })
+
+  it('marks admin-flavored e2e users as admins', () => {
+    expect(buildE2EUser('e2e-admin-ops')).toMatchObject({
+      app_metadata: {
+        admin: true,
+        is_admin: true,
+        role: 'admin',
+      },
+      user_metadata: {
+        full_name: 'E2E Admin',
+      },
+    })
+  })
 })

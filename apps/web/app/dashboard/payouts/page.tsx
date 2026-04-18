@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
-import { stripe } from '@/lib/stripe'
 import {
   calculateSubscriberRunRate,
   formatUsdFromCents,
@@ -21,7 +20,9 @@ type StripeAccountSnapshot = {
 
 async function getStripeAccountSnapshot(stripeAccountId: string | null): Promise<StripeAccountSnapshot | null> {
   if (!stripeAccountId) return null
+  if (!process.env.STRIPE_SECRET_KEY) return null
 
+  const { stripe } = await import('@/lib/stripe')
   const account = await stripe.accounts.retrieve(stripeAccountId)
   return {
     connected: true,
