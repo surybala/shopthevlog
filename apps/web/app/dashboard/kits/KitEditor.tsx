@@ -164,7 +164,7 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
       <section className="dashboard-mirror-card space-y-6 p-6 md:p-7">
         <div>
           <p className="dashboard-mirror-kicker text-xs">Core Story</p>
-          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-[#f7f1e4]">Shape the Trip Kit before it goes live.</h2>
+          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-[#17332d]">Shape the Trip Kit before it goes live.</h2>
           <p className="dashboard-mirror-subtle mt-2 max-w-2xl text-sm">
             Dial in the title, route, budget, and unlock level so subscribers feel like they are stepping into a polished travel editorial.
           </p>
@@ -184,9 +184,9 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
           <div className="md:col-span-2">
             <label className={labelCls}>Storefront Slug</label>
             <div className="flex items-center gap-3 rounded-[1.35rem] bg-white/[0.05] px-4 py-3 ring-1 ring-white/10">
-              <span className="shrink-0 text-sm text-[#d2d9c7]/55">/@{creatorHandle}/kits/</span>
+              <span className="shrink-0 text-sm text-[rgba(23,51,45,0.52)]">/@{creatorHandle}/kits/</span>
               <input
-                className="min-w-0 flex-1 bg-transparent text-sm text-[#f7f1e4] outline-none placeholder:text-[#d2d9c7]/35"
+                className="min-w-0 flex-1 bg-transparent text-sm text-[#17332d] outline-none placeholder:text-[rgba(23,51,45,0.36)]"
                 placeholder="10-days-in-japan"
                 value={form.slug}
                 onChange={(e) => set('slug', e.target.value)}
@@ -241,9 +241,9 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="dashboard-mirror-kicker text-xs">Access</p>
-            <h2 className="mt-2 text-xl font-semibold text-[#f7f1e4]">Choose how this guide unlocks.</h2>
+            <h2 className="mt-2 text-xl font-semibold text-[#17332d]">Choose how this guide unlocks.</h2>
           </div>
-          <div className="rounded-full bg-white/[0.06] px-4 py-2 text-xs text-[#d2d9c7]/70 ring-1 ring-white/10">
+          <div className="rounded-full bg-white/[0.06] px-4 py-2 text-xs text-[rgba(23,51,45,0.58)] ring-1 ring-white/10">
             {kit ? (kit.isPublished ? 'Published now' : 'Draft mode') : 'Create first draft'}
           </div>
         </div>
@@ -267,10 +267,10 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
                 }`}
               >
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-semibold text-[#f7f1e4]">{tier.label}</span>
+                  <span className="text-sm font-semibold text-[#17332d]">{tier.label}</span>
                   <span className={`h-2.5 w-2.5 rounded-full ${selected ? 'bg-[#f0b16b]' : 'bg-white/25'}`} />
                 </div>
-                <p className="mt-2 text-sm leading-6 text-[#d2d9c7]/75">{tier.description}</p>
+                <p className="mt-2 text-sm leading-6 text-[rgba(23,51,45,0.68)]">{tier.description}</p>
               </button>
             )
           })}
@@ -284,8 +284,8 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
           >
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-[#f7f1e4]">Featured placement</p>
-                <p className="mt-1 text-sm text-[#d2d9c7]/72">Lift this kit toward the top of your storefront collection.</p>
+                <p className="text-sm font-semibold text-[#17332d]">Featured placement</p>
+                <p className="mt-1 text-sm text-[rgba(23,51,45,0.72)]">Lift this kit toward the top of your storefront collection.</p>
               </div>
               <div className={`h-6 w-11 rounded-full transition ${form.isFeatured ? 'bg-[#f0b16b]' : 'bg-white/12'}`}>
                 <div className={`mt-0.5 h-5 w-5 rounded-full bg-[#163328] transition-transform ${form.isFeatured ? 'translate-x-5' : 'translate-x-0.5'}`} />
@@ -294,8 +294,8 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
           </button>
 
           <div className="rounded-[1.5rem] bg-white/[0.04] p-4 ring-1 ring-white/10">
-            <p className="text-sm font-semibold text-[#f7f1e4]">Storefront visibility</p>
-            <p className="mt-1 text-sm text-[#d2d9c7]/72">
+            <p className="text-sm font-semibold text-[#17332d]">Storefront visibility</p>
+            <p className="mt-1 text-sm text-[rgba(23,51,45,0.72)]">
               {kit?.isPublished
                 ? 'This Trip Kit is live on your storefront right now.'
                 : 'Save your edits first. You can publish once the kit is ready for subscribers.'}
@@ -308,9 +308,9 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="dashboard-mirror-kicker text-xs">Itinerary</p>
-            <h2 className="mt-2 text-xl font-semibold text-[#f7f1e4]">Build the experience day by day.</h2>
+            <h2 className="mt-2 text-xl font-semibold text-[#17332d]">Build the experience day by day.</h2>
           </div>
-          <div className="rounded-full bg-white/[0.06] px-4 py-2 text-xs text-[#d2d9c7]/70 ring-1 ring-white/10">
+          <div className="rounded-full bg-white/[0.06] px-4 py-2 text-xs text-[rgba(23,51,45,0.58)] ring-1 ring-white/10">
             {kit ? `${kit.days.length} day${kit.days.length === 1 ? '' : 's'}` : 'Save to unlock'}
           </div>
         </div>
@@ -319,8 +319,8 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
           <ItineraryEditor kitId={kit.id} initialDays={kit.days} />
         ) : (
           <div className="rounded-[1.75rem] border border-dashed border-white/12 bg-white/[0.03] px-6 py-12 text-center">
-            <p className="text-sm font-medium text-[#f7f1e4]">Save the Trip Kit first.</p>
-            <p className="mt-2 text-sm text-[#d2d9c7]/68">
+            <p className="text-sm font-medium text-[#17332d]">Save the Trip Kit first.</p>
+            <p className="mt-2 text-sm text-[rgba(23,51,45,0.64)]">
               Once the kit exists, you can add days, activities, and affiliate links in the same editor.
             </p>
           </div>
@@ -336,7 +336,11 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
           <button
             onClick={handlePublishToggle}
             disabled={saving}
-            className={`dashboard-pill-button disabled:opacity-50 ${kit.isPublished ? 'text-[#ffb5a8] ring-red-400/25 hover:bg-red-400/10' : ''}`}
+            className={
+              kit.isPublished
+                ? 'btn-ghost border border-red-400/25 text-[#b84c38] hover:bg-red-400/10 disabled:opacity-50'
+                : 'btn-ghost disabled:opacity-50'
+            }
           >
             {kit.isPublished ? 'Unpublish' : 'Publish'}
           </button>
@@ -347,7 +351,7 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
             href={`/@${creatorHandle}/kits/${kit.slug}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="ml-auto text-sm text-[#d2d9c7]/62 transition hover:text-[#f7f1e4]"
+            className="ml-auto text-sm text-[rgba(23,51,45,0.62)] transition hover:text-[#17332d]"
           >
             View on storefront
           </a>

@@ -207,13 +207,13 @@ function ActivityRow({
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              {activity.time ? <span className="text-xs text-[#d2d9c7]/55">{activity.time}</span> : null}
-              <span className="text-sm font-medium text-[#f7f1e4]">{activity.title}</span>
-              <span className="rounded-full bg-white/[0.08] px-2.5 py-1 text-[11px] text-[#d2d9c7]/72 ring-1 ring-white/10">
+              {activity.time ? <span className="text-xs text-[rgba(23,51,45,0.54)]">{activity.time}</span> : null}
+              <span className="text-sm font-medium text-[#17332d]">{activity.title}</span>
+              <span className="rounded-full bg-white/[0.08] px-2.5 py-1 text-[11px] text-[rgba(23,51,45,0.66)] ring-1 ring-white/10">
                 {typeLabel(activity.type)}
               </span>
             </div>
-            {activity.description ? <p className="mt-1 text-sm leading-6 text-[#d2d9c7]/68">{activity.description}</p> : null}
+            {activity.description ? <p className="mt-1 text-sm leading-6 text-[rgba(23,51,45,0.66)]">{activity.description}</p> : null}
             {activity.affiliateLink ? (
               <div className="mt-3">
                 <span className="rounded-full bg-[#5f84ff]/14 px-3 py-1 text-xs text-[#c7d5ff] ring-1 ring-[#7c98ff]/20">
@@ -267,8 +267,8 @@ function ActivityRow({
                 onClick={() => setForm((prev) => ({ ...prev, type: entry.value }))}
                 className={`rounded-full px-3 py-1.5 text-xs transition ${
                   selected
-                    ? 'bg-[linear-gradient(135deg,rgba(240,152,74,0.32),rgba(232,118,34,0.2))] text-[#f7f1e4] ring-1 ring-[#f0b16b]/35'
-                    : 'bg-white/[0.05] text-[#d2d9c7]/72 ring-1 ring-white/10 hover:bg-white/[0.08]'
+                    ? 'bg-[linear-gradient(135deg,rgba(240,152,74,0.32),rgba(232,118,34,0.2))] text-[#17332d] ring-1 ring-[#f0b16b]/35'
+                    : 'bg-white/[0.05] text-[rgba(23,51,45,0.68)] ring-1 ring-white/10 hover:bg-white/[0.08]'
                 }`}
               >
                 {entry.icon} · {entry.label}
@@ -414,7 +414,7 @@ function DayCard({
   return (
     <div className="dashboard-mirror-card overflow-hidden">
       <div className="flex items-center gap-3 border-b border-white/8 px-5 py-4">
-        <button onClick={() => setCollapsed((value) => !value)} className="text-sm text-[#d2d9c7]/58 transition hover:text-[#f7f1e4]">
+        <button onClick={() => setCollapsed((value) => !value)} className="text-sm text-[rgba(23,51,45,0.58)] transition hover:text-[#17332d]">
           {collapsed ? 'Expand' : 'Collapse'}
         </button>
         <div className="min-w-0 flex-1">
@@ -435,9 +435,9 @@ function DayCard({
               <span className="rounded-full bg-white/[0.06] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#f0b16b] ring-1 ring-white/10">
                 Day {day.dayNumber}
               </span>
-              <span className="text-base font-semibold text-[#f7f1e4]">{day.title}</span>
-              {day.city || day.country ? <span className="text-sm text-[#d2d9c7]/64">{[day.city, day.country].filter(Boolean).join(', ')}</span> : null}
-              <span className="text-sm text-[#d2d9c7]/52">{day.activities.length} activities</span>
+              <span className="text-base font-semibold text-[#17332d]">{day.title}</span>
+              {day.city || day.country ? <span className="text-sm text-[rgba(23,51,45,0.62)]">{[day.city, day.country].filter(Boolean).join(', ')}</span> : null}
+              <span className="text-sm text-[rgba(23,51,45,0.52)]">{day.activities.length} activities</span>
             </div>
           )}
         </div>
@@ -456,7 +456,7 @@ function DayCard({
       {!collapsed ? (
         <div className="space-y-3 px-4 py-4">
           {day.activities.length === 0 ? (
-            <div className="rounded-[1.35rem] border border-dashed border-white/12 bg-white/[0.03] px-5 py-6 text-sm text-[#d2d9c7]/62">
+            <div className="rounded-[1.35rem] border border-dashed border-white/12 bg-white/[0.03] px-5 py-6 text-sm text-[rgba(23,51,45,0.62)]">
               No activities yet. Add the first stop for this day below.
             </div>
           ) : null}
@@ -515,7 +515,7 @@ export default function ItineraryEditor({ kitId, initialDays }: Props) {
   return (
     <div className="space-y-4">
       {days.length === 0 ? (
-        <div className="rounded-[1.75rem] border border-dashed border-white/12 bg-white/[0.03] py-10 text-center text-sm text-[#d2d9c7]/62">
+        <div className="rounded-[1.75rem] border border-dashed border-white/12 bg-white/[0.03] py-10 text-center text-sm text-[rgba(23,51,45,0.62)]">
           No itinerary yet. Add your first day below.
         </div>
       ) : null}

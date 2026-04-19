@@ -196,7 +196,9 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
       if (!res.ok) {
         setErrors((prev) => ({
           ...prev,
-          [vlogId]: data.error ?? 'Could not delete this video right now.',
+          [vlogId]:
+            data.error ??
+            'This video could not be deleted because it still has linked Trip Kit content or related records.',
         }))
         return
       }
