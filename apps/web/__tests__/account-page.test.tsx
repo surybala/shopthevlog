@@ -129,4 +129,32 @@ describe('AccountPage', () => {
     expect(html).toContain('dashboard-mirror-panel')
     expect(html).toContain('dashboard-mirror-card')
   })
+
+  it('uses source vlog thumbnails for saved kits when a cover image is missing', async () => {
+    mockSavedKitFindMany.mockResolvedValue([
+      {
+        savedAt: new Date('2026-04-12T00:00:00.000Z'),
+        tripKit: {
+          id: 'kit-1',
+          creatorId: 'creator-1',
+          title: 'Bangkok Nights',
+          slug: 'bangkok-nights',
+          coverImageUrl: null,
+          sourceVlogs: [{ vlog: { thumbnailUrl: 'https://img.youtube.com/vi/bangkok/hqdefault.jpg' } }],
+          primaryCity: 'Bangkok',
+          countries: ['Thailand'],
+          durationDays: 4,
+          accessTier: 'FREE',
+          estimatedBudgetLow: 500,
+          creator: { handle: 'qa-subscriber-e2e', displayName: 'Subscriber QA Creator' },
+        },
+      },
+    ])
+
+    const page = await AccountPage({ searchParams: { tab: 'saved' } })
+    const html = renderToStaticMarkup(page)
+
+    expect(html).toContain('https://img.youtube.com/vi/bangkok/hqdefault.jpg')
+    expect(html).not.toContain('>KIT<')
+  })
 })

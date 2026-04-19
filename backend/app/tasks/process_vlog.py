@@ -111,18 +111,23 @@ async def process_vlog_task(vlog_id: str) -> None:
             logger.error("Transcription failed for vlog %s", vlog_id)
             return
 
-        transcript_summary = sync_transcript_graph(vlog_id, creator_id, title, transcript)
+        transcript_summary = sync_transcript_graph(vlog_id, creator_id, title, transcript, duration_seconds=duration_seconds)
         _update_vlog_status(vlog_id, "TRANSCRIPT_DONE")
 
         visual_opportunity_count = 0
         visual_error_messages: list[str] = []
         visual_sync_succeeded = False
+        inferred_duration_seconds = duration_seconds
+        if not inferred_duration_seconds:
+            transcript_segments = int(transcript_summary.get("segments") or 0)
+            if transcript_segments > 0:
+                inferred_duration_seconds = transcript_segments * 30
         try:
             sync_visual_evidence(
                 vlog_id,
                 creator_id,
                 title,
-                duration_seconds=duration_seconds,
+                duration_seconds=inferred_duration_seconds,
                 external_video_url=external_video_url,
                 thumbnail_url=thumbnail_url,
             )

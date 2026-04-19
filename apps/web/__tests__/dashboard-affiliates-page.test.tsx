@@ -87,5 +87,6 @@ describe('DashboardAffiliatesPage', () => {
     expect(html).toContain('Tokyo Stay Guide')
     expect(html).toContain('Park Hyatt Tokyo')
     expect(html).toContain('Confirmed Earnings')
+    expect(html).toContain('href="/dashboard/affiliates/new"')
   })
 })

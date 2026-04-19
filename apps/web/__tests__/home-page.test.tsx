@@ -60,6 +60,12 @@ describe('HomePage', () => {
     expect(html).toContain('Join the creator waitlist')
     expect(html).toContain('Browse creator storefronts')
     expect(html).toContain('landing-ticker')
+    expect(html).toContain('landing-pipeline-panel')
+    expect(html).toContain('Trip Kit preview')
+    expect(html).toContain('Monetize the trips you already filmed')
+    expect(html).toContain('turns your vlogs into unlockable trip planning')
+    expect(html).toContain('Copyright 2026 VlogShopper. All rights reserved.')
+    expect(html).not.toContain('Review ready')
   })
 
   it('redirects signed-in creators to the dashboard', async () => {

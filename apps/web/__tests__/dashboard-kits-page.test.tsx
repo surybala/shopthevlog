@@ -57,6 +57,7 @@ describe('DashboardKitsPage', () => {
         durationDays: 3,
         accessTier: 'FOLLOWER',
         coverImageUrl: null,
+        sourceVlogs: [{ vlog: { thumbnailUrl: 'https://img.youtube.com/vi/lisbon/hqdefault.jpg' } }],
         _count: { affiliateLinks: 6, days: 3 },
       },
     ])
@@ -72,5 +73,7 @@ describe('DashboardKitsPage', () => {
     expect(html).toContain('AI generated')
     expect(html).toContain('dashboard-mirror-panel')
     expect(html).toContain('dashboard-mirror-card')
+    expect(html).toContain('https://img.youtube.com/vi/lisbon/hqdefault.jpg')
+    expect(html).not.toContain('>KIT<')
   })
 })

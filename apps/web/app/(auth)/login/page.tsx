@@ -63,7 +63,7 @@ function LoginForm() {
               <div className="w-full border-t border-white/10" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="bg-[#f7efe3] px-3 text-[#17332d]/35">or</span>
+              <span className="px-3 text-[#17332d]/35">or</span>
             </div>
           </div>
 

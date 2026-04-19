@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import mimetypes
 import os
 import tempfile
@@ -20,6 +21,7 @@ import httpx
 from app.core.config import settings
 from app.db.client import get_supabase
 
+logger = logging.getLogger(__name__)
 
 PLACEHOLDER_PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnCYuoAAAAASUVORK5CYII="
@@ -179,11 +181,17 @@ def load_cached_frame_assets(
     supabase = get_supabase()
     bucket = supabase.storage.from_(settings.SUPABASE_STORAGE_BUCKET)
     manifest_path = build_frame_manifest_path(creator_id, vlog_id)
+    manifest_directory = os.path.dirname(manifest_path)
+    manifest_name = os.path.basename(manifest_path)
 
     try:
+        existing_entries = bucket.list(manifest_directory)
+        if not any(entry.get("name") == manifest_name for entry in existing_entries or []):
+            return {}
         manifest_payload = bucket.download(manifest_path)
         manifest = json.loads(_coerce_downloaded_bytes(manifest_payload).decode("utf-8"))
-    except Exception:
+    except Exception as error:
+        logger.debug("Could not load frame manifest for vlog %s: %s", vlog_id, error)
         return {}
 
     if manifest.get("sourceVideoUrl") != source_video_url:

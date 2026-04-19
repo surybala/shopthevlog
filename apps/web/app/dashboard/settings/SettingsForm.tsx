@@ -363,7 +363,28 @@ export default function SettingsForm({ userId, creator }: Props) {
               Your {planConfig.label} plan includes up to {planConfig.maxImportedVlogs} imported videos and {processingCreditLimit ?? planConfig.monthlyProcessingCredits} processing credits each month.
               {remainingProcessingCredits !== null ? ` ${remainingProcessingCredits} credit${remainingProcessingCredits === 1 ? '' : 's'} remaining.` : ''}
             </p>
-            {scanStatus === 'PENDING' || scanStatus === 'COMPLETE' || scanStatus === 'FAILED' ? <button onClick={async () => { const res = await fetch('/api/creator/scan', { method: 'POST' }); if (res.ok) setScanStatus('SCANNING') }} className="btn-ghost text-sm">{scanStatus === 'COMPLETE' ? 'Re-scan' : 'Start scan'}</button> : null}
+            <div className="flex flex-wrap gap-3">
+              {scanStatus === 'PENDING' || scanStatus === 'COMPLETE' || scanStatus === 'FAILED' ? (
+                <button
+                  onClick={async () => {
+                    setError('')
+                    const res = await fetch('/api/creator/scan', { method: 'POST' })
+                    const data = await res.json().catch(() => ({}))
+                    if (res.ok) {
+                      setScanStatus('SCANNING')
+                      return
+                    }
+                    setError(data.error ?? 'Could not start a YouTube scan right now.')
+                  }}
+                  className="btn-ghost text-sm"
+                >
+                  {scanStatus === 'COMPLETE' ? 'Re-scan' : 'Start scan'}
+                </button>
+              ) : null}
+              <button onClick={connectYouTube} className="dashboard-pill-button px-4 py-2 text-sm text-[#17332d]">
+                Reconnect YouTube
+              </button>
+            </div>
           </div> : null}
         </div>
         <div className="dashboard-mirror-card p-6">

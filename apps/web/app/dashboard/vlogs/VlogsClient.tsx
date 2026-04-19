@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { buildImportedVlogInsight, type ProcessingInsight } from '@/lib/vlogInsights'
-import { formatVlogPipelineErrorMessage } from '@/lib/vlogProcessing'
+import { formatVlogPipelineErrorMessage, getVlogProcessingPresentation } from '@/lib/vlogProcessing'
 
 type TripKitRef = {
   id: string
@@ -49,28 +49,17 @@ interface Props {
   remainingVlogSlots: number
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  PENDING: 'bg-[#17332d]/8 text-[#17332d]/76',
-  QUEUED: 'bg-blue-500/14 text-blue-900',
-  TRANSCRIBING: 'bg-yellow-500/16 text-yellow-900 animate-pulse',
-  EXTRACTING: 'bg-purple-500/16 text-purple-900 animate-pulse',
-  EMBEDDING: 'bg-orange-500/18 text-orange-900 animate-pulse',
-  COMPLETE: 'bg-green-500/18 text-green-900',
-  FAILED: 'bg-red-500/18 text-red-900',
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  PENDING: 'Pending',
-  QUEUED: 'Queued',
-  TRANSCRIBING: 'Transcribing...',
-  EXTRACTING: 'Generating Kit...',
-  EMBEDDING: 'Embedding...',
-  COMPLETE: 'Complete',
-  REVIEW_PENDING: 'Ready for Review',
-  FAILED: 'Failed',
-}
-
-const IN_PROGRESS = new Set(['QUEUED', 'TRANSCRIBING', 'EXTRACTING', 'EMBEDDING'])
+const IN_PROGRESS = new Set([
+  'QUEUED',
+  'TRANSCRIBING',
+  'TRANSCRIPT_DONE',
+  'EXTRACTING',
+  'VISION_DONE',
+  'FUSED',
+  'RESOLVED',
+  'RANKED',
+  'EMBEDDING',
+])
 
 function insightChipClasses(tone: ProcessingInsight['chips'][number]['tone']) {
   switch (tone) {
@@ -102,6 +91,7 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
   const [showImportedInCatalog, setShowImportedInCatalog] = useState(false)
   const [videoUrl, setVideoUrl] = useState('')
   const [urlLookupLoading, setUrlLookupLoading] = useState(false)
+  const [catalogReconnectRequired, setCatalogReconnectRequired] = useState(false)
 
   const anyInProgress = vlogs.some((vlog) => IN_PROGRESS.has(vlog.processingStatus))
   const recommendedImportedVlogs = useMemo(
@@ -133,6 +123,7 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
   const loadCatalog = useCallback(async (query = '', showImported = false) => {
     setCatalogLoading(true)
     setCatalogError('')
+    setCatalogReconnectRequired(false)
     try {
       const params = new URLSearchParams()
       if (query.trim()) params.set('query', query.trim())
@@ -141,6 +132,7 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
       const data = await res.json()
       if (!res.ok) {
         setCatalogError(data.error ?? 'Could not load your YouTube videos right now.')
+        setCatalogReconnectRequired(Boolean(data.reconnectRequired))
         return
       }
       setCatalogVideos(data.videos)
@@ -219,6 +211,7 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
     if (selectedVideoIds.length === 0) return
     setImporting(true)
     setCatalogError('')
+    setCatalogReconnectRequired(false)
     try {
       const res = await fetch('/api/creator/scan', {
         method: 'POST',
@@ -228,6 +221,7 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setCatalogError(data.error ?? 'Could not import those videos right now.')
+        setCatalogReconnectRequired(Boolean(data.reconnectRequired))
         return
       }
       await refreshVlogs()
@@ -269,6 +263,7 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
     if (!videoUrl.trim()) return
     setUrlLookupLoading(true)
     setCatalogError('')
+    setCatalogReconnectRequired(false)
     try {
       const res = await fetch('/api/creator/scan/preview', {
         method: 'POST',
@@ -278,6 +273,7 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
       const data = await res.json()
       if (!res.ok) {
         setCatalogError(data.error ?? 'Could not find that video right now.')
+        setCatalogReconnectRequired(Boolean(data.reconnectRequired))
         return
       }
       if (data.video?.videoId) {
@@ -289,6 +285,16 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
       setCatalogError('Network error')
     } finally {
       setUrlLookupLoading(false)
+    }
+  }
+
+  async function reconnectYouTube() {
+    const res = await fetch('/api/auth/youtube')
+    const data = await res.json().catch(() => ({}))
+    if (data.url) {
+      window.location.href = data.url
+    } else {
+      setCatalogError('Could not start YouTube reconnect right now.')
     }
   }
 
@@ -355,7 +361,8 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
         <div className="space-y-3">
           {vlogs.map((vlog) => {
             const tripKit = vlog.tripKits[0]?.tripKit ?? null
-            const inProgress = IN_PROGRESS.has(vlog.processingStatus)
+            const statusPresentation = getVlogProcessingPresentation(vlog.processingStatus)
+            const inProgress = statusPresentation.inProgress || IN_PROGRESS.has(vlog.processingStatus)
             const canProcess = vlog.processingStatus === 'PENDING' || vlog.processingStatus === 'FAILED'
             const insight = buildImportedVlogInsight(vlog)
 
@@ -385,8 +392,8 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
                       >
                         {vlog.title}
                       </a>
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[vlog.processingStatus] ?? 'bg-[#17332d]/8 text-[#17332d]/76'}`}>
-                        {STATUS_LABELS[vlog.processingStatus] ?? vlog.processingStatus}
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${statusPresentation.tone}`}>
+                        {statusPresentation.label}
                       </span>
                     </div>
 
@@ -523,7 +530,14 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
               {catalogLoading ? (
                 <p className="text-sm text-[rgba(23,51,45,0.62)]">Loading your YouTube videos...</p>
               ) : catalogError ? (
-                <p className="text-sm text-red-700">{catalogError}</p>
+                <div className="space-y-3">
+                  <p className="text-sm text-red-700">{catalogError}</p>
+                  {catalogReconnectRequired ? (
+                    <button onClick={reconnectYouTube} className="btn-ghost text-sm">
+                      Reconnect YouTube
+                    </button>
+                  ) : null}
+                </div>
               ) : selectableVideos.length === 0 ? (
                 <p className="text-sm text-[rgba(23,51,45,0.62)]">No importable videos found right now.</p>
               ) : (
@@ -563,7 +577,7 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
                               </span>
                             ) : null}
                             {video.imported ? <span>Already imported</span> : null}
-                            {video.importedProcessingStatus ? <span>{STATUS_LABELS[video.importedProcessingStatus] ?? video.importedProcessingStatus}</span> : null}
+                            {video.importedProcessingStatus ? <span>{getVlogProcessingPresentation(video.importedProcessingStatus).label}</span> : null}
                           </div>
                           {video.insights ? (
                             <div className="mt-3">

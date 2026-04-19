@@ -192,6 +192,7 @@ def test_extract_video_frame_bytes_uses_batch_extractor_for_single_timestamp():
 
 def test_load_cached_frame_assets_returns_manifest_matches():
     mock_bucket = MagicMock()
+    mock_bucket.list.return_value = [{"name": "manifest.json"}]
     mock_bucket.download.return_value = json.dumps(
         {
             "sourceVideoUrl": "https://youtube.com/watch?v=abc",
@@ -219,6 +220,26 @@ def test_load_cached_frame_assets_returns_manifest_matches():
 
     assert list(cached.keys()) == [12.0]
     assert cached[12.0].path == "creators/creator-001/vlogs/vlog-001/frames/frame-000012.jpg"
+
+
+def test_load_cached_frame_assets_skips_download_when_manifest_is_missing():
+    mock_bucket = MagicMock()
+    mock_bucket.list.return_value = []
+    mock_supabase = MagicMock()
+    mock_supabase.storage.from_.return_value = mock_bucket
+
+    with patch("app.services.frame_storage_service.get_supabase", return_value=mock_supabase):
+        from app.services.frame_storage_service import load_cached_frame_assets
+
+        cached = load_cached_frame_assets(
+            creator_id="creator-001",
+            vlog_id="vlog-001",
+            source_video_url="https://youtube.com/watch?v=abc",
+            timestamps_sec=[12.0],
+        )
+
+    assert cached == {}
+    mock_bucket.download.assert_not_called()
 
 
 def test_write_frame_manifest_uploads_json_manifest():

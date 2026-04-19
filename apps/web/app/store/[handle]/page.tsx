@@ -12,6 +12,7 @@ import { createSupabaseServer } from '@/lib/supabase/server'
 import AccessBadge from '@/components/AccessBadge'
 import { getStorefrontTheme } from '@/lib/storefrontThemes'
 import { resolveAbsoluteStorageAssetUrl, resolveStorageAssetUrl } from '@/lib/storageAssets'
+import { getTripKitCardImageUrl } from '@/lib/tripKitImages'
 
 export async function generateMetadata({ params }: { params: { handle: string } }) {
   const creator = await prisma.creator.findUnique({
@@ -48,6 +49,16 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
           title: true,
           slug: true,
           coverImageUrl: true,
+          sourceVlogs: {
+            take: 1,
+            select: {
+              vlog: {
+                select: {
+                  thumbnailUrl: true,
+                },
+              },
+            },
+          },
           primaryCity: true,
           countries: true,
           durationDays: true,
@@ -290,6 +301,11 @@ function KitCard({
     title: string
     slug: string
     coverImageUrl: string | null
+    sourceVlogs: Array<{
+      vlog: {
+        thumbnailUrl: string | null
+      }
+    }>
     primaryCity: string | null
     countries: string[]
     durationDays: number | null
@@ -307,21 +323,20 @@ function KitCard({
     kit.accessTier as 'FREE' | 'FOLLOWER' | 'PREMIUM',
     accessLevel,
   )
+  const tileImageUrl = getTripKitCardImageUrl(kit)
 
   return (
     <Link href={`/@${handle}/kits/${kit.slug}`} className={`group overflow-hidden ${cardClassName}`}>
       <div className="relative aspect-video bg-[rgba(255,255,255,0.3)]">
-        {kit.coverImageUrl ? (
+        {tileImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={resolveStorageAssetUrl(kit.coverImageUrl) ?? ''}
+            src={tileImageUrl}
             alt={kit.title}
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
-          <div className="storefront-muted flex h-full w-full items-center justify-center text-3xl font-semibold">
-            KIT
-          </div>
+          <div className="h-full w-full bg-[linear-gradient(135deg,rgba(255,255,255,0.24),rgba(23,51,45,0.16),rgba(210,156,92,0.24))]" />
         )}
         {kit.accessTier !== 'FREE' && (
           <AccessBadge

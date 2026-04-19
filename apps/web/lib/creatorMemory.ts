@@ -34,7 +34,7 @@ export function buildCreatorMemoryEntries(
     || placeLikeOpportunityTypes.has(opportunity.opportunityType)
 
   const primaryMemoryType = action === 'REJECTED'
-    ? (isPlaceLike ? 'REJECTED_PLACE' : 'REJECTED_PRODUCT')
+    ? 'REJECTED_PRODUCT'
     : (isPlaceLike ? 'ACCEPTED_PLACE' : 'ACCEPTED_PRODUCT')
 
   const entries = [
@@ -85,7 +85,6 @@ export function buildCreatorMemoryHints(
       case 'ACCEPTED_PRODUCT':
         hints.push('Previously approved')
         break
-      case 'REJECTED_PLACE':
       case 'REJECTED_PRODUCT':
         hints.push('Previously rejected')
         break

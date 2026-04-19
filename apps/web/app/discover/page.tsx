@@ -10,6 +10,7 @@ import { getViewerCreatorAccessMap } from '@/lib/viewerAccess'
 import AccessBadge from '@/components/AccessBadge'
 import PublicNav from '@/components/PublicNav'
 import { resolveStorageAssetUrl } from '@/lib/storageAssets'
+import { getTripKitCardImageUrl } from '@/lib/tripKitImages'
 
 export const metadata = {
   title: 'Discover — VlogShopper',
@@ -52,6 +53,16 @@ export default async function DiscoverPage({
       title: true,
       slug: true,
       coverImageUrl: true,
+      sourceVlogs: {
+        take: 1,
+        select: {
+          vlog: {
+            select: {
+              thumbnailUrl: true,
+            },
+          },
+        },
+      },
       primaryCity: true,
       countries: true,
       creatorId: true,
@@ -77,6 +88,16 @@ export default async function DiscoverPage({
       title: true,
       slug: true,
       coverImageUrl: true,
+      sourceVlogs: {
+        take: 1,
+        select: {
+          vlog: {
+            select: {
+              thumbnailUrl: true,
+            },
+          },
+        },
+      },
       primaryCity: true,
       countries: true,
       creatorId: true,
@@ -155,11 +176,11 @@ export default async function DiscoverPage({
               {trending.map((kit) => (
                 <Link key={kit.id} href={`/@${kit.creator.handle}/kits/${kit.slug}`} className="glass-card group flex gap-4 overflow-hidden p-4">
                   <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-white/30">
-                    {kit.coverImageUrl ? (
+                    {getTripKitCardImageUrl(kit) ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={resolveStorageAssetUrl(kit.coverImageUrl) ?? ''} alt="" className="h-full w-full object-cover transition-transform group-hover:scale-110" />
+                      <img src={getTripKitCardImageUrl(kit) ?? ''} alt="" className="h-full w-full object-cover transition-transform group-hover:scale-110" />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-2xl">🗺</div>
+                      <div className="h-full w-full bg-[linear-gradient(135deg,rgba(23,51,45,0.16),rgba(210,156,92,0.24))]" />
                     )}
                   </div>
                   <div className="min-w-0">
@@ -200,11 +221,11 @@ export default async function DiscoverPage({
               {kits.map((kit) => (
                 <Link key={kit.id} href={`/@${kit.creator.handle}/kits/${kit.slug}`} className="glass-card group overflow-hidden">
                   <div className="relative aspect-video overflow-hidden bg-white/30">
-                    {kit.coverImageUrl ? (
+                    {getTripKitCardImageUrl(kit) ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={resolveStorageAssetUrl(kit.coverImageUrl) ?? ''} alt={kit.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                      <img src={getTripKitCardImageUrl(kit) ?? ''} alt={kit.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-4xl">🗺</div>
+                      <div className="h-full w-full bg-[linear-gradient(135deg,rgba(23,51,45,0.16),rgba(210,156,92,0.24))]" />
                     )}
                     {kit.accessTier !== 'FREE' && (
                       <AccessBadge

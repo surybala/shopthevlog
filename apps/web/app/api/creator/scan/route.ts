@@ -4,7 +4,11 @@ import prisma from '@/lib/prisma/client'
 import { rateLimit } from '@/lib/rateLimit'
 import { getCreatorPlanConfig } from '@/lib/creatorPlans'
 import { recordApiObservation } from '@/lib/observability'
-import { fetchYouTubeCatalog, getYouTubeAccessToken } from '@/lib/youtubeCatalog'
+import {
+  fetchYouTubeCatalog,
+  getYouTubeAccessToken,
+  isYouTubeReconnectRequiredError,
+} from '@/lib/youtubeCatalog'
 
 export async function POST(req: NextRequest) {
   const startedAt = Date.now()
@@ -59,9 +63,40 @@ export async function POST(req: NextRequest) {
         where: { id: creator.id },
         data: { catalogScanStatus: 'FAILED' },
       })
+      if (isYouTubeReconnectRequiredError(e)) {
+        record(409, 'youtube_reconnect_required')
+        return NextResponse.json(
+          {
+            error: 'Reconnect your YouTube channel to continue importing videos.',
+            reconnectRequired: true,
+          },
+          { status: 409 },
+        )
+      }
       record(500, 'selected_import_failed')
       return NextResponse.json({ error: 'Could not import those videos right now.' }, { status: 500 })
     }
+  }
+
+  try {
+    await getYouTubeAccessToken(creator.id)
+  } catch (error) {
+    await prisma.creator.update({
+      where: { id: creator.id },
+      data: { catalogScanStatus: 'FAILED' },
+    })
+    if (isYouTubeReconnectRequiredError(error)) {
+      record(409, 'youtube_reconnect_required')
+      return NextResponse.json(
+        {
+          error: 'Reconnect your YouTube channel to continue scanning.',
+          reconnectRequired: true,
+        },
+        { status: 409 },
+      )
+    }
+    record(500, 'token_refresh_failed')
+    return NextResponse.json({ error: 'Could not access your YouTube channel right now.' }, { status: 500 })
   }
 
   // Run in background — don't await
@@ -111,12 +146,14 @@ async function runScan(creatorId: string, channelId: string, plan: string, selec
         description: item.description,
         thumbnailUrl: item.thumbnailUrl,
         publishedAt: item.publishedAt ? new Date(item.publishedAt) : null,
+        durationSeconds: item.durationSeconds,
         processingStatus: 'PENDING',
       },
       update: {
         title: item.title,
         description: item.description,
         thumbnailUrl: item.thumbnailUrl,
+        durationSeconds: item.durationSeconds,
       },
     })
 

@@ -109,12 +109,12 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
 
   return (
     <div
-      className="storefront-shell mx-auto max-w-4xl px-6 py-12"
+      className="storefront-shell storefront-detail-page mx-auto max-w-4xl px-6 py-12"
       style={{ ...theme.cssVars, backgroundImage: `var(--storefront-page-bg), url(${theme.storefrontBackdropImageUrl})` }}
     >
       {isDraftPreview && (
         <div className="storefront-surface mb-6 flex items-center justify-between gap-4 rounded-xl border px-4 py-3">
-          <p className="storefront-subtle text-sm">
+          <p className="storefront-heading text-sm">
             {!kit.isPublished ? 'Draft preview - only you can see this kit.' : 'Your storefront is unpublished - only you can preview it.'}
           </p>
           <a href="/dashboard/kits" className="storefront-heading shrink-0 text-xs underline underline-offset-2">
@@ -124,7 +124,7 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
       )}
 
       <div className="mb-8">
-        <Link href={`/@${creator.handle}/kits`} className="storefront-muted mb-4 inline-block text-sm hover:text-[var(--storefront-text)]">
+        <Link href={`/@${creator.handle}/kits`} className="storefront-subtle mb-4 inline-block text-sm hover:text-[var(--storefront-text)]">
           &larr; All kits
         </Link>
 
@@ -139,7 +139,7 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
           <div>
             <h1 className="storefront-heading text-3xl font-bold">{kit.title}</h1>
             {kit.description && <p className="storefront-subtle mt-2 leading-relaxed">{kit.description}</p>}
-            <div className="storefront-muted mt-3 flex flex-wrap items-center gap-3 text-sm">
+            <div className="storefront-subtle mt-3 flex flex-wrap items-center gap-3 text-sm">
               {kit.primaryCity && <span>{kit.primaryCity}</span>}
               {kit.durationDays && <span>{kit.durationDays} days</span>}
               {kit.estimatedBudgetLow && kit.estimatedBudgetHigh && (
@@ -175,7 +175,7 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
             <Link href={`/@${creator.handle}`} className="storefront-heading text-sm font-medium hover:opacity-80">
               {creator.displayName}
             </Link>
-            <p className="storefront-muted text-xs">@{creator.handle}</p>
+          <p className="storefront-subtle text-xs">@{creator.handle}</p>
           </div>
           <Link href={`/@${creator.handle}/subscribe`} className="ml-auto btn-ghost px-4 py-1.5 text-sm">
             Follow
@@ -188,7 +188,7 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
           <h2 className="storefront-heading mb-2 text-lg font-semibold">
             {kit.accessTier === 'FOLLOWER' ? 'Follow to unlock this kit' : 'Subscribe to unlock this kit'}
           </h2>
-          <p className="storefront-muted mb-6 text-sm">
+          <p className="storefront-subtle mb-6 text-sm">
             {kit.accessTier === 'FOLLOWER'
               ? `Follow ${creator.displayName} for free to access all follower-tier kits.`
               : `Subscribe to ${creator.displayName} to unlock premium kits and exclusive content.`}
@@ -212,17 +212,16 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
               <div className="divide-y" style={{ borderColor: 'var(--storefront-border)' }}>
                 {day.activities.map((activity) => (
                   <div key={activity.id} className="flex gap-4 p-5">
-                    <div className="storefront-muted w-16 shrink-0 pt-0.5 text-xs">{activity.time ?? '-'}</div>
+                    <div className="storefront-subtle w-16 shrink-0 pt-0.5 text-xs font-medium">{activity.time ?? '-'}</div>
                     <div className="flex-1">
                       <p className="storefront-heading text-sm font-medium">{activity.title}</p>
-                      {activity.description && <p className="storefront-muted mt-1 text-xs leading-relaxed">{activity.description}</p>}
+                      {activity.description && <p className="storefront-subtle mt-1 text-xs leading-relaxed">{activity.description}</p>}
                       {activity.affiliateLink && (
                         <a
                           href={`/r/r/${activity.affiliateLink.shortCode}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="mt-2 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors hover:opacity-80"
-                          style={{ borderColor: 'var(--storefront-border)', color: 'var(--storefront-subtle)' }}
+                          className="storefront-detail-affiliate-link mt-2 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors hover:opacity-80"
                         >
                           {activity.affiliateLink.priceFrom && <span>{activity.affiliateLink.priceFrom}</span>}
                           Book on {activity.affiliateLink.provider.replace(/_/g, ' ')} -&gt;
@@ -232,15 +231,15 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
                   </div>
                 ))}
                 {day.activities.length === 0 && (
-                  <div className="storefront-muted p-5 text-center text-sm">No activities planned for this day yet.</div>
+                  <div className="storefront-subtle p-5 text-center text-sm">No activities planned for this day yet.</div>
                 )}
               </div>
               {day.tips.length > 0 && (
                 <div className="px-5 pb-5">
-                  <p className="storefront-muted mb-2 text-xs font-medium uppercase tracking-wider">Tips</p>
+                  <p className="storefront-subtle mb-2 text-xs font-medium uppercase tracking-wider">Tips</p>
                   <ul className="space-y-1">
                     {day.tips.map((tip, i) => (
-                      <li key={i} className="storefront-muted text-xs">
+                      <li key={i} className="storefront-subtle text-xs">
                         {tip}
                       </li>
                     ))}
@@ -261,7 +260,7 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
               </div>
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
-                  <p className="storefront-subtle mb-3 text-sm">{kit.days.length - 1} more days inside</p>
+                  <p className="storefront-heading mb-3 text-sm">{kit.days.length - 1} more days inside</p>
                   <Link href={`/@${creator.handle}/subscribe`} className="btn-primary text-sm">
                     Unlock full itinerary
                   </Link>
@@ -281,7 +280,7 @@ export default async function KitDetailPage({ params }: { params: { handle: stri
                 <span className="storefront-heading text-lg">{sv.vlog.platform === 'YOUTUBE' ? 'Video' : 'Clip'}</span>
                 <div className="min-w-0 flex-1">
                   <p className="storefront-heading truncate text-sm">{sv.vlog.title}</p>
-                  <p className="storefront-muted text-xs">{sv.vlog.platform}</p>
+                  <p className="storefront-subtle text-xs">{sv.vlog.platform}</p>
                 </div>
                 <a href={sv.vlog.externalUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost px-3 py-1.5 text-xs">
                   Watch -&gt;

@@ -1,8 +1,10 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
+import ChunkRecovery from '@/components/ChunkRecovery'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
+
 const metadataBase = (() => {
   const baseUrl =
     process.env.NEXT_PUBLIC_BASE_URL ||
@@ -17,15 +19,12 @@ const metadataBase = (() => {
 
 export const metadata: Metadata = {
   metadataBase,
-  title: 'VlogShopper — Creator-first travel storefronts',
-  description: 'Turn your vlog back-catalog into a shoppable travel storefront. AI-powered Trip Kits, affiliate income, subscriber subscriptions.',
+  title: 'VlogShopper - Creator-first travel storefronts',
+  description:
+    'Turn your vlog back-catalog into a shoppable travel storefront. AI-powered Trip Kits, affiliate income, subscriber subscriptions.',
   icons: {
-    icon: [
-      { url: '/logo.png', type: 'image/png' },
-    ],
-    apple: [
-      { url: '/logo.png', type: 'image/png' },
-    ],
+    icon: [{ url: '/logo.png', type: 'image/png' }],
+    apple: [{ url: '/logo.png', type: 'image/png' }],
     shortcut: '/logo.png',
   },
   openGraph: {
@@ -43,7 +42,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} text-[#17332d]`}>{children}</body>
+      <body className={`${inter.className} text-[#17332d]`}>
+        <ChunkRecovery />
+        {children}
+      </body>
     </html>
   )
 }

@@ -8,6 +8,7 @@ import AccessBadge from '@/components/AccessBadge'
 import UnfollowButton from './UnfollowButton'
 import UnsaveButton from './UnsaveButton'
 import { resolveStorageAssetUrl } from '@/lib/storageAssets'
+import { getTripKitCardImageUrl } from '@/lib/tripKitImages'
 
 export const metadata = { title: 'My Account - VlogShopper' }
 
@@ -87,6 +88,16 @@ export default async function AccountPage({
                 title: true,
                 slug: true,
                 coverImageUrl: true,
+                sourceVlogs: {
+                  take: 1,
+                  select: {
+                    vlog: {
+                      select: {
+                        thumbnailUrl: true,
+                      },
+                    },
+                  },
+                },
                 primaryCity: true,
                 countries: true,
                 durationDays: true,
@@ -305,17 +316,15 @@ export default async function AccountPage({
                   return (
                     <div key={kit.id} className="dashboard-mirror-card group relative overflow-hidden">
                       <div className="aspect-video overflow-hidden bg-white/8">
-                        {kit.coverImageUrl ? (
+                        {getTripKitCardImageUrl(kit) ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={resolveStorageAssetUrl(kit.coverImageUrl) ?? ''}
+                            src={getTripKitCardImageUrl(kit) ?? ''}
                             alt={kit.title}
                             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                           />
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-[#17332d]/85">
-                            KIT
-                          </div>
+                          <div className="h-full w-full bg-[linear-gradient(135deg,rgba(23,51,45,0.16),rgba(210,156,92,0.24))]" />
                         )}
                         {kit.accessTier !== 'FREE' ? (
                           <AccessBadge

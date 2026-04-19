@@ -54,7 +54,7 @@ describe('creator memory helpers', () => {
 
     expect(rejected).toEqual([
       {
-        memoryType: 'REJECTED_PLACE',
+        memoryType: 'REJECTED_PRODUCT',
         key: 'mystery hotel',
         valueJson: {
           sourceAction: 'REJECTED',
@@ -68,7 +68,7 @@ describe('creator memory helpers', () => {
   it('builds human-readable hints from stored memory', () => {
     expect(
       buildCreatorMemoryHints([
-        { memoryType: 'REJECTED_PLACE', valueJson: {} },
+        { memoryType: 'REJECTED_PRODUCT', valueJson: {} },
         { memoryType: 'NAMING_PREFERENCE', valueJson: { preferredTitle: 'Park Hyatt Tokyo' } },
         { memoryType: 'RECURRING_ITEM', valueJson: {} },
       ])

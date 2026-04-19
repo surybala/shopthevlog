@@ -305,6 +305,21 @@ def _call_gemini(system: str, user_content: str, max_tokens: int) -> str:
             system_instruction=system,
             max_output_tokens=max_tokens,
             temperature=0.4,
+            response_mime_type="application/json",
+        ),
+    )
+    return response.text or ""
+
+
+def _call_gemini_parts(system: str, contents: list[types.Part], max_tokens: int, temperature: float = 0.2) -> str:
+    response = _client().models.generate_content(
+        model=GEMINI_MODEL,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            system_instruction=system,
+            max_output_tokens=max_tokens,
+            temperature=temperature,
+            response_mime_type="application/json",
         ),
     )
     return response.text or ""
@@ -590,18 +605,53 @@ def extract_visual_opportunities(
     content_type: str = "image/jpeg",
 ) -> list[dict]:
     """Extract structured visual evidence from a stored frame payload."""
-    batched = extract_visual_opportunities_batch(
-        [
-            {
-                "frame_id": "frame-0",
-                "image_bytes": frame_image_bytes,
-                "content_type": content_type,
-                "scene_summary": scene_summary,
-            }
-        ],
+    return _extract_visual_frame_signals(
+        {
+            "frame_id": "frame-0",
+            "image_bytes": frame_image_bytes,
+            "content_type": content_type,
+            "scene_summary": scene_summary,
+        },
         title,
     )
-    return batched.get("frame-0", [])
+
+
+def _extract_visual_frame_signals(frame: dict, title: str) -> list[dict]:
+    try:
+        content_type = str(frame.get("content_type") or "image/jpeg").split(";")[0].strip() or "image/jpeg"
+        contents = [
+            types.Part.from_bytes(data=frame["image_bytes"], mime_type=content_type),
+            types.Part.from_text(
+                text="\n".join(
+                    [
+                        f"Vlog title: {title}",
+                        f'frame_id="{frame["frame_id"]}"',
+                        f'scene_summary="{frame.get("scene_summary") or "Unknown"}"',
+                    ]
+                )
+            ),
+        ]
+        raw = _call_gemini_parts(
+            VISUAL_OPPORTUNITY_SYSTEM_PROMPT,
+            contents,
+            max_tokens=2048,
+            temperature=0.15,
+        )
+        parsed = _parse_response(raw, title, "visual-opportunities-single")
+        if not parsed:
+            return []
+        signals = parsed.get("signals")
+        if not isinstance(signals, list):
+          payload_frames = parsed.get("frames")
+          if isinstance(payload_frames, list) and payload_frames:
+              first_frame = payload_frames[0] if isinstance(payload_frames[0], dict) else {}
+              signals = first_frame.get("signals")
+        if not isinstance(signals, list):
+            return []
+        return [item for item in signals if isinstance(item, dict)]
+    except Exception as e:
+        logger.warning("extract_visual_frame_signals failed: %s", e)
+        return []
 
 
 def extract_visual_opportunities_batch(frames: list[dict], title: str) -> dict[str, list[dict]]:
@@ -624,22 +674,33 @@ def extract_visual_opportunities_batch(frames: list[dict], title: str) -> dict[s
             )
 
         contents.append(types.Part.from_text(text="\n".join(prompt_lines)))
-        raw = _client().models.generate_content(
-            model=GEMINI_MODEL,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=VISUAL_BATCH_OPPORTUNITY_SYSTEM_PROMPT,
-                max_output_tokens=4096,
-                temperature=0.2,
-            ),
-        ).text or ""
+        raw = _call_gemini_parts(
+            VISUAL_BATCH_OPPORTUNITY_SYSTEM_PROMPT,
+            contents,
+            max_tokens=4096,
+            temperature=0.15,
+        )
         parsed = _parse_response(raw, title, "visual-opportunities-batch")
         if not parsed:
-            return {frame["frame_id"]: [] for frame in valid_frames}
+            logger.warning(
+                "Falling back to per-frame visual extraction after invalid batch response for vlog %s",
+                title,
+            )
+            return {
+                frame["frame_id"]: _extract_visual_frame_signals(frame, title)
+                for frame in valid_frames
+            }
 
         payload_frames = parsed.get("frames")
         if not isinstance(payload_frames, list):
-            return {frame["frame_id"]: [] for frame in valid_frames}
+            logger.warning(
+                "Falling back to per-frame visual extraction after malformed batch payload for vlog %s",
+                title,
+            )
+            return {
+                frame["frame_id"]: _extract_visual_frame_signals(frame, title)
+                for frame in valid_frames
+            }
 
         signals_by_frame: dict[str, list[dict]] = {frame["frame_id"]: [] for frame in valid_frames}
         for payload_frame in payload_frames:
@@ -655,7 +716,10 @@ def extract_visual_opportunities_batch(frames: list[dict], title: str) -> dict[s
         return signals_by_frame
     except Exception as e:
         logger.warning("extract_visual_opportunities_batch failed: %s", e)
-        return {frame["frame_id"]: [] for frame in valid_frames}
+        return {
+            frame["frame_id"]: _extract_visual_frame_signals(frame, title)
+            for frame in valid_frames
+        }
 
 
 def extract_itinerary_blueprint(transcript: str, title: str) -> Optional[dict]:

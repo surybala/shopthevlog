@@ -53,7 +53,7 @@ describe('DashboardReviewPage', () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
     mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1', userId: 'user-1' })
     mockCreatorMemoryFindMany.mockResolvedValue([
-      { key: 'park hyatt tokyo', memoryType: 'REJECTED_PLACE', valueJson: {} },
+      { key: 'park hyatt tokyo', memoryType: 'REJECTED_PRODUCT', valueJson: {} },
       { key: 'park hyatt tokyo', memoryType: 'NAMING_PREFERENCE', valueJson: { preferredTitle: 'Park Hyatt Tokyo' } },
     ])
     mockOpportunityFindMany.mockResolvedValue([

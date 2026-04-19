@@ -60,6 +60,7 @@ describe('StorefrontHomePage', () => {
           title: '10 Days in Japan',
           slug: 'japan-trip',
           coverImageUrl: null,
+          sourceVlogs: [{ vlog: { thumbnailUrl: 'https://img.youtube.com/vi/japan/hqdefault.jpg' } }],
           primaryCity: 'Tokyo',
           countries: ['Japan'],
           durationDays: 10,
@@ -95,5 +96,7 @@ describe('StorefrontHomePage', () => {
     expect(html).toContain('background-image:var(--storefront-page-bg)');
     expect(html).toContain('data:image/svg+xml');
     expect(html).toContain('/api/media?path=creators%2Fcreator-1%2Fstorefront%2Fcover%2Fcover.jpg');
+    expect(html).toContain('https://img.youtube.com/vi/japan/hqdefault.jpg');
+    expect(html).not.toContain('>KIT<');
   });
 });

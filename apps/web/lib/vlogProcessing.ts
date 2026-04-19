@@ -29,3 +29,46 @@ export function formatVlogPipelineErrorMessage(raw: string | null | undefined): 
 
   return 'Video processing did not complete. Please try again.'
 }
+
+export function getVlogProcessingPresentation(status: string | null | undefined): {
+  label: string
+  tone: string
+  inProgress: boolean
+} {
+  const normalized = (status ?? '').toUpperCase()
+
+  switch (normalized) {
+    case 'PENDING':
+      return { label: 'Ready to process', tone: 'bg-[#17332d]/8 text-[#17332d]/76', inProgress: false }
+    case 'QUEUED':
+      return { label: 'Starting video processing', tone: 'bg-blue-500/14 text-blue-900', inProgress: true }
+    case 'TRANSCRIBING':
+      return { label: 'Analyzing transcript', tone: 'bg-yellow-500/16 text-yellow-900 animate-pulse', inProgress: true }
+    case 'TRANSCRIPT_DONE':
+      return { label: 'Continuing video processing', tone: 'bg-yellow-500/16 text-yellow-900 animate-pulse', inProgress: true }
+    case 'EXTRACTING':
+      return { label: 'Analyzing video scenes', tone: 'bg-purple-500/16 text-purple-900 animate-pulse', inProgress: true }
+    case 'VISION_DONE':
+      return { label: 'Processing video details', tone: 'bg-purple-500/16 text-purple-900 animate-pulse', inProgress: true }
+    case 'FUSED':
+      return { label: 'Combining findings', tone: 'bg-orange-500/18 text-orange-900 animate-pulse', inProgress: true }
+    case 'RESOLVED':
+      return { label: 'Linking places and products', tone: 'bg-orange-500/18 text-orange-900 animate-pulse', inProgress: true }
+    case 'RANKED':
+      return { label: 'Preparing review queue', tone: 'bg-orange-500/18 text-orange-900 animate-pulse', inProgress: true }
+    case 'EMBEDDING':
+      return { label: 'Preparing recommendations', tone: 'bg-orange-500/18 text-orange-900 animate-pulse', inProgress: true }
+    case 'REVIEW_PENDING':
+      return { label: 'Ready for review', tone: 'bg-green-500/18 text-green-900', inProgress: false }
+    case 'COMPLETE':
+      return { label: 'Complete', tone: 'bg-green-500/18 text-green-900', inProgress: false }
+    case 'FAILED':
+      return { label: 'Failed', tone: 'bg-red-500/18 text-red-900', inProgress: false }
+    default:
+      return {
+        label: normalized.includes('DONE') || normalized.includes('ING') ? 'Video processing in progress' : 'Processing update',
+        tone: 'bg-[#17332d]/8 text-[#17332d]/76',
+        inProgress: normalized.includes('DONE') || normalized.includes('ING'),
+      }
+  }
+}

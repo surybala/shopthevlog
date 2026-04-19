@@ -3,7 +3,11 @@ import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 import { getCreatorPlanConfig } from '@/lib/creatorPlans'
 import { buildCatalogVideoInsight } from '@/lib/vlogInsights'
-import { fetchYouTubeCatalog, getYouTubeAccessToken } from '@/lib/youtubeCatalog'
+import {
+  fetchYouTubeCatalog,
+  getYouTubeAccessToken,
+  isYouTubeReconnectRequiredError,
+} from '@/lib/youtubeCatalog'
 
 function extractYouTubeVideoId(rawUrl: string) {
   const trimmed = rawUrl.trim()
@@ -46,7 +50,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Connect a YouTube channel first' }, { status: 400 })
   }
 
-  const accessToken = await getYouTubeAccessToken(creator.id)
+  let accessToken: string
+  try {
+    accessToken = await getYouTubeAccessToken(creator.id)
+  } catch (error) {
+    if (isYouTubeReconnectRequiredError(error)) {
+      return NextResponse.json(
+        { error: 'Reconnect your YouTube channel to load your catalog.', reconnectRequired: true },
+        { status: 409 },
+      )
+    }
+    return NextResponse.json({ error: 'Could not access YouTube right now.' }, { status: 500 })
+  }
   const catalog = await fetchYouTubeCatalog(creator.youtubeChannelId, accessToken)
   const existingVlogs = await prisma.vlog.findMany({
     where: { creatorId: creator.id },
@@ -109,7 +124,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Enter a valid YouTube video URL.' }, { status: 400 })
   }
 
-  const accessToken = await getYouTubeAccessToken(creator.id)
+  let accessToken: string
+  try {
+    accessToken = await getYouTubeAccessToken(creator.id)
+  } catch (error) {
+    if (isYouTubeReconnectRequiredError(error)) {
+      return NextResponse.json(
+        { error: 'Reconnect your YouTube channel to search for that video.', reconnectRequired: true },
+        { status: 409 },
+      )
+    }
+    return NextResponse.json({ error: 'Could not access YouTube right now.' }, { status: 500 })
+  }
   const catalog = await fetchYouTubeCatalog(creator.youtubeChannelId, accessToken)
   const matched = catalog.find((item) => item.videoId === videoId)
 

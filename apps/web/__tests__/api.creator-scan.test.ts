@@ -104,6 +104,16 @@ describe('creator scan trigger route', () => {
             ],
           }),
         })
+        .mockResolvedValueOnce({
+          json: async () => ({
+            items: [
+              {
+                id: 'video-1',
+                contentDetails: { duration: 'PT15M9S' },
+              },
+            ],
+          }),
+        })
         .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) })
     )
   })
@@ -161,6 +171,8 @@ describe('creator scan trigger route', () => {
       expect(mockVlogUpsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { platform_externalId: { platform: 'YOUTUBE', externalId: 'video-1' } },
+          create: expect.objectContaining({ durationSeconds: 909 }),
+          update: expect.objectContaining({ durationSeconds: 909 }),
         })
       )
       expect(mockCreatorUpdate).toHaveBeenCalledWith(
@@ -188,6 +200,7 @@ describe('creator scan trigger route', () => {
           description: 'Desc',
           thumbnailUrl: 'https://img.example/1.jpg',
           publishedAt: '2024-01-01T00:00:00.000Z',
+          durationSeconds: 909,
           imported: true,
           importedVlogId: 'vlog-1',
           importedProcessingStatus: 'PENDING',
@@ -242,6 +255,20 @@ describe('creator scan trigger route', () => {
               },
             ],
           }),
+        })
+        .mockResolvedValueOnce({
+          json: async () => ({
+            items: [
+              {
+                id: 'video-1',
+                contentDetails: { duration: 'PT11M' },
+              },
+              {
+                id: 'video-2',
+                contentDetails: { duration: 'PT7M30S' },
+              },
+            ],
+          }),
         }),
     )
     mockVlogFindMany.mockResolvedValue([{ externalId: 'video-1', id: 'vlog-1', processingStatus: 'PENDING' }])
@@ -259,6 +286,7 @@ describe('creator scan trigger route', () => {
           description: 'Desc 2',
           thumbnailUrl: 'https://img.example/2.jpg',
           publishedAt: '2024-01-02T00:00:00.000Z',
+          durationSeconds: 450,
           imported: false,
           importedVlogId: null,
           importedProcessingStatus: null,
@@ -292,6 +320,7 @@ describe('creator scan trigger route', () => {
         description: 'Desc',
         thumbnailUrl: 'https://img.example/1.jpg',
         publishedAt: '2024-01-01T00:00:00.000Z',
+        durationSeconds: 909,
         imported: false,
         importedVlogId: null,
         insights: expect.objectContaining({
@@ -344,6 +373,20 @@ describe('creator scan trigger route', () => {
             ],
           }),
         })
+        .mockResolvedValueOnce({
+          json: async () => ({
+            items: [
+              {
+                id: 'video-1',
+                contentDetails: { duration: 'PT15M9S' },
+              },
+              {
+                id: 'video-2',
+                contentDetails: { duration: 'PT5M5S' },
+              },
+            ],
+          }),
+        })
         .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) }),
     )
 
@@ -361,6 +404,8 @@ describe('creator scan trigger route', () => {
     expect(mockVlogUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { platform_externalId: { platform: 'YOUTUBE', externalId: 'video-2' } },
+        create: expect.objectContaining({ durationSeconds: 305 }),
+        update: expect.objectContaining({ durationSeconds: 305 }),
       }),
     )
   })
@@ -423,6 +468,9 @@ describe('creator scan trigger route', () => {
         .mockResolvedValueOnce({
           json: async () => ({ items: [], nextPageToken: undefined }),
         })
+        .mockResolvedValueOnce({
+          json: async () => ({ items: [] }),
+        })
     )
 
     const res = await triggerScan(new NextRequest('http://localhost/api/creator/scan', { method: 'POST' }))
@@ -435,6 +483,54 @@ describe('creator scan trigger route', () => {
           data: expect.objectContaining({ accessToken: 'fresh-access' }),
         })
       )
+    })
+  })
+
+  it('returns reconnect required when YouTube token refresh fails before scanning', async () => {
+    mockCreatorChannelTokenFindUnique.mockResolvedValue({
+      creatorId: 'creator-1',
+      accessToken: 'expired',
+      refreshToken: 'refresh-1',
+      tokenExpiry: new Date(Date.now() - 60_000),
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({
+        json: async () => ({ error: 'invalid_grant' }),
+      }),
+    )
+
+    const res = await triggerScan(new NextRequest('http://localhost/api/creator/scan', { method: 'POST' }))
+
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toEqual({
+      error: 'Reconnect your YouTube channel to continue scanning.',
+      reconnectRequired: true,
+    })
+  })
+
+  it('preview returns reconnect required when YouTube auth can no longer refresh', async () => {
+    mockCreatorChannelTokenFindUnique.mockResolvedValue({
+      creatorId: 'creator-1',
+      accessToken: 'expired',
+      refreshToken: 'refresh-1',
+      tokenExpiry: new Date(Date.now() - 60_000),
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({
+        json: async () => ({ error: 'invalid_grant' }),
+      }),
+    )
+
+    const res = await previewScan(new NextRequest('http://localhost/api/creator/scan/preview'))
+
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toEqual({
+      error: 'Reconnect your YouTube channel to load your catalog.',
+      reconnectRequired: true,
     })
   })
 })

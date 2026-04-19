@@ -2,11 +2,14 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
-import { resolveStorageAssetUrl } from '@/lib/storageAssets'
+import { getTripKitCardImageUrl } from '@/lib/tripKitImages'
 
 export default async function DashboardKitsPage() {
   const supabase = createSupabaseServer()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
   if (!user) redirect('/login')
 
   const creator = await prisma.creator.findUnique({ where: { userId: user.id } })
@@ -17,6 +20,16 @@ export default async function DashboardKitsPage() {
     orderBy: { updatedAt: 'desc' },
     include: {
       _count: { select: { affiliateLinks: true, days: true } },
+      sourceVlogs: {
+        take: 1,
+        select: {
+          vlog: {
+            select: {
+              thumbnailUrl: true,
+            },
+          },
+        },
+      },
     },
   })
 
@@ -36,16 +49,20 @@ export default async function DashboardKitsPage() {
             </p>
             <p className="dashboard-mirror-muted mt-3 text-xs">
               {kits.length} kit{kits.length !== 1 ? 's' : ''}
-              {limit !== null ? ` · ${creator.plan} plan: ${kits.length}/${limit}` : ` · ${creator.plan} plan`}
+              {limit !== null ? ` • ${creator.plan} plan: ${kits.length}/${limit}` : ` • ${creator.plan} plan`}
             </p>
           </div>
           {atLimit ? (
             <div className="flex flex-wrap items-center justify-end gap-3">
               <p className="text-xs text-[#17332d]/68">Upgrade to PRO for unlimited kits.</p>
-              <Link href="/dashboard/settings?tab=billing" className="btn-primary text-sm">Upgrade</Link>
+              <Link href="/dashboard/settings?tab=billing" className="btn-primary text-sm">
+                Upgrade
+              </Link>
             </div>
           ) : (
-            <Link href="/dashboard/kits/new" className="btn-primary text-sm">+ New Kit</Link>
+            <Link href="/dashboard/kits/new" className="btn-primary text-sm">
+              + New Kit
+            </Link>
           )}
         </div>
       </div>
@@ -60,64 +77,72 @@ export default async function DashboardKitsPage() {
             Create your first Trip Kit manually, or connect YouTube and let the AI pipeline turn your vlogs into bookable itineraries.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
-            <Link href="/dashboard/kits/new" className="btn-primary text-sm">Create manually</Link>
-            <Link href="/dashboard/settings?tab=channels" className="btn-ghost text-sm">Connect YouTube</Link>
+            <Link href="/dashboard/kits/new" className="btn-primary text-sm">
+              Create manually
+            </Link>
+            <Link href="/dashboard/settings?tab=channels" className="btn-ghost text-sm">
+              Connect YouTube
+            </Link>
           </div>
         </div>
       ) : (
         <div className="space-y-4">
-          {kits.map((kit) => (
-            <div key={kit.id} className="dashboard-mirror-card flex items-center gap-4 p-5">
-              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-[#17332d]/8">
-                {kit.coverImageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={resolveStorageAssetUrl(kit.coverImageUrl) ?? ''} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-[#17332d]/82">
-                    KIT
+          {kits.map((kit) => {
+            const tileImageUrl = getTripKitCardImageUrl(kit)
+
+            return (
+              <div key={kit.id} className="dashboard-mirror-card flex items-center gap-4 p-5">
+                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-[#17332d]/8">
+                  {tileImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={tileImageUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="h-full w-full bg-[linear-gradient(135deg,rgba(23,51,45,0.18),rgba(210,156,92,0.26))]" />
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 flex items-center gap-2">
+                    <h3 className="truncate text-base font-semibold text-[#17332d]">{kit.title}</h3>
+                    <span
+                      className={`shrink-0 rounded px-1.5 py-0.5 text-xs ${
+                        kit.isPublished ? 'bg-green-500/18 text-green-900' : 'bg-[#17332d]/8 text-[#17332d]/70'
+                      }`}
+                    >
+                      {kit.isPublished ? 'Published' : 'Draft'}
+                    </span>
+                    {kit.generatedByAI ? (
+                      <span className="shrink-0 rounded bg-sky-500/16 px-1.5 py-0.5 text-xs text-sky-900">AI generated</span>
+                    ) : null}
                   </div>
-                )}
-              </div>
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-[#17332d]/64">
+                    {kit.primaryCity ? <span>{kit.primaryCity}</span> : null}
+                    {kit.durationDays ? <span>{kit.durationDays} days</span> : null}
+                    <span>{kit._count.days} planned days</span>
+                    <span>{kit._count.affiliateLinks} affiliate links</span>
+                    <span className="capitalize">{kit.accessTier.toLowerCase()} access</span>
+                  </div>
+                </div>
 
-              <div className="min-w-0 flex-1">
-                <div className="mb-1 flex items-center gap-2">
-                  <h3 className="truncate text-base font-semibold text-[#17332d]">{kit.title}</h3>
-                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-xs ${
-                    kit.isPublished ? 'bg-green-500/18 text-green-900' : 'bg-[#17332d]/8 text-[#17332d]/70'
-                  }`}>
-                    {kit.isPublished ? 'Published' : 'Draft'}
-                  </span>
-                  {kit.generatedByAI ? (
-                    <span className="shrink-0 rounded bg-sky-500/16 px-1.5 py-0.5 text-xs text-sky-900">AI generated</span>
+                <div className="flex shrink-0 items-center gap-6">
+                  <Metric value={kit.viewCount.toLocaleString()} label="views" />
+                  <Metric value={kit.clickCount.toLocaleString()} label="clicks" />
+                  <Metric value={`$${kit.estimatedEarnings.toFixed(0)}`} label="earned" />
+                </div>
+
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                  {kit.isPublished ? (
+                    <Link href={`/@${creator.handle}/kits/${kit.slug}`} className="dashboard-action-chip text-xs">
+                      View {'->'}
+                    </Link>
                   ) : null}
-                </div>
-                <div className="flex flex-wrap items-center gap-4 text-xs text-[#17332d]/64">
-                  {kit.primaryCity ? <span>{kit.primaryCity}</span> : null}
-                  {kit.durationDays ? <span>{kit.durationDays} days</span> : null}
-                  <span>{kit._count.days} planned days</span>
-                  <span>{kit._count.affiliateLinks} affiliate links</span>
-                  <span className="capitalize">{kit.accessTier.toLowerCase()} access</span>
-                </div>
-              </div>
-
-              <div className="flex shrink-0 items-center gap-6">
-                <Metric value={kit.viewCount.toLocaleString()} label="views" />
-                <Metric value={kit.clickCount.toLocaleString()} label="clicks" />
-                <Metric value={`$${kit.estimatedEarnings.toFixed(0)}`} label="earned" />
-              </div>
-
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                {kit.isPublished ? (
-                  <Link href={`/@${creator.handle}/kits/${kit.slug}`} className="dashboard-action-chip text-xs">
-                    View {'->'}
+                  <Link href={`/dashboard/kits/${kit.id}`} className="dashboard-action-chip text-xs">
+                    Edit
                   </Link>
-                ) : null}
-                <Link href={`/dashboard/kits/${kit.id}`} className="dashboard-action-chip text-xs">
-                  Edit
-                </Link>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

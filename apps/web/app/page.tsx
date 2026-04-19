@@ -3,6 +3,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
+import PublicCopyright from '@/components/PublicCopyright'
 
 const creatorSteps = [
   {
@@ -33,6 +34,45 @@ const storefrontSignals = [
   'Premium subscriptions',
   'Affiliate-ready trips',
   'Saved kits and repeat visits',
+]
+
+const creatorGallery = [
+  {
+    title: 'Island reset',
+    label: 'Beach stays + boat days',
+    image:
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    title: 'City weekender',
+    label: 'Boutique hotels + food finds',
+    image:
+      'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    title: 'Mountain route',
+    label: 'Scenic stays + gear picks',
+    image:
+      'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    title: 'Desert escape',
+    label: 'Resorts + experience bookings',
+    image:
+      'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    title: 'Forest cabin',
+    label: 'Packing lists + hidden stops',
+    image:
+      'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    title: 'Mediterranean days',
+    label: 'Hotels + restaurants + guides',
+    image:
+      'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1200&q=80',
+  },
 ]
 
 function AuroraBackdrop() {
@@ -93,7 +133,7 @@ export default async function HomePage() {
       '?')[0]?.toUpperCase() ?? '?'
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-transparent text-[#17332d]">
+    <main className="landing-page relative min-h-screen overflow-hidden bg-transparent text-[#17332d]">
       <AuroraBackdrop />
 
       <nav className="sticky top-0 z-50 border-b border-[#17332d]/10 bg-[rgba(255,248,240,0.78)] backdrop-blur-xl">
@@ -130,7 +170,7 @@ export default async function HomePage() {
         </div>
       </nav>
 
-      <section className="relative mx-auto grid max-w-7xl gap-12 px-6 pb-24 pt-16 lg:grid-cols-[minmax(0,1fr)_26rem] lg:items-start lg:pt-24">
+      <section className="landing-section relative mx-auto grid max-w-7xl gap-12 px-6 pb-24 pt-16 lg:grid-cols-[minmax(0,1fr)_26rem] lg:items-start lg:pt-24">
         <div className="relative z-10">
           <div className="inline-flex items-center gap-2 rounded-full border border-teal-800/12 bg-white/68 px-4 py-2 text-xs uppercase tracking-[0.22em] text-teal-800">
             <span className="h-2 w-2 rounded-full bg-teal-500 shadow-[0_0_14px_rgba(13,148,136,0.45)]" />
@@ -161,15 +201,12 @@ export default async function HomePage() {
         </div>
 
         <div className="relative lg:self-start">
-          <div className="lg:sticky lg:top-24">
-          <div className="rounded-[2rem] border border-[#17332d]/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.92),_rgba(255,247,238,0.84)_48%,_rgba(251,241,229,0.9)_100%)] p-6 shadow-[0_30px_120px_rgba(23,51,45,0.12)] backdrop-blur-xl">
+          <div className="landing-pipeline-rail lg:sticky lg:top-20">
+          <div className="landing-pipeline-panel rounded-[2rem] border border-[#17332d]/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.92),_rgba(255,247,238,0.84)_48%,_rgba(251,241,229,0.9)_100%)] p-6 shadow-[0_30px_120px_rgba(23,51,45,0.12)] backdrop-blur-xl">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.25em] text-[#17332d]/52">AI Pipeline</p>
                 <h2 className="mt-2 text-2xl font-semibold text-[#17332d]">From raw vlog to shoppable Trip Kit</h2>
-              </div>
-              <div className="rounded-full border border-emerald-700/15 bg-emerald-600/10 px-3 py-1 text-xs font-medium text-emerald-800">
-                Review ready
               </div>
             </div>
 
@@ -180,11 +217,11 @@ export default async function HomePage() {
                 'Resolution, ranking, and creator memory decide review priority',
                 'Approved opportunities project into Trip Kits and storefront modules',
               ].map((step, index) => (
-                <div key={step} className="flex items-start gap-4 rounded-2xl border border-[#17332d]/8 bg-white/60 px-4 py-4">
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#17332d]/10 text-sm font-semibold text-teal-800">
+                <div key={step} className="flex items-center gap-4 rounded-2xl border border-[#17332d]/8 bg-white/60 px-4 py-4">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-full bg-[#17332d]/10 text-sm font-semibold text-teal-800">
                     0{index + 1}
                   </div>
-                  <p className="text-sm leading-6 text-[#17332d]/82">{step}</p>
+                  <p className="flex-1 text-sm leading-6 text-[#17332d]/82">{step}</p>
                 </div>
               ))}
             </div>
@@ -214,7 +251,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section id="creators" className="mx-auto max-w-7xl px-6 py-20">
+      <section id="creators" className="landing-section mx-auto max-w-7xl px-6 py-20">
         <div className="mb-10 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.28em] text-teal-800/80">For creators</p>
@@ -237,9 +274,34 @@ export default async function HomePage() {
             </article>
           ))}
         </div>
+
+        <div className="mt-10 overflow-hidden rounded-[2rem] border border-[#17332d]/10 bg-white/52 py-5 shadow-[0_22px_60px_rgba(23,51,45,0.08)] backdrop-blur-sm">
+          <div className="landing-gallery-track flex min-w-max gap-5 px-5">
+            {Array.from({ length: 2 }).flatMap((_, loopIndex) =>
+              creatorGallery.map((card) => (
+                <article
+                  key={`${card.title}-${loopIndex}`}
+                  className="landing-gallery-card group relative h-72 w-[19rem] shrink-0 overflow-hidden rounded-[1.7rem] border border-white/35"
+                >
+                  <img
+                    src={card.image}
+                    alt={`${card.title} Trip Kit preview`}
+                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[rgba(9,28,24,0.82)] via-[rgba(9,28,24,0.22)] to-transparent" />
+                  <div className="absolute inset-x-0 bottom-0 p-5">
+                    <p className="text-[10px] uppercase tracking-[0.28em] text-white/72">Trip Kit preview</p>
+                    <h3 className="mt-2 text-2xl font-semibold text-white">{card.title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-white/80">{card.label}</p>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+        </div>
       </section>
 
-      <section id="subscribers" className="border-y border-[#17332d]/8 bg-[rgba(255,248,240,0.56)] py-20">
+      <section id="subscribers" className="landing-section border-y border-[#17332d]/8 bg-[rgba(255,248,240,0.56)] py-20">
         <div className="mx-auto grid max-w-7xl gap-10 px-6 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
           <div>
             <p className="text-xs uppercase tracking-[0.28em] text-teal-800/80">For subscribers</p>
@@ -265,7 +327,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section id="pipeline" className="mx-auto max-w-7xl px-6 py-20">
+      <section id="pipeline" className="landing-section mx-auto max-w-7xl px-6 py-20">
         <div className="mb-10">
           <p className="text-xs uppercase tracking-[0.28em] text-teal-800/80">Why the AI matters</p>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[#17332d] sm:text-4xl">
@@ -302,26 +364,30 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="px-6 pb-24">
-        <div className="mx-auto max-w-6xl rounded-[2.5rem] border border-[#17332d]/10 bg-[linear-gradient(135deg,rgba(251,146,60,0.14),rgba(255,255,255,0.72)_35%,rgba(45,212,191,0.08)_100%)] p-10 text-center shadow-[0_30px_100px_rgba(23,51,45,0.12)] backdrop-blur-xl">
-          <p className="text-xs uppercase tracking-[0.28em] text-teal-800/80">Private beta</p>
-          <h2 className="mx-auto mt-4 max-w-3xl text-3xl font-semibold tracking-tight text-[#17332d] sm:text-4xl">
-            We are onboarding a small set of travel creators and the subscribers who already trust them.
-          </h2>
-          <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-[#17332d]/62 sm:text-base">
-            If you want a storefront that turns vlogs into unlockable trip planning, join the waitlist.
-            If you love following creators for where they stayed, what they packed, and how they planned a trip, start in discover.
-          </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Link href="/waitlist" className="btn-primary inline-flex items-center justify-center px-6 py-3 text-sm">
-              Request creator access
-            </Link>
-            <Link href="/discover" className="btn-ghost inline-flex items-center justify-center px-6 py-3 text-sm">
-              Browse creator storefronts
-            </Link>
-          </div>
+      <section className="mx-auto max-w-7xl px-6 pb-10 pt-8">
+        <p className="text-xs uppercase tracking-[0.28em] text-teal-800/80">Private beta</p>
+        <h2 className="mt-4 max-w-4xl text-3xl font-semibold tracking-tight text-[#17332d] sm:text-4xl">
+          We are onboarding a small set of travel creators and the subscribers who already trust them.
+        </h2>
+        <p className="mt-5 max-w-3xl text-sm leading-7 text-[#17332d]/62 sm:text-base">
+          If you want a storefront that turns your vlogs into unlockable trip planning, join the waitlist.
+          If you love following creators for where they stayed, what they packed, and how they planned a trip, start in discover.
+        </p>
+        <div className="mt-8 flex flex-col gap-4 sm:flex-row">
+          <Link href="/waitlist" className="btn-primary inline-flex items-center justify-center px-6 py-3 text-sm">
+            Request creator access
+          </Link>
+          <Link href="/discover" className="btn-ghost inline-flex items-center justify-center px-6 py-3 text-sm">
+            Browse creator storefronts
+          </Link>
         </div>
       </section>
+
+      <footer className="px-6 pb-12">
+        <div className="mx-auto max-w-7xl border-t border-[#17332d]/10 pt-6">
+          <PublicCopyright className="text-center text-xs uppercase tracking-[0.22em] text-[#17332d]/42" />
+        </div>
+      </footer>
     </main>
   )
 }
