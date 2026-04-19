@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { isAdminUser } from '@/lib/admin'
+import { requireAdmin } from '@/lib/admin'
 import prisma from '@/lib/prisma/client'
 
 type BulkAction = 'confirm' | 'mark_paid' | 'reverse'
@@ -31,23 +30,6 @@ function buildUpdateData(status: 'CONFIRMED' | 'PAID' | 'REVERSED') {
     status,
     paidAt: status === 'PAID' ? new Date() : null,
   } as const
-}
-
-async function requireAdmin() {
-  const supabase = createSupabaseServer()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  if (!isAdminUser(user)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-
-  return user
 }
 
 export async function GET(req: NextRequest) {

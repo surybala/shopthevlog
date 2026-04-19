@@ -116,7 +116,8 @@
       "Bash(python -c \"from google.oauth2.credentials import Credentials; print\\(''OK''\\)\")",
       "Bash(python -m pytest tests/test_youtube_service.py::TestIsoDurationToSeconds::test_hours_only --no-cov -v)",
       "Bash(python -c \"from supabase import create_client; print\\(''''supabase OK''''\\)\")",
-      "Bash(python -m pytest tests/test_main.py tests/test_youtube_service.py::TestGetVideoCaptions --no-cov -q)"
+      "Bash(python -m pytest tests/test_main.py tests/test_youtube_service.py::TestGetVideoCaptions --no-cov -q)",
+      "Bash(wc -l /c/Users/surya/IdeaProjects/shopthevlog/backend/tests/*.py)"
     ]
   }
 }

@@ -1,18 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { isAdminUser } from '@/lib/admin'
+import { requireAdmin } from '@/lib/admin'
 import prisma from '@/lib/prisma/client'
+
+type WaitlistStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+const WAITLIST_STATUSES: WaitlistStatus[] = ['PENDING', 'APPROVED', 'REJECTED']
 
 /** GET /api/admin/waitlist — list all waitlist requests (admin only) */
 export async function GET(req: NextRequest) {
-  const supabase = createSupabaseServer()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isAdminUser(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const result = await requireAdmin()
+  if (result instanceof NextResponse) return result
 
-  const status = req.nextUrl.searchParams.get('status') ?? 'PENDING'
+  const rawStatus = req.nextUrl.searchParams.get('status') ?? 'PENDING'
+  const showAll = rawStatus === 'ALL'
+  if (!showAll && !(WAITLIST_STATUSES as string[]).includes(rawStatus)) {
+    return NextResponse.json(
+      { error: `Invalid status. Must be one of: ALL, ${WAITLIST_STATUSES.join(', ')}` },
+      { status: 422 },
+    )
+  }
+
   const requests = await prisma.waitlistRequest.findMany({
-    where: status === 'ALL' ? {} : { status: status as any },
+    where: showAll ? {} : { status: rawStatus as WaitlistStatus },
     orderBy: { createdAt: 'desc' },
   })
 

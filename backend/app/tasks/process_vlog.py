@@ -14,7 +14,6 @@ from app.services.transcript_graph_service import sync_transcript_graph
 from app.services.visual_enrichment_service import enrich_visual_graph
 from app.services.visual_evidence_service import sync_visual_evidence
 from app.services.transcription_service import transcribe_vlog
-from app.services.gemini_service import _mark_vlog_failed
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +51,10 @@ def _update_vlog_status(vlog_id: str, status: str) -> None:
                WHERE id = %s''',
             (status, vlog_id),
         )
+
+
+def _mark_vlog_failed(vlog_id: str) -> None:
+    _update_vlog_status(vlog_id, "FAILED")
 
 
 def _update_vlog_pipeline_error(vlog_id: str, message: str) -> None:
@@ -109,6 +112,9 @@ async def process_vlog_task(vlog_id: str) -> None:
         transcript = transcribe_vlog(vlog_id)
         if not transcript:
             logger.error("Transcription failed for vlog %s", vlog_id)
+            _update_vlog_pipeline_error(vlog_id, "transcription_failed")
+            _mark_vlog_failed(vlog_id)
+            observability_store.record(kind="pipeline", name="process_vlog", status="failed", detail="transcription_failed")
             return
 
         transcript_summary = sync_transcript_graph(vlog_id, creator_id, title, transcript, duration_seconds=duration_seconds)

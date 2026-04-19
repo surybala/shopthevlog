@@ -10,6 +10,9 @@ import {
   isYouTubeReconnectRequiredError,
 } from '@/lib/youtubeCatalog'
 
+// Give the scan enough time to finish on Vercel (YouTube API + Prisma upserts)
+export const maxDuration = 60
+
 export async function POST(req: NextRequest) {
   const startedAt = Date.now()
   const record = (status: number, detail?: string) => {
@@ -56,6 +59,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         status: 'COMPLETE',
         importedCount: result.importedCount,
+        limitReached: result.limitReached,
       })
     } catch (e) {
       console.error('Selected import failed:', e)
@@ -99,17 +103,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Could not access your YouTube channel right now.' }, { status: 500 })
   }
 
-  // Run in background — don't await
-  runScan(creator.id, creator.youtubeChannelId, creator.plan, null).catch(async (e) => {
+  try {
+    const result = await runScan(creator.id, creator.youtubeChannelId, creator.plan, null)
+    record(200, 'scan_complete')
+    return NextResponse.json({
+      status: 'COMPLETE',
+      importedCount: result.importedCount,
+      limitReached: result.limitReached,
+    })
+  } catch (e) {
     console.error('Scan failed:', e)
     await prisma.creator.update({
       where: { id: creator.id },
       data: { catalogScanStatus: 'FAILED' },
     })
-  })
-
-  record(200, 'scan_started')
-  return NextResponse.json({ status: 'SCANNING' })
+    if (isYouTubeReconnectRequiredError(e)) {
+      record(409, 'youtube_reconnect_required')
+      return NextResponse.json(
+        {
+          error: 'Reconnect your YouTube channel to continue scanning.',
+          reconnectRequired: true,
+        },
+        { status: 409 },
+      )
+    }
+    record(500, 'scan_failed')
+    return NextResponse.json({ error: 'Could not scan your channel right now.' }, { status: 500 })
+  }
 }
 
 async function runScan(creatorId: string, channelId: string, plan: string, selectedVideoIds?: string[] | null) {
@@ -122,7 +142,7 @@ async function runScan(creatorId: string, channelId: string, plan: string, selec
     select: { externalId: true },
   })
   const importedExternalIds = new Set(existingVlogs.map((vlog) => vlog.externalId))
-  let limitReached = importedExternalIds.size >= maxImportedVlogs
+  let limitReached = false
   const videosToConsider = selectedSet
     ? catalog.filter((item) => selectedSet.has(item.videoId))
     : catalog
@@ -181,5 +201,5 @@ async function runScan(creatorId: string, channelId: string, plan: string, selec
     }).catch(() => {})
   }
 
-  return { importedCount }
+  return { importedCount, limitReached }
 }

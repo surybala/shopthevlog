@@ -42,3 +42,31 @@ export function isAdminUser(user: AdminLikeUser): boolean {
   if (!user) return false
   return hasAdminMetadata(user) || (!!user.email && isAdmin(user.email))
 }
+
+/**
+ * Server-side admin guard for Next.js App Router route handlers.
+ *
+ * Returns the authenticated user if they are an admin, or a NextResponse with
+ * the appropriate 401/403 error that the caller should return immediately.
+ *
+ * Usage:
+ *   const result = await requireAdmin()
+ *   if (result instanceof NextResponse) return result
+ *   const user = result  // fully typed User
+ */
+export async function requireAdmin() {
+  // Import here to avoid pulling Next.js server-only modules into shared code
+  const { NextResponse } = await import('next/server')
+  const { createSupabaseServer } = await import('@/lib/supabase/server')
+
+  const supabase = createSupabaseServer()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (!isAdminUser(user)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  return user
+}

@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/admin'
 import prisma from '@/lib/prisma/client'
 import { getApiObservabilitySnapshot } from '@/lib/observability'
 
 export async function GET() {
-  const supabase = createSupabaseServer()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const result = await requireAdmin()
+  if (result instanceof NextResponse) return result
 
   const [
     creators,
