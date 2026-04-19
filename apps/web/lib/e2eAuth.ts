@@ -19,12 +19,17 @@ export function getE2EUserIdFromCookies(cookieStore: CookieReader) {
 // A regex match like /admin/i is intentionally avoided — an attacker who sets
 // ENABLE_E2E_AUTH=true in a misconfigured environment must not be able to
 // self-grant admin rights by choosing an arbitrary user ID.
-const E2E_ADMIN_USER_IDS = new Set(
-  (process.env.E2E_ADMIN_USER_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-)
+function getE2EAdminUserIds() {
+  return new Set(
+    (process.env.E2E_ADMIN_USER_IDS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  )
+}
 
 export function buildE2EUser(userId: string) {
-  const isAdmin = E2E_ADMIN_USER_IDS.has(userId)
+  const isAdmin = getE2EAdminUserIds().has(userId)
   return {
     id: userId,
     email: `e2e+${userId}@vlogshopper.test`,

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 const mockGetUser = vi.fn();
+const mockRequireAdmin = vi.fn();
 vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServer: () => ({ auth: { getUser: mockGetUser } }),
 }));
@@ -9,6 +10,7 @@ vi.mock('@/lib/supabase/server', () => ({
 const mockIsAdminUser = vi.fn();
 vi.mock('@/lib/admin', () => ({
   isAdminUser: (...args: unknown[]) => mockIsAdminUser(...args),
+  requireAdmin: (...args: unknown[]) => mockRequireAdmin(...args),
 }));
 
 const mockFindUnique = vi.fn();
@@ -29,12 +31,14 @@ describe('POST /api/admin/waitlist/[id]/reject', () => {
     vi.clearAllMocks();
     mockGetUser.mockResolvedValue({ data: { user: { id: 'u-1', email: 'admin@example.com' } } });
     mockIsAdminUser.mockReturnValue(true);
+    mockRequireAdmin.mockResolvedValue({ id: 'u-1', email: 'admin@example.com' });
     mockFindUnique.mockResolvedValue({ id: 'req-1', status: 'PENDING' });
     mockUpdate.mockResolvedValue({});
   });
 
   it('returns 401 when the viewer is unauthenticated', async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
+    mockRequireAdmin.mockResolvedValue(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
 
     const res = await POST(new NextRequest('http://localhost/api/admin/waitlist/req-1/reject', { method: 'POST' }), { params: { id: 'req-1' } });
 
@@ -43,6 +47,7 @@ describe('POST /api/admin/waitlist/[id]/reject', () => {
 
   it('returns 403 for non-admin viewers', async () => {
     mockIsAdminUser.mockReturnValue(false);
+    mockRequireAdmin.mockResolvedValue(NextResponse.json({ error: 'Forbidden' }, { status: 403 }));
 
     const res = await POST(new NextRequest('http://localhost/api/admin/waitlist/req-1/reject', { method: 'POST' }), { params: { id: 'req-1' } });
 

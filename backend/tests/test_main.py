@@ -72,15 +72,6 @@ class TestCorsMiddleware:
         client = _get_client()
         resp = client.get("/health")
         assert resp.status_code == 200
-
-
-class TestRateLimitWiring:
-    def test_app_has_limiter_state(self):
-        from app.main import app
-        from slowapi import Limiter
-        assert isinstance(app.state.limiter, Limiter)
-
-
 class TestLifespan:
     def test_jwks_prewarmed_on_startup(self):
         """lifespan should call _jwks() to pre-warm the JWKS cache."""

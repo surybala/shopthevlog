@@ -45,7 +45,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   }
 
   const sharedDraftTripKit = vlog.tripKits.find(
-    (item) => !item.tripKit.isPublished && item.tripKit.sourceVlogs.length > 1,
+    (item) => !item.tripKit.isPublished && (item.tripKit.sourceVlogs?.length ?? 0) > 1,
   )
   if (sharedDraftTripKit) {
     return NextResponse.json(

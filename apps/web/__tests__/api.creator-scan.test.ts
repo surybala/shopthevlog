@@ -160,8 +160,8 @@ describe('creator scan trigger route', () => {
     const res = await triggerScan(new NextRequest('http://localhost/api/creator/scan', { method: 'POST' }))
 
     expect(res.status).toBe(200)
-    await expect(res.json()).resolves.toEqual({ status: 'SCANNING' })
-    expect(mockRecordApiObservation).toHaveBeenCalledWith('/api/creator/scan', 200, expect.any(Number), 'scan_started')
+    await expect(res.json()).resolves.toEqual({ status: 'COMPLETE', importedCount: 1, limitReached: false })
+    expect(mockRecordApiObservation).toHaveBeenCalledWith('/api/creator/scan', 200, expect.any(Number), 'scan_complete')
 
     await vi.waitFor(() => {
       expect(mockCreatorUpdate).toHaveBeenCalledWith({
@@ -399,7 +399,7 @@ describe('creator scan trigger route', () => {
     )
 
     expect(res.status).toBe(200)
-    await expect(res.json()).resolves.toEqual({ status: 'COMPLETE', importedCount: 1 })
+    await expect(res.json()).resolves.toEqual({ status: 'COMPLETE', importedCount: 1, limitReached: false })
     expect(mockVlogUpsert).toHaveBeenCalledTimes(1)
     expect(mockVlogUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -446,6 +446,18 @@ describe('creator scan trigger route', () => {
       refreshToken: 'refresh-1',
       tokenExpiry: new Date(Date.now() - 60_000),
     })
+    mockCreatorChannelTokenFindUnique.mockResolvedValueOnce({
+      creatorId: 'creator-1',
+      accessToken: 'expired',
+      refreshToken: 'refresh-1',
+      tokenExpiry: new Date(Date.now() - 60_000),
+    })
+    mockCreatorChannelTokenFindUnique.mockResolvedValueOnce({
+      creatorId: 'creator-1',
+      accessToken: 'fresh-access',
+      refreshToken: 'refresh-1',
+      tokenExpiry: new Date(Date.now() + 300_000),
+    })
 
     vi.stubGlobal(
       'fetch',
@@ -453,6 +465,17 @@ describe('creator scan trigger route', () => {
         .fn()
         .mockResolvedValueOnce({
           json: async () => ({ access_token: 'fresh-access', expires_in: 300 }),
+        })
+        .mockResolvedValueOnce({
+          json: async () => ({
+            items: [
+              {
+                contentDetails: {
+                  relatedPlaylists: { uploads: 'uploads-1' },
+                },
+              },
+            ],
+          }),
         })
         .mockResolvedValueOnce({
           json: async () => ({
@@ -476,6 +499,7 @@ describe('creator scan trigger route', () => {
     const res = await triggerScan(new NextRequest('http://localhost/api/creator/scan', { method: 'POST' }))
 
     expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({ status: 'COMPLETE', importedCount: 0, limitReached: false })
     await vi.waitFor(() => {
       expect(mockCreatorChannelTokenUpdate).toHaveBeenCalledWith(
         expect.objectContaining({

@@ -45,6 +45,8 @@ describe('e2e auth helpers', () => {
   })
 
   it('marks admin-flavored e2e users as admins', () => {
+    vi.stubEnv('E2E_ADMIN_USER_IDS', 'e2e-admin-ops')
+
     expect(buildE2EUser('e2e-admin-ops')).toMatchObject({
       app_metadata: {
         admin: true,
@@ -55,5 +57,7 @@ describe('e2e auth helpers', () => {
         full_name: 'E2E Admin',
       },
     })
+
+    vi.unstubAllEnvs()
   })
 })

@@ -229,7 +229,7 @@ describe('creator vlog routes', () => {
     mockVlogFindFirst.mockResolvedValue({
       id: 'vlog-1',
       creatorId: 'creator-1',
-      tripKits: [{ tripKit: { id: 'kit-draft', title: 'Draft kit', isPublished: false } }],
+      tripKits: [{ tripKit: { id: 'kit-draft', title: 'Draft kit', isPublished: false, sourceVlogs: [{ vlogId: 'vlog-1' }] } }],
     });
 
     const res = await deleteVlog(new NextRequest('http://localhost/api/vlogs/vlog-1', { method: 'DELETE' }), {
@@ -246,7 +246,7 @@ describe('creator vlog routes', () => {
     mockVlogFindFirst.mockResolvedValue({
       id: 'vlog-1',
       creatorId: 'creator-1',
-      tripKits: [{ tripKit: { id: 'kit-live', title: 'Live kit', isPublished: true } }],
+      tripKits: [{ tripKit: { id: 'kit-live', title: 'Live kit', isPublished: true, sourceVlogs: [{ vlogId: 'vlog-1' }] } }],
     });
 
     const res = await deleteVlog(new NextRequest('http://localhost/api/vlogs/vlog-1', { method: 'DELETE' }), {
@@ -255,7 +255,7 @@ describe('creator vlog routes', () => {
 
     expect(res.status).toBe(409);
     await expect(res.json()).resolves.toEqual({
-      error: 'This video powers a published Trip Kit. Unpublish or delete the kit first.',
+      error: 'This video is attached to the published Trip Kit "Live kit". Unpublish that Trip Kit, or delete it from Trip Kits, before deleting this video.',
     });
   });
 });

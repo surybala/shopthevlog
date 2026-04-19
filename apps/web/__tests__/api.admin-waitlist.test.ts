@@ -6,17 +6,19 @@
  * Mocks Supabase, Prisma, admin Supabase client, and email helpers.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 // ── Mock Supabase (server) ─────────────────────────────────────────────────────
 const mockGetUser = vi.fn()
 const mockIsAdminUser = vi.fn()
+const mockRequireAdmin = vi.fn()
 vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServer: () => ({ auth: { getUser: mockGetUser } }),
 }))
 
 vi.mock('@/lib/admin', () => ({
   isAdminUser: (...args: unknown[]) => mockIsAdminUser(...args),
+  requireAdmin: (...args: unknown[]) => mockRequireAdmin(...args),
 }))
 
 // ── Mock Supabase (admin) ─────────────────────────────────────────────────────
@@ -82,6 +84,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockGetUser.mockResolvedValue({ data: { user: ADMIN_USER } })
   mockIsAdminUser.mockReturnValue(true)
+  mockRequireAdmin.mockResolvedValue(ADMIN_USER)
   mockCreatorFindUnique.mockResolvedValue(CREATOR)
   mockWaitlistFindMany.mockResolvedValue([PENDING_REQ])
   mockWaitlistFindUnique.mockResolvedValue(PENDING_REQ)
@@ -96,6 +99,7 @@ beforeEach(() => {
 describe('GET /api/admin/waitlist', () => {
   it('returns 401 when not authenticated', async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } })
+    mockRequireAdmin.mockResolvedValue(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
     const req = makeRequest('GET', 'http://localhost/api/admin/waitlist')
     const res = await GET(req)
     expect(res.status).toBe(401)
@@ -104,6 +108,7 @@ describe('GET /api/admin/waitlist', () => {
   it('returns 403 when user is not an admin', async () => {
     mockGetUser.mockResolvedValue({ data: { user: NON_ADMIN } })
     mockIsAdminUser.mockReturnValue(false)
+    mockRequireAdmin.mockResolvedValue(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
     const req = makeRequest('GET', 'http://localhost/api/admin/waitlist')
     const res = await GET(req)
     expect(res.status).toBe(403)
@@ -162,6 +167,7 @@ describe('POST /api/admin/waitlist/[id]/approve', () => {
 
   it('returns 401 when not authenticated', async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } })
+    mockRequireAdmin.mockResolvedValue(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
     const req = makeRequest('POST', 'http://localhost/api/admin/waitlist/req-1/approve')
     const res = await APPROVE(req, { params })
     expect(res.status).toBe(401)
@@ -170,6 +176,7 @@ describe('POST /api/admin/waitlist/[id]/approve', () => {
   it('returns 403 when user is not an admin', async () => {
     mockGetUser.mockResolvedValue({ data: { user: NON_ADMIN } })
     mockIsAdminUser.mockReturnValue(false)
+    mockRequireAdmin.mockResolvedValue(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
     const req = makeRequest('POST', 'http://localhost/api/admin/waitlist/req-1/approve')
     const res = await APPROVE(req, { params })
     expect(res.status).toBe(403)

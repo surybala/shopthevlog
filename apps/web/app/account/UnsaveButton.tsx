@@ -23,7 +23,7 @@ export default function UnsaveButton({ kitId }: { kitId: string }) {
     <button
       onClick={handleUnsave}
       disabled={loading}
-      className="dashboard-pill-button text-xs text-[#d2d9c7]/72 hover:border-red-400/35 hover:bg-red-400/10 hover:text-[#ffb5a8] disabled:opacity-50"
+      className="dashboard-pill-button text-xs text-[rgba(23,51,45,0.72)] hover:border-red-400/35 hover:bg-red-400/10 hover:text-[#ffb5a8] disabled:opacity-50"
       title="Remove from saved"
     >
       {loading ? 'Removing...' : 'Remove'}

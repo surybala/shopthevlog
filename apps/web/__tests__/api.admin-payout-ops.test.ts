@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 const mockGetUser = vi.fn()
 const mockIsAdminUser = vi.fn()
+const mockRequireAdmin = vi.fn()
 const mockFindMany = vi.fn()
 const mockUpdateMany = vi.fn()
 
@@ -16,6 +17,7 @@ vi.mock('@/lib/supabase/server', () => ({
 
 vi.mock('@/lib/admin', () => ({
   isAdminUser: (...args: unknown[]) => mockIsAdminUser(...args),
+  requireAdmin: (...args: unknown[]) => mockRequireAdmin(...args),
 }))
 
 vi.mock('@/lib/prisma/client', () => ({
@@ -34,12 +36,14 @@ describe('admin payout ops route', () => {
     vi.clearAllMocks()
     mockGetUser.mockResolvedValue({ data: { user: { id: 'admin-1', email: 'ops@example.com' } } })
     mockIsAdminUser.mockReturnValue(true)
+    mockRequireAdmin.mockResolvedValue({ id: 'admin-1', email: 'ops@example.com' })
     mockFindMany.mockResolvedValue([{ id: 'comm-1' }])
     mockUpdateMany.mockResolvedValue({ count: 2 })
   })
 
   it('rejects unauthenticated requests', async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } })
+    mockRequireAdmin.mockResolvedValue(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
 
     const response = await GET(new NextRequest('http://localhost/api/admin/payout-ops'))
 
@@ -48,6 +52,7 @@ describe('admin payout ops route', () => {
 
   it('rejects non-admin requests', async () => {
     mockIsAdminUser.mockReturnValue(false)
+    mockRequireAdmin.mockResolvedValue(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
 
     const response = await GET(new NextRequest('http://localhost/api/admin/payout-ops'))
 

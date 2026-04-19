@@ -247,13 +247,13 @@ body {
     @apply rounded-[1.6rem] backdrop-blur-xl;
   }
   .dashboard-mirror-subtle {
-    color: rgba(23, 51, 45, 0.74);
+    color: rgba(23, 51, 45, 0.8);
   }
   .dashboard-mirror-muted {
-    color: rgba(23, 51, 45, 0.56);
+    color: rgba(23, 51, 45, 0.66);
   }
   .dashboard-mirror-kicker {
-    color: rgba(23, 51, 45, 0.46);
+    color: rgba(23, 51, 45, 0.56);
     letter-spacing: 0.24em;
     text-transform: uppercase;
   }
@@ -294,10 +294,10 @@ body {
     @apply rounded-[2rem] backdrop-blur-sm;
   }
   .editorial-subtle {
-    color: rgba(23, 51, 45, 0.7);
+    color: rgba(23, 51, 45, 0.78);
   }
   .editorial-muted {
-    color: rgba(23, 51, 45, 0.52);
+    color: rgba(23, 51, 45, 0.62);
   }
   .editorial-input {
     background: rgba(255, 255, 255, 0.74);
@@ -307,12 +307,12 @@ body {
   }
   .storefront-shell {
     --storefront-text: #17332d;
-    --storefront-muted: rgba(23, 51, 45, 0.58);
-    --storefront-subtle: rgba(23, 51, 45, 0.74);
+    --storefront-muted: rgba(23, 51, 45, 0.66);
+    --storefront-subtle: rgba(23, 51, 45, 0.8);
     --storefront-border: rgba(23, 51, 45, 0.1);
     --storefront-soft-bg: rgba(255, 255, 255, 0.36);
     --storefront-chip-bg: rgba(23, 51, 45, 0.08);
-    --storefront-chip-text: rgba(23, 51, 45, 0.72);
+    --storefront-chip-text: rgba(23, 51, 45, 0.8);
     --storefront-nav-bg: linear-gradient(180deg, rgba(255, 248, 240, 0.92), rgba(255, 244, 234, 0.86));
     --storefront-panel-bg:
       linear-gradient(180deg, rgba(255, 251, 245, 0.92), rgba(255, 247, 238, 0.88)),
@@ -379,12 +379,12 @@ body {
     background: color-mix(in srgb, var(--storefront-chip-bg) 58%, white);
     color: var(--storefront-text);
   }
-  .storefront-detail-page .storefront-muted {
-    color: color-mix(in srgb, var(--storefront-text) 58%, transparent);
-  }
-  .storefront-detail-page .storefront-subtle {
-    color: color-mix(in srgb, var(--storefront-text) 78%, transparent);
-  }
+.storefront-detail-page .storefront-muted {
+  color: color-mix(in srgb, var(--storefront-text) 68%, transparent);
+}
+.storefront-detail-page .storefront-subtle {
+  color: color-mix(in srgb, var(--storefront-text) 86%, transparent);
+}
   .storefront-detail-page .storefront-card,
   .storefront-detail-page .storefront-panel,
   .storefront-detail-page .storefront-surface {

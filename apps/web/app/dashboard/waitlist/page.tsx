@@ -34,7 +34,7 @@ export default async function WaitlistAdminPage() {
       <section>
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-white/50">Pending ({pending.length})</h2>
         {pending.length === 0 ? (
-          <div className="dashboard-mirror-card p-5 text-sm text-[#d2d9c7]/62">No pending requests.</div>
+          <div className="dashboard-mirror-card p-5 text-sm text-[rgba(23,51,45,0.66)]">No pending requests.</div>
         ) : (
           <WaitlistTable requests={pending} showApprove />
         )}

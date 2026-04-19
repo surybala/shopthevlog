@@ -11,11 +11,12 @@ export const POST = createAffiliateWebhookHandler({
   parsePayload(raw) {
     const p = raw as Record<string, unknown>
     if (!p.booking_id || !p.tour_id) throw new Error('Missing required fields')
-    const { shortCode } = parseAffiliatePartnerRef(p.partner_ref ? String(p.partner_ref) : null)
+    const { shortCode, tripKitId } = parseAffiliatePartnerRef(p.partner_ref ? String(p.partner_ref) : null)
     return {
       externalConversionId: String(p.booking_id),
       providerProductId: String(p.tour_id),
       shortCode,
+      explicitTripKitId: tripKitId,
       grossAmount: Number(p.gross_amount),
       commissionAmount: Number(p.commission_amount),
       currency: p.currency ? String(p.currency) : 'USD',

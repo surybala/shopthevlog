@@ -29,6 +29,8 @@ export interface NormalisedBooking {
   providerProductId: string
   /** Our short-code embedded in the outbound link (optional, used by GYG partner_ref) */
   shortCode?: string | null
+  /** Explicit Trip Kit from the outbound link payload, when the provider echoes it back */
+  explicitTripKitId?: string | null
   /** Amount the user paid, in the native currency unit (dollars/euros, not cents) */
   grossAmount: number
   /** Commission earned, in the native currency unit */
@@ -145,6 +147,7 @@ export function createAffiliateWebhookHandler(config: WebhookHandlerConfig) {
     )
     const currency = booking.currency ?? 'USD'
     const attribution = resolveAttributedTripKitId({
+      explicitTripKitId: booking.explicitTripKitId,
       linkedTripKitIds: link.tripKits.map((k) => k.id),
     })
 

@@ -107,7 +107,7 @@ function SummaryCard({ label, value, detail }: { label: string; value: string; d
   return (
     <div className="dashboard-mirror-card p-5">
       <p className="dashboard-mirror-kicker mb-2 text-xs">{label}</p>
-      <p className="text-4xl font-semibold tracking-tight text-[#f7f1e4]">{value}</p>
+      <p className="text-4xl font-semibold tracking-tight text-[#17332d]">{value}</p>
       {detail ? <p className="dashboard-mirror-subtle mt-2 text-xs">{detail}</p> : null}
     </div>
   )

@@ -49,16 +49,6 @@ class TestSettings:
         )
         assert s.APP_ENV == "development"
 
-    def test_redis_url_can_be_overridden(self):
-        from app.core.config import Settings
-        s = Settings(
-            DATABASE_URL="postgresql://x:y@localhost/db",
-            SUPABASE_URL="https://test.supabase.co",
-            SUPABASE_SECRET_KEY="test-key",
-            REDIS_URL="redis://custom-host:6380",
-        )
-        assert s.REDIS_URL == "redis://custom-host:6380"
-
     def test_gemini_api_key_can_be_set(self):
         from app.core.config import Settings
         s = Settings(

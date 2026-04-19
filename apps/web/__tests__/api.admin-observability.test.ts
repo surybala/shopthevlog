@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { NextResponse } from 'next/server'
 
 const mockGetUser = vi.fn()
+const mockRequireAdmin = vi.fn()
 const mockCreatorCount = vi.fn()
 const mockSubscriberCount = vi.fn()
 const mockTripKitCount = vi.fn()
@@ -40,12 +42,17 @@ vi.mock('@/lib/observability', () => ({
   getApiObservabilitySnapshot: (...args: unknown[]) => mockGetApiObservabilitySnapshot(...args),
 }))
 
+vi.mock('@/lib/admin', () => ({
+  requireAdmin: (...args: unknown[]) => mockRequireAdmin(...args),
+}))
+
 import { GET } from '../app/api/admin/observability/route'
 
 describe('admin observability route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetUser.mockResolvedValue({ data: { user: { id: 'admin-user' } } })
+    mockRequireAdmin.mockResolvedValue({ id: 'admin-user' })
     mockCreatorCount
       .mockResolvedValueOnce(4)
       .mockResolvedValueOnce(1)
@@ -73,6 +80,7 @@ describe('admin observability route', () => {
 
   it('returns 401 when unauthenticated', async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } })
+    mockRequireAdmin.mockResolvedValue(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
     const res = await GET()
     expect(res.status).toBe(401)
   })

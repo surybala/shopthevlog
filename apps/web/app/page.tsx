@@ -142,7 +142,7 @@ export default async function HomePage() {
             <Image src="/logo.png" alt="VlogShopper" width={34} height={34} className="rounded-xl shadow-[0_0_30px_rgba(23,51,45,0.08)]" />
             <div>
               <p className="text-base font-semibold tracking-tight text-[#17332d]">VlogShopper</p>
-              <p className="text-[10px] uppercase tracking-[0.32em] text-[#17332d]/35">Curated by creators for their subscribers</p>
+                <p className="text-[10px] uppercase tracking-[0.32em] text-[#17332d]/52">Curated by creators for their subscribers</p>
             </div>
           </Link>
 

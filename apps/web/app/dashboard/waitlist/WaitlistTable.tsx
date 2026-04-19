@@ -49,7 +49,7 @@ export default function WaitlistTable({
         <div key={request.id} className="dashboard-mirror-card flex flex-col gap-4 p-5 sm:flex-row sm:items-start">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-semibold text-[#f7f1e4]">{request.name}</span>
+              <span className="text-sm font-semibold text-[#17332d]">{request.name}</span>
               <span
                 className={`rounded-full px-2.5 py-1 text-[11px] ring-1 ${
                   request.status === 'APPROVED'
@@ -63,13 +63,13 @@ export default function WaitlistTable({
               </span>
             </div>
 
-            <p className="mt-0.5 text-xs text-[#d2d9c7]/64">{request.email}</p>
+            <p className="mt-0.5 text-xs text-[rgba(23,51,45,0.66)]">{request.email}</p>
 
             {request.reason ? (
-              <p className="mt-2 text-sm italic leading-relaxed text-[#d2d9c7]/68">"{request.reason}"</p>
+              <p className="mt-2 text-sm italic leading-relaxed text-[rgba(23,51,45,0.72)]">"{request.reason}"</p>
             ) : null}
 
-            <p className="mt-2 text-xs text-[#d2d9c7]/46">
+            <p className="mt-2 text-xs text-[rgba(23,51,45,0.56)]">
               Requested {new Date(request.createdAt).toLocaleDateString()}
               {request.approvedAt ? ` · Approved ${new Date(request.approvedAt).toLocaleDateString()}` : ''}
               {request.rejectedAt ? ` · Rejected ${new Date(request.rejectedAt).toLocaleDateString()}` : ''}
@@ -86,7 +86,7 @@ export default function WaitlistTable({
               <button
                 onClick={() => doAction(request.id, 'reject')}
                 disabled={!!busy[request.id]}
-                className="dashboard-pill-button text-xs text-[#ffb5a8] hover:bg-red-400/10 disabled:opacity-50"
+                className="dashboard-pill-button text-xs text-[#c95d49] hover:bg-red-400/10 hover:text-[#a73e2d] disabled:opacity-50"
               >
                 {busy[request.id] === 'rejecting' ? 'Rejecting...' : 'Reject'}
               </button>
