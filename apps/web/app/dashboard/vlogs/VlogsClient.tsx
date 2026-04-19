@@ -92,6 +92,8 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
   const [videoUrl, setVideoUrl] = useState('')
   const [urlLookupLoading, setUrlLookupLoading] = useState(false)
   const [catalogReconnectRequired, setCatalogReconnectRequired] = useState(false)
+  const [importLimitReached, setImportLimitReached] = useState(false)
+  const [pipelineStaleWarning, setPipelineStaleWarning] = useState(false)
 
   const anyInProgress = vlogs.some((vlog) => IN_PROGRESS.has(vlog.processingStatus))
   const recommendedImportedVlogs = useMemo(
@@ -145,9 +147,19 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
   }, [])
 
   useEffect(() => {
-    if (!anyInProgress) return
+    if (!anyInProgress) {
+      setPipelineStaleWarning(false)
+      return
+    }
+    // After 5 minutes of continuous in-progress polling, show a stale warning.
+    // This catches vlogs that are stuck due to backend issues.
+    const STALE_AFTER_MS = 5 * 60 * 1000
+    const staleTimeout = setTimeout(() => setPipelineStaleWarning(true), STALE_AFTER_MS)
     const interval = setInterval(refreshVlogs, 5000)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      clearTimeout(staleTimeout)
+    }
   }, [anyInProgress, refreshVlogs])
 
   async function triggerProcess(vlogId: string) {
@@ -204,6 +216,7 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
     setCatalogQuery('')
     setShowImportedInCatalog(false)
     setVideoUrl('')
+    setImportLimitReached(false)
     await loadCatalog('', false)
   }
 
@@ -212,6 +225,7 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
     setImporting(true)
     setCatalogError('')
     setCatalogReconnectRequired(false)
+    setImportLimitReached(false)
     try {
       const res = await fetch('/api/creator/scan', {
         method: 'POST',
@@ -225,9 +239,16 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
         return
       }
       await refreshVlogs()
-      setShowImportModal(false)
-      setSelectedVideoIds([])
-      setVideoUrl('')
+      if (data.limitReached) {
+        // Keep modal open so the user can see the warning
+        setImportLimitReached(true)
+        setSelectedVideoIds([])
+        await loadCatalog(catalogQuery, showImportedInCatalog)
+      } else {
+        setShowImportModal(false)
+        setSelectedVideoIds([])
+        setVideoUrl('')
+      }
       router.refresh()
     } catch {
       setCatalogError('Network error')
@@ -310,6 +331,14 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
           </button>
         ) : null}
       </div>
+
+      {pipelineStaleWarning ? (
+        <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-50/60 px-4 py-3 text-sm text-amber-800">
+          One or more videos have been processing for over 5 minutes. This may indicate a pipeline issue.{' '}
+          <button onClick={refreshVlogs} className="underline underline-offset-2">Refresh status</button>
+          {' '}or contact support if the issue persists.
+        </div>
+      ) : null}
 
       {recommendedImportedVlogs.length > 0 ? (
         <div className="mb-5 grid gap-3 md:grid-cols-2">
@@ -487,6 +516,13 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
             </div>
 
             <div className="max-h-[calc(84vh-148px)] overflow-y-auto p-6">
+              {importLimitReached ? (
+                <div className="mb-4 rounded-xl border border-amber-400/40 bg-amber-50/80 px-4 py-3 text-sm text-amber-800">
+                  You&apos;ve reached your video import limit. Some of the selected videos were skipped.
+                  Upgrade to PRO for a higher limit, or delete existing videos to free up slots.
+                </div>
+              ) : null}
+
               <div className="mb-5 grid gap-3 rounded-[1.4rem] border border-[rgba(23,51,45,0.1)] bg-[rgba(255,255,255,0.68)] p-4 lg:grid-cols-[1fr_auto]">
                 <div className="space-y-3">
                   <div>

@@ -21,7 +21,7 @@ shopthevlog/
 | Database | PostgreSQL (via Supabase) |
 | AI Pipeline | Python FastAPI + Gemini Flash 2.5 + OpenAI Whisper |
 | State | Zustand (client), TanStack Query (server state) |
-| Rate Limiting | slowapi (Python) + in-process sliding window (Next.js) |
+| Rate Limiting | In-process sliding window (Next.js) |
 
 ---
 
@@ -70,7 +70,6 @@ backend/
 │   ├── core/
 │   │   ├── config.py                # pydantic-settings Settings
 │   │   ├── security.py              # JWT verification (Supabase JWKS + HS256 fallback)
-│   │   └── rate_limit.py            # slowapi limiter + async token bucket
 │   └── db/
 │       └── pg_client.py             # psycopg2 PgClient context manager
 └── tests/
@@ -145,7 +144,6 @@ OPENAI_API_KEY=your-openai-api-key
 
 YOUTUBE_API_KEY=your-youtube-data-api-key
 
-REDIS_URL=redis://localhost:6379
 APP_ENV=development
 CORS_ORIGINS=http://localhost:3000
 ```
@@ -181,7 +179,7 @@ Visit `http://localhost:3000`.
 
 When a creator clicks **Generate Kit** on a vlog:
 
-1. `POST /api/vlogs/[id]/process` (Next.js) — verifies ownership, rate-limits, proxies to FastAPI with the user's JWT
+1. `POST /api/vlogs/[id]/process` (Next.js) — verifies ownership and proxies to FastAPI with the user's JWT
 2. `POST /api/v1/vlogs/{id}/process` (FastAPI) — marks vlog `QUEUED`, spawns background task
 3. `process_vlog_task` — calls `transcribe_vlog` (Whisper via yt-dlp) then `generate_trip_kit` (Gemini)
 4. `generate_trip_kit` — sends transcript to **Gemini Flash 2.5**, parses structured JSON itinerary, writes `TripKit` + `ItineraryDay` + `DayActivity` rows, marks vlog `COMPLETE`
@@ -220,8 +218,7 @@ After a TripKit is generated (or created manually), creators can:
 | OAuth CSRF | YouTube and TikTok callbacks verify `state` param matches the authenticated user's session before processing the auth code |
 | Short code randomness | `crypto.randomBytes(6).toString('base64url')` — not `Math.random()` |
 | Input validation | `lib/validate.ts` — length limits, URL scheme checks (`http`/`https` only), handle format `[a-z0-9_-]`, enum membership |
-| Rate limiting (inbound) | slowapi (Python backend) keyed by JWT user-id; Next.js sliding-window Map |
-| Rate limiting (outbound) | Async token bucket in `rate_limit.py` — throttles calls to external APIs |
+| Rate limiting | Next.js sliding-window Map |
 | Ownership checks | All vlog/kit mutations join on `creator.userId` so users only access their own data |
 | SQL injection | All queries use psycopg2 parameterized `%s` — no string interpolation |
 
@@ -285,7 +282,6 @@ npm test
 | `OPENAI_API_KEY` | backend | ✅ | OpenAI API key for Whisper transcription |
 | `YOUTUBE_CLIENT_ID` / `SECRET` | both | for YouTube OAuth | |
 | `TIKTOK_CLIENT_KEY` / `SECRET` | web | for TikTok OAuth | |
-| `REDIS_URL` | backend | recommended | Rate-limit storage; falls back to in-memory |
 | `AI_PIPELINE_URL` | web | ✅ | URL of the FastAPI backend |
 | `APP_ENV` | backend | | `development` enables Swagger UI at `/docs` |
 | `WHISPER_LOCAL_ENABLED` | backend | | `true` to use local Whisper model instead of OpenAI API |

@@ -17,7 +17,6 @@ google-api-python-client==2.133.0
 yt-dlp==2024.5.27
 ffmpeg-python==0.2.0
 sentry-sdk[fastapi]==2.6.0
-slowapi>=0.1.9
 psycopg2-binary==2.9.9
 pytest==8.2.2
 pytest-asyncio==0.23.7

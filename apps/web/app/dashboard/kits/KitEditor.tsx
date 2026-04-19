@@ -132,13 +132,20 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
   async function handlePublishToggle() {
     if (!kit) return
     setSaving(true)
+    setError('')
     try {
-      await fetch(`/api/kits/${kit.id}`, {
+      const res = await fetch(`/api/kits/${kit.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isPublished: !kit.isPublished }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error ?? (kit.isPublished ? 'Could not unpublish kit' : 'Could not publish kit'))
+      }
       router.refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong')
     } finally {
       setSaving(false)
     }

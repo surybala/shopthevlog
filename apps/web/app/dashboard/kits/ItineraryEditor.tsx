@@ -126,9 +126,13 @@ function ActivityRow({
   async function deleteActivity() {
     if (!confirm('Delete this activity?')) return
     setSaving(true)
+    setError('')
     try {
-      await fetch(`/api/kits/${kitId}/days/${dayId}/activities/${activity.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/kits/${kitId}/days/${dayId}/activities/${activity.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Could not delete activity')
       onDelete()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete activity')
     } finally {
       setSaving(false)
     }
@@ -177,15 +181,18 @@ function ActivityRow({
 
   async function detachLink() {
     setSaving(true)
+    setError('')
     try {
       const res = await fetch(`/api/kits/${kitId}/days/${dayId}/activities/${activity.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ affiliateLinkId: null }),
       })
-      if (!res.ok) throw new Error('Failed')
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Could not detach link')
       const updated = await res.json()
       onUpdate(updated)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not detach link')
     } finally {
       setSaving(false)
     }

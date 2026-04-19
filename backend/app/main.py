@@ -5,11 +5,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.observability import observability_store
-from app.core.rate_limit import limiter, rate_limit_exceeded_handler
 from app.core.sentry import init_sentry
 from app.api.v1.router import api_router
 
@@ -44,10 +42,6 @@ app = FastAPI(
     docs_url="/docs" if settings.APP_ENV == "development" else None,
     redoc_url=None,
 )
-
-# Rate limiting — attach limiter state and 429 handler.
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 # CORS
 app.add_middleware(

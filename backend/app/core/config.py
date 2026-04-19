@@ -41,9 +41,6 @@ class Settings(BaseSettings):
     # Google Places (for location resolution in AI pipeline)
     GOOGLE_PLACES_API_KEY: str = ""
 
-    # Redis
-    REDIS_URL: str = "redis://localhost:6379"
-
     # Sentry
     SENTRY_DSN: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1

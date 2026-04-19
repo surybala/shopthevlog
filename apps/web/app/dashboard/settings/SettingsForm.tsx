@@ -70,15 +70,30 @@ export default function SettingsForm({ userId, creator }: Props) {
 
   useEffect(() => {
     if (scanStatus !== 'SCANNING') return
+    // Stop polling after 40 attempts (~2 minutes) to avoid running forever if
+    // the backend is stuck or the status endpoint is consistently failing.
+    let attempts = 0
+    const MAX_ATTEMPTS = 40
     const interval = setInterval(async () => {
-      const res = await fetch('/api/creator/scan/status')
-      if (!res.ok) return
-      const data = await res.json()
-      setScanStatus(data.status)
-      setVlogCount(data.vlogCount)
-      setRemainingProcessingCredits(data.remainingProcessingCredits ?? null)
-      setProcessingCreditLimit(data.processingCreditsLimit ?? null)
-      if (data.status !== 'SCANNING') clearInterval(interval)
+      attempts += 1
+      if (attempts >= MAX_ATTEMPTS) {
+        clearInterval(interval)
+        setScanStatus('FAILED')
+        setError('Scan is taking too long. Please refresh the page to check status.')
+        return
+      }
+      try {
+        const res = await fetch('/api/creator/scan/status')
+        if (!res.ok) return // transient error — keep polling
+        const data = await res.json()
+        setScanStatus(data.status)
+        setVlogCount(data.vlogCount)
+        setRemainingProcessingCredits(data.remainingProcessingCredits ?? null)
+        setProcessingCreditLimit(data.processingCreditsLimit ?? null)
+        if (data.status !== 'SCANNING') clearInterval(interval)
+      } catch {
+        // network error — keep polling until max attempts
+      }
     }, 3000)
     return () => clearInterval(interval)
   }, [scanStatus])
@@ -121,18 +136,32 @@ export default function SettingsForm({ userId, creator }: Props) {
   async function togglePublish() {
     if (!creator) return
     setSaving(true)
+    setError('')
     try {
-      await fetch('/api/creator/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isPublished: !creator.isPublished }) })
+      const res = await fetch('/api/creator/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isPublished: !creator.isPublished }) })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error ?? (creator.isPublished ? 'Could not unpublish storefront' : 'Could not publish storefront'))
+      }
       router.refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong')
     } finally {
       setSaving(false)
     }
   }
 
   async function connectYouTube() {
-    const res = await fetch('/api/auth/youtube')
-    const { url } = await res.json()
-    window.location.href = url
+    setError('')
+    try {
+      const res = await fetch('/api/auth/youtube')
+      if (!res.ok) throw new Error('Could not start YouTube connection')
+      const data = await res.json()
+      if (!data.url) throw new Error('No redirect URL returned')
+      window.location.href = data.url
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not connect YouTube right now')
+    }
   }
 
   function connectStripe() {

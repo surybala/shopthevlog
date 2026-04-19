@@ -21,6 +21,7 @@ build/
 # IDE
 .idea/
 .vscode/
+.claude/
 *.iml
 
 # OS
