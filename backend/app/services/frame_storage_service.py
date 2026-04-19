@@ -136,7 +136,7 @@ def extract_video_frames(video_url: str | None, timestamps_sec: list[float]) -> 
                 normalized_timestamp = round(max(float(timestamp_sec), 0.0), 2)
                 frame_path = os.path.join(tmpdir, f"frame-{int(normalized_timestamp):06d}.jpg")
                 (
-                    ffmpeg.input(downloaded_path, ss=normalized_timestamp)
+                    ffmpeg.input(downloaded_path)
                     .filter(
                         "scale",
                         AI_FRAME_MAX_EDGE_PX,
@@ -145,6 +145,7 @@ def extract_video_frames(video_url: str | None, timestamps_sec: list[float]) -> 
                     )
                     .output(
                         frame_path,
+                        ss=normalized_timestamp,
                         vframes=1,
                         format="image2",
                         vcodec="mjpeg",

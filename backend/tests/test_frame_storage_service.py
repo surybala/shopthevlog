@@ -145,7 +145,12 @@ def test_extract_video_frames_downloads_once_and_returns_all_requested_jpegs():
             frame_path_holder["output_kwargs"] = kwargs
             return FakeOutput()
 
-    fake_ffmpeg = types.SimpleNamespace(input=lambda *_args, **_kwargs: FakeStream())
+    def fake_input(*args, **kwargs):
+        frame_path_holder["input_args"] = args
+        frame_path_holder["input_kwargs"] = kwargs
+        return FakeStream()
+
+    fake_ffmpeg = types.SimpleNamespace(input=fake_input)
     fake_yt_dlp = types.SimpleNamespace(YoutubeDL=FakeYoutubeDL)
 
     class FakeTemporaryDirectory:
@@ -168,10 +173,13 @@ def test_extract_video_frames_downloads_once_and_returns_all_requested_jpegs():
         24.0: (b"jpeg-frame", "image/jpeg"),
     }
     assert download_count == 1
+    assert frame_path_holder["input_args"] == (str(video_path),)
+    assert frame_path_holder["input_kwargs"] == {}
     assert frame_path_holder["filter_name"] == "scale"
     assert frame_path_holder["filter_width"] == 1024
     assert frame_path_holder["filter_height"] == 1024
     assert frame_path_holder["filter_kwargs"] == {"force_original_aspect_ratio": "decrease"}
+    assert frame_path_holder["output_kwargs"]["ss"] == 24.0
     assert frame_path_holder["output_kwargs"]["q:v"] == 4
     assert frame_path_holder["output_kwargs"]["vcodec"] == "mjpeg"
     shutil.rmtree(temp_dir)
