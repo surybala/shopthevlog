@@ -233,6 +233,9 @@ Rules:
 - object_detection should focus on luggage, gear, hotel room, restaurant table, landmark-like scenes, or transit.
 - logo_detection should only include logos/brands that are clearly visible.
 - clip_summary may summarize the scene only when it gives useful travel context.
+- Keep every "description" and "evidence_summary" under 12 words.
+- Keep "attributes" empty unless an essential visible fact would otherwise be lost.
+- Return at most 3 signals for the frame.
 - If the frame contains no useful travel-shopping signal, return {"signals":[]}.
 """
 
@@ -271,6 +274,9 @@ Rules:
 - object_detection should focus on luggage, gear, hotel room, restaurant table, landmark-like scenes, or transit.
 - logo_detection should only include logos/brands that are clearly visible.
 - clip_summary may summarize the scene only when it gives useful travel context.
+- Keep every "description" and "evidence_summary" under 12 words.
+- Keep "attributes" empty unless an essential visible fact would otherwise be lost.
+- Return at most 2 signals per frame.
 - If a frame contains no useful travel-shopping signal, return that frame with "signals": [].
 """
 
@@ -296,9 +302,8 @@ def _strip_code_fences(text: str) -> str:
     return "\n".join(lines[1:end]).strip()
 
 
-def _call_gemini(system: str, user_content: str, max_tokens: int) -> str:
-    """Call Gemini and return the raw text response."""
-    response = _client().models.generate_content(
+def _generate_content(system: str, user_content: str, max_tokens: int):
+    return _client().models.generate_content(
         model=GEMINI_MODEL,
         contents=user_content,
         config=types.GenerateContentConfig(
@@ -306,13 +311,13 @@ def _call_gemini(system: str, user_content: str, max_tokens: int) -> str:
             max_output_tokens=max_tokens,
             temperature=0.4,
             response_mime_type="application/json",
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         ),
     )
-    return response.text or ""
 
 
-def _call_gemini_parts(system: str, contents: list[types.Part], max_tokens: int, temperature: float = 0.2) -> str:
-    response = _client().models.generate_content(
+def _generate_content_parts(system: str, contents: list[types.Part], max_tokens: int, temperature: float = 0.2):
+    return _client().models.generate_content(
         model=GEMINI_MODEL,
         contents=contents,
         config=types.GenerateContentConfig(
@@ -320,22 +325,46 @@ def _call_gemini_parts(system: str, contents: list[types.Part], max_tokens: int,
             max_output_tokens=max_tokens,
             temperature=temperature,
             response_mime_type="application/json",
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         ),
     )
+
+
+def _call_gemini(system: str, user_content: str, max_tokens: int) -> str:
+    """Call Gemini and return the raw text response."""
+    response = _generate_content(system, user_content, max_tokens)
     return response.text or ""
 
 
-def _parse_response(raw_text: str, vlog_id: str, attempt: str) -> Optional[dict]:
+def _call_gemini_parts(system: str, contents: list[types.Part], max_tokens: int, temperature: float = 0.2) -> str:
+    response = _generate_content_parts(system, contents, max_tokens, temperature=temperature)
+    return response.text or ""
+
+
+def _finish_reason(response: object) -> str | None:
+    try:
+        candidates = getattr(response, "candidates", None) or []
+        if not candidates:
+            return None
+        reason = getattr(candidates[0], "finish_reason", None)
+        return str(reason) if reason is not None else None
+    except Exception:
+        return None
+
+
+def _parse_response(raw_text: str, vlog_id: str, attempt: str, finish_reason: str | None = None) -> Optional[dict]:
     if not raw_text:
-        logger.warning(f"Gemini returned empty response [{attempt}] for vlog {vlog_id}")
+        suffix = f" (finish_reason={finish_reason})" if finish_reason else ""
+        logger.warning(f"Gemini returned empty response [{attempt}] for vlog {vlog_id}{suffix}")
         return None
     cleaned = _strip_code_fences(raw_text.strip())
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError as e:
+        suffix = f" finish_reason={finish_reason}." if finish_reason else ""
         logger.error(
             f"Gemini invalid JSON [{attempt}] for vlog {vlog_id}: {e}. "
-            f"Raw: {raw_text[:400]}"
+            f"{suffix} Raw: {raw_text[:400]}"
         )
         return None
 
@@ -631,13 +660,19 @@ def _extract_visual_frame_signals(frame: dict, title: str) -> list[dict]:
                 )
             ),
         ]
-        raw = _call_gemini_parts(
+        response = _generate_content_parts(
             VISUAL_OPPORTUNITY_SYSTEM_PROMPT,
             contents,
-            max_tokens=2048,
+            max_tokens=1024,
             temperature=0.15,
         )
-        parsed = _parse_response(raw, title, "visual-opportunities-single")
+        raw = response.text or ""
+        parsed = _parse_response(
+            raw,
+            title,
+            "visual-opportunities-single",
+            finish_reason=_finish_reason(response),
+        )
         if not parsed:
             return []
         signals = parsed.get("signals")
@@ -674,13 +709,19 @@ def extract_visual_opportunities_batch(frames: list[dict], title: str) -> dict[s
             )
 
         contents.append(types.Part.from_text(text="\n".join(prompt_lines)))
-        raw = _call_gemini_parts(
+        response = _generate_content_parts(
             VISUAL_BATCH_OPPORTUNITY_SYSTEM_PROMPT,
             contents,
-            max_tokens=4096,
+            max_tokens=2048,
             temperature=0.15,
         )
-        parsed = _parse_response(raw, title, "visual-opportunities-batch")
+        raw = response.text or ""
+        parsed = _parse_response(
+            raw,
+            title,
+            "visual-opportunities-batch",
+            finish_reason=_finish_reason(response),
+        )
         if not parsed:
             logger.warning(
                 "Falling back to per-frame visual extraction after invalid batch response for vlog %s",

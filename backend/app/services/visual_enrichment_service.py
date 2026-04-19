@@ -21,6 +21,7 @@ from app.services.frame_storage_service import download_frame_asset_bytes
 from app.services.gemini_service import extract_visual_opportunities_batch
 
 logger = logging.getLogger(__name__)
+VISUAL_GEMINI_BATCH_SIZE = 4
 
 
 def _normalize_confidence(raw: object, default: float = 0.45) -> float:
@@ -164,7 +165,10 @@ def enrich_visual_graph(vlog_id: str, creator_id: str, title: str) -> dict:
                 }
             )
 
-        signals_by_frame = extract_visual_opportunities_batch(model_frames, title)
+        signals_by_frame: dict[str, list[dict]] = {}
+        for index in range(0, len(model_frames), VISUAL_GEMINI_BATCH_SIZE):
+            batch = model_frames[index:index + VISUAL_GEMINI_BATCH_SIZE]
+            signals_by_frame.update(extract_visual_opportunities_batch(batch, title))
 
         for frame in frames:
             signals = signals_by_frame.get(frame["id"], [])
