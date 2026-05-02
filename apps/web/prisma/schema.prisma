@@ -1,0 +1,1162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum CreatorPlan {
+  FREE
+  PRO
+  STUDIO
+}
+
+enum StorefrontTheme {
+  BEACH_RETREAT
+  ADVENTURE_TRAIL
+  BACKPACKER_NOTEBOOK
+  MOUNTAIN_ESCAPE
+  CITY_EDITORIAL
+  FOREST_CAMP
+  DESERT_SUNSET
+  ISLAND_HOPPING
+  ROAD_TRIP
+  WELLNESS_HIDEAWAY
+  FOOD_TRAIL
+  LUXURY_ATLAS
+}
+
+enum ScanStatus {
+  PENDING
+  QUEUED
+  SCANNING
+  COMPLETE
+  FAILED
+}
+
+enum Platform {
+  YOUTUBE
+  TIKTOK
+  INSTAGRAM
+}
+
+enum ProcessingStatus {
+  PENDING
+  QUEUED
+  TRANSCRIBING
+  EXTRACTING
+  EMBEDDING
+  INGESTED
+  PREPROCESSING
+  TRANSCRIPT_DONE
+  VISION_DONE
+  FUSED
+  RESOLVED
+  RANKED
+  REVIEW_PENDING
+  PUBLISHED
+  COMPLETE
+  FAILED
+}
+
+enum EvidenceSourceType {
+  TRANSCRIPT
+  OCR
+  SCENE_SUMMARY
+  OBJECT_DETECTION
+  LOGO_DETECTION
+  LLM_CLAIM
+  CLIP_SUMMARY
+}
+
+enum ClaimType {
+  STAYED_AT
+  VISITED
+  ATE_AT
+  DRANK_AT
+  PACKED
+  USED
+  RECOMMENDS
+  PURCHASED
+  ITINERARY_STEP
+}
+
+enum CandidateEntityType {
+  PLACE
+  PRODUCT
+  EXPERIENCE
+  BRAND
+}
+
+enum CandidateEntityStatus {
+  NEW
+  RESOLVED
+  APPROVED
+  REJECTED
+}
+
+enum OpportunityType {
+  ITINERARY
+  CITY_GUIDE
+  PACKING_LIST
+  HOTEL
+  RESTAURANT
+  CAFE
+  ATTRACTION
+  ACTIVITY
+  TRAVEL_PRODUCT
+  PACKING_ITEM
+}
+
+enum OpportunityPublishState {
+  DRAFT
+  PUBLISHED
+  SUPPRESSED
+}
+
+enum OpportunityReviewState {
+  UNREVIEWED
+  APPROVED
+  EDITED
+  REJECTED
+  AUTO_APPROVED
+}
+
+enum ResolverType {
+  PLACE_MATCHER
+  PRODUCT_MATCHER
+}
+
+enum ResolutionMatchType {
+  EXACT
+  LIKELY
+  SIMILAR
+  UNRESOLVED
+}
+
+enum CreatorMemoryType {
+  ACCEPTED_PRODUCT
+  REJECTED_PRODUCT
+  ACCEPTED_PLACE
+  NAMING_PREFERENCE
+  DISALLOWED_CATEGORY
+  RECURRING_ITEM
+}
+
+enum FeedbackAction {
+  APPROVED
+  EDITED
+  REJECTED
+}
+
+enum PlaceType {
+  HOTEL
+  HOSTEL
+  RESTAURANT
+  CAFE
+  EXPERIENCE
+  ATTRACTION
+  NEIGHBORHOOD
+  TRANSPORT
+  OTHER
+}
+
+enum ProductCategory {
+  GEAR
+  CLOTHING
+  ELECTRONICS
+  LUGGAGE
+  OTHER
+}
+
+enum ActivityType {
+  ACCOMMODATION
+  FOOD
+  TOUR
+  ADVENTURE
+  CULTURAL
+  WELLNESS
+  NIGHTLIFE
+  TRANSPORT
+  ATTRACTION
+  OTHER
+}
+
+enum TravelStyle {
+  BUDGET
+  MID
+  LUXURY
+  BACKPACKER
+  FAMILY
+  SOLO
+  COUPLE
+}
+
+enum Difficulty {
+  EASY
+  MODERATE
+  CHALLENGING
+}
+
+enum AccessTier {
+  FREE
+  FOLLOWER
+  PREMIUM
+}
+
+enum SectionType {
+  ACCOMMODATION
+  TRANSPORT
+  FOOD
+  GEAR_AND_PACKING
+  BUDGET_BREAKDOWN
+  VISA_AND_ENTRY
+  HEALTH_AND_SAFETY
+  TIPS
+  CUSTOM
+}
+
+enum MerchandiseType {
+  PHYSICAL
+  DIGITAL
+  AFFILIATE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  TRIALING
+  INCOMPLETE
+}
+
+enum BillingPeriod {
+  MONTHLY
+  YEARLY
+}
+
+enum AffiliateLinkType {
+  HOTEL
+  HOSTEL
+  AIRBNB
+  EXPERIENCE_TOUR
+  RESTAURANT
+  TRANSPORT
+  FLIGHT_SEARCH
+  GEAR_PRODUCT
+  CLOTHING
+  CUSTOM
+}
+
+enum AffiliateProvider {
+  STAY22
+  BOOKING_COM
+  EXPEDIA
+  AIRBNB
+  GETYOURGUIDE
+  VIATOR
+  KLOOK
+  AMAZON
+  SKYSCANNER
+  GOOGLE_FLIGHTS
+  KIWI
+  PRINTFUL
+  PRINTIFY
+  CUSTOM
+}
+
+enum CommissionType {
+  CPA
+  CPL
+  CPC
+}
+
+enum CommissionStatus {
+  PENDING
+  CONFIRMED
+  PAID
+  REVERSED
+}
+
+enum WishlistItemType {
+  TRIP_KIT
+  MERCHANDISE
+  AFFILIATE_LINK
+}
+
+enum DeviceType {
+  MOBILE
+  DESKTOP
+  TABLET
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CREATOR
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Creator {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  handle        String  @unique
+  displayName   String
+  bio           String?
+  avatarUrl     String?
+  coverImageUrl String?
+  storefrontTheme         StorefrontTheme @default(CITY_EDITORIAL)
+  storefrontTagline       String?
+  storefrontIntro         String?
+  storefrontMoodImageUrl  String?
+  storefrontGalleryImages String[]
+  location      String?
+  websiteUrl    String?
+  country       String?
+
+  youtubeChannelId String? @unique
+  youtubeHandle    String?
+  tiktokUserId     String? @unique
+  tiktokHandle     String?
+  instagramHandle  String?
+  subscriberCount  Int     @default(0)
+
+  freeTierEnabled Boolean            @default(true)
+  tiers           SubscriptionTier[]
+
+  stripeAccountId String?
+  payoutsEnabled  Boolean @default(false)
+  defaultCurrency String  @default("USD")
+
+  tripKits      TripKit[]
+  merchandise   Merchandise[]
+  vlogs         Vlog[]
+  collections   Collection[]
+  subscribers   Subscription[]
+  followers     Follow[]
+  affiliateLinks AffiliateLink[]
+  commissions   Commission[]
+  channelTokens CreatorChannelToken[]
+  clickEvents   ClickEvent[]
+  opportunities Opportunity[]
+  opportunityFeedback OpportunityFeedback[]
+  creatorMemory CreatorMemory[]
+
+  plan              CreatorPlan @default(FREE)
+  catalogScanStatus ScanStatus  @default(PENDING)
+  lastCatalogScan   DateTime?
+  processingCreditsUsed Int     @default(0)
+  processingCreditsResetAt DateTime?
+  isPublished       Boolean     @default(false)
+  isVerified        Boolean     @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CreatorChannelToken {
+  id           String   @id @default(uuid())
+  creatorId    String
+  creator      Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  platform     String
+  channelId    String
+  accessToken  String
+  refreshToken String
+  tokenExpiry  DateTime
+  scopes       String[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([creatorId, platform])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUBSCRIBER
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Subscriber {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  displayName      String
+  avatarUrl        String?
+  location         String?
+  stripeCustomerId String? @unique
+
+  subscriptions Subscription[]
+  following     Follow[]
+  savedKits     SavedKit[]
+  clickHistory  ClickEvent[]
+  wishlist      WishlistItem[]
+  orders        Order[]
+
+  preferredCurrency String        @default("USD")
+  travelStyles      TravelStyle[]
+  emailNotifs       Boolean       @default(true)
+  pushNotifs        Boolean       @default(false)
+
+  createdAt DateTime @default(now())
+}
+
+model Follow {
+  id           String     @id @default(cuid())
+  subscriberId String
+  subscriber   Subscriber @relation(fields: [subscriberId], references: [id])
+  creatorId    String
+  creator      Creator    @relation(fields: [creatorId], references: [id])
+  followedAt   DateTime   @default(now())
+
+  @@unique([subscriberId, creatorId])
+}
+
+model SavedKit {
+  id           String     @id @default(cuid())
+  subscriberId String
+  subscriber   Subscriber @relation(fields: [subscriberId], references: [id])
+  tripKitId    String
+  tripKit      TripKit    @relation(fields: [tripKitId], references: [id])
+  savedAt      DateTime   @default(now())
+
+  @@unique([subscriberId, tripKitId])
+}
+
+model WishlistItem {
+  id              String           @id @default(cuid())
+  subscriberId    String
+  subscriber      Subscriber       @relation(fields: [subscriberId], references: [id])
+  itemType        WishlistItemType
+  tripKitId       String?
+  merchandiseId   String?
+  affiliateLinkId String?
+  notes           String?
+  createdAt       DateTime         @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VLOG
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Vlog {
+  id        String  @id @default(cuid())
+  creatorId String
+  creator   Creator @relation(fields: [creatorId], references: [id])
+
+  platform        Platform
+  externalId      String
+  externalUrl     String
+  title           String
+  description     String?
+  thumbnailUrl    String?
+  publishedAt     DateTime?
+  durationSeconds Int?
+  viewCount       Int?     @default(0)
+  likeCount       Int?     @default(0)
+
+  transcriptRaw    String?
+  transcriptClean  String?
+  processingStatus ProcessingStatus @default(PENDING)
+  pipelineError    String?
+  processedAt      DateTime?
+  processingCreditsConsumed Boolean @default(false)
+  processingCreditsConsumedAt DateTime?
+  lastPipelineRunAt DateTime?
+  reviewReadyAt     DateTime?
+  publishedFromGraphAt DateTime?
+  embeddingId      String?
+
+  extractedPlaces     ExtractedPlace[]
+  extractedProducts   ExtractedProduct[]
+  extractedActivities ExtractedActivity[]
+  tripKits            TripKitsOnVlogs[]
+  transcriptSegments  TranscriptSegment[]
+  sceneSegments       SceneSegment[]
+  frameAssets         FrameAsset[]
+  evidences           Evidence[]
+  candidateEntities   CandidateEntity[]
+  opportunities       Opportunity[]
+
+  tags      String[]
+  countries String[]
+  cities    String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([platform, externalId])
+}
+
+model TranscriptSegment {
+  id        String @id @default(cuid())
+  vlogId    String
+  vlog      Vlog   @relation(fields: [vlogId], references: [id], onDelete: Cascade)
+
+  startSec Float
+  endSec   Float
+  text     String
+  speaker  String?
+  source   String
+
+  evidences Evidence[]
+
+  createdAt DateTime @default(now())
+
+  @@index([vlogId, startSec])
+}
+
+model SceneSegment {
+  id        String @id @default(cuid())
+  vlogId    String
+  vlog      Vlog   @relation(fields: [vlogId], references: [id], onDelete: Cascade)
+
+  startSec         Float
+  endSec           Float
+  sceneType        String?
+  summary          String?
+  samplingStrategy String?
+
+  frameAssets FrameAsset[]
+
+  createdAt DateTime @default(now())
+
+  @@index([vlogId, startSec])
+}
+
+model FrameAsset {
+  id             String        @id @default(cuid())
+  vlogId         String
+  vlog           Vlog          @relation(fields: [vlogId], references: [id], onDelete: Cascade)
+  sceneSegmentId String?
+  sceneSegment   SceneSegment? @relation(fields: [sceneSegmentId], references: [id], onDelete: SetNull)
+
+  timestampSec Float
+  imageUri     String
+  width        Int?
+  height       Int?
+
+  evidences Evidence[]
+
+  createdAt DateTime @default(now())
+
+  @@index([vlogId, timestampSec])
+}
+
+model Evidence {
+  id                  String              @id @default(cuid())
+  vlogId              String
+  vlog                Vlog                @relation(fields: [vlogId], references: [id], onDelete: Cascade)
+  sourceType          EvidenceSourceType
+  claimType           ClaimType?
+  startSec            Float
+  endSec              Float
+  transcriptSegmentId String?
+  transcriptSegment   TranscriptSegment?  @relation(fields: [transcriptSegmentId], references: [id], onDelete: SetNull)
+  frameAssetId        String?
+  frameAsset          FrameAsset?         @relation(fields: [frameAssetId], references: [id], onDelete: SetNull)
+  confidence          Float?
+  payloadJson         Json
+
+  opportunityLinks OpportunityEvidence[]
+
+  createdAt DateTime @default(now())
+
+  @@index([vlogId, sourceType])
+  @@index([vlogId, startSec])
+}
+
+model CandidateEntity {
+  id                 String                @id @default(cuid())
+  vlogId             String
+  vlog               Vlog                  @relation(fields: [vlogId], references: [id], onDelete: Cascade)
+  entityType         CandidateEntityType
+  subtype            String?
+  canonicalLabel     String?
+  rawLabel           String
+  startSec           Float
+  endSec             Float
+  confidence         Float
+  status             CandidateEntityStatus @default(NEW)
+  evidenceBundleJson Json
+
+  resolvedEntities ResolvedEntity[]
+  opportunities    Opportunity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vlogId, entityType])
+}
+
+model ResolvedEntity {
+  id                String              @id @default(cuid())
+  candidateEntityId String
+  candidateEntity   CandidateEntity     @relation(fields: [candidateEntityId], references: [id], onDelete: Cascade)
+  resolverType      ResolverType
+  provider          String
+  externalId        String?
+  resolvedName      String
+  matchType         ResolutionMatchType
+  confidence        Float
+  metadataJson      Json
+
+  opportunities Opportunity[]
+
+  createdAt DateTime @default(now())
+}
+
+model Opportunity {
+  id                String                 @id @default(cuid())
+  vlogId            String
+  vlog              Vlog                   @relation(fields: [vlogId], references: [id], onDelete: Cascade)
+  creatorId         String
+  creator           Creator                @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  opportunityType   OpportunityType
+  candidateEntityId String?
+  candidateEntity   CandidateEntity?       @relation(fields: [candidateEntityId], references: [id], onDelete: SetNull)
+  resolvedEntityId  String?
+  resolvedEntity    ResolvedEntity?        @relation(fields: [resolvedEntityId], references: [id], onDelete: SetNull)
+  title             String
+  description       String?
+  rankScore         Float?
+  confidence        Float
+  publishState      OpportunityPublishState @default(DRAFT)
+  reviewState       OpportunityReviewState  @default(UNREVIEWED)
+  storefrontModule  String?
+  metadataJson      Json
+
+  evidences OpportunityEvidence[]
+  feedbacks OpportunityFeedback[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vlogId, opportunityType])
+  @@index([creatorId, reviewState])
+}
+
+model OpportunityEvidence {
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  evidenceId    String
+  evidence      Evidence    @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@id([opportunityId, evidenceId])
+}
+
+model OpportunityFeedback {
+  id               String         @id @default(cuid())
+  creatorId        String
+  creator          Creator        @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  opportunityId    String
+  opportunity      Opportunity    @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  action           FeedbackAction
+  editedFieldsJson Json?
+  reason           String?
+
+  createdAt DateTime @default(now())
+
+  @@index([creatorId, createdAt])
+}
+
+model CreatorMemory {
+  id         String           @id @default(cuid())
+  creatorId  String
+  creator    Creator          @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  memoryType CreatorMemoryType
+  key        String
+  valueJson  Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([creatorId, memoryType, key])
+}
+
+model ExtractedPlace {
+  id     String @id @default(cuid())
+  vlogId String
+  vlog   Vlog   @relation(fields: [vlogId], references: [id])
+
+  name              String
+  type              PlaceType
+  confidence        Float
+  timestampStart    Int?
+  timestampEnd      Int?
+  transcriptExcerpt String?
+
+  googlePlaceId String?
+  latitude      Float?
+  longitude     Float?
+  address       String?
+  city          String?
+  country       String?
+  countryCode   String?
+
+  affiliateLinks AffiliateLink[]
+  resolved       Boolean         @default(false)
+
+  createdAt DateTime @default(now())
+}
+
+model ExtractedProduct {
+  id     String @id @default(cuid())
+  vlogId String
+  vlog   Vlog   @relation(fields: [vlogId], references: [id])
+
+  name              String
+  category          ProductCategory
+  brand             String?
+  confidence        Float
+  timestampStart    Int?
+  transcriptExcerpt String?
+
+  asin         String?
+  affiliateUrl String?
+  resolved     Boolean @default(false)
+
+  createdAt DateTime @default(now())
+}
+
+model ExtractedActivity {
+  id     String @id @default(cuid())
+  vlogId String
+  vlog   Vlog   @relation(fields: [vlogId], references: [id])
+
+  name              String
+  type              ActivityType
+  confidence        Float
+  timestampStart    Int?
+  transcriptExcerpt String?
+
+  gygProductId    String?
+  viatorProductId String?
+  affiliateUrl    String?
+  resolved        Boolean @default(false)
+
+  createdAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRIP KIT
+// ─────────────────────────────────────────────────────────────────────────────
+
+model TripKit {
+  id        String  @id @default(cuid())
+  creatorId String
+  creator   Creator @relation(fields: [creatorId], references: [id])
+
+  title         String
+  slug          String
+  description   String?
+  coverImageUrl String?
+  heroVideoUrl  String?
+
+  countries   String[]
+  cities      String[]
+  primaryCity String?
+
+  durationDays        Int?
+  estimatedBudgetLow  Int?
+  estimatedBudgetHigh Int?
+  bestMonths          Int[]
+  travelStyle         TravelStyle[]
+  difficulty          Difficulty?
+
+  days        ItineraryDay[]
+  sections    KitSection[]
+  packingList PackingItem[]
+
+  accessTier  AccessTier @default(FREE)
+  isPublished Boolean    @default(false)
+  isFeatured  Boolean    @default(false)
+
+  sourceVlogs    TripKitsOnVlogs[]
+  affiliateLinks AffiliateLink[]
+  savedBy        SavedKit[]
+  clickEvents    ClickEvent[]
+  commissions    Commission[] @relation("CommissionAttribution")
+
+  totalLinkCount    Int   @default(0)
+  estimatedEarnings Float @default(0)
+  viewCount         Int   @default(0)
+  saveCount         Int   @default(0)
+  clickCount        Int   @default(0)
+  conversionCount   Int   @default(0)
+
+  generatedByAI  Boolean   @default(false)
+  aiVersion      String?
+  lastAIRegen    DateTime?
+  manuallyEdited Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([creatorId, slug])
+}
+
+model TripKitsOnVlogs {
+  tripKitId String
+  tripKit   TripKit @relation(fields: [tripKitId], references: [id])
+  vlogId    String
+  vlog      Vlog    @relation(fields: [vlogId], references: [id])
+
+  @@id([tripKitId, vlogId])
+}
+
+model ItineraryDay {
+  id        String  @id @default(cuid())
+  tripKitId String
+  tripKit   TripKit @relation(fields: [tripKitId], references: [id])
+
+  dayNumber  Int
+  title      String
+  summary    String?
+  city       String?
+  country    String?
+  tips       String[]
+  activities DayActivity[]
+
+  @@unique([tripKitId, dayNumber])
+}
+
+model DayActivity {
+  id    String       @id @default(cuid())
+  dayId String
+  day   ItineraryDay @relation(fields: [dayId], references: [id])
+
+  sortOrder   Int
+  time        String?
+  title       String
+  description String?
+  type        ActivityType
+
+  affiliateLinkId String?
+  affiliateLink   AffiliateLink? @relation(fields: [affiliateLinkId], references: [id])
+
+  imageUrl       String?
+  videoTimestamp Int?
+  googlePlaceId  String?
+  latitude       Float?
+  longitude      Float?
+}
+
+model KitSection {
+  id        String  @id @default(cuid())
+  tripKitId String
+  tripKit   TripKit @relation(fields: [tripKitId], references: [id])
+
+  type      SectionType
+  title     String
+  sortOrder Int
+  content   Json
+  links     AffiliateLink[]
+}
+
+model PackingItem {
+  id        String  @id @default(cuid())
+  tripKitId String
+  tripKit   TripKit @relation(fields: [tripKitId], references: [id])
+
+  category  String
+  name      String
+  essential Boolean @default(false)
+  sortOrder Int     @default(0)
+
+  affiliateLinkId String?
+  affiliateLink   AffiliateLink? @relation(fields: [affiliateLinkId], references: [id])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MERCHANDISE
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Merchandise {
+  id        String  @id @default(cuid())
+  creatorId String
+  creator   Creator @relation(fields: [creatorId], references: [id])
+
+  title         String
+  slug          String
+  description   String?
+  coverImageUrl String
+  imageUrls     String[]
+  type          MerchandiseType
+
+  printProvider  String?
+  printProductId String?
+  variants       MerchVariant[]
+
+  digitalFileUrl  String?
+  digitalFileSize Int?
+
+  affiliateLinkId String?
+  affiliateLink   AffiliateLink? @relation(fields: [affiliateLinkId], references: [id])
+
+  currency       String @default("USD")
+  price          Int?
+  compareAtPrice Int?
+
+  accessTier  AccessTier @default(FREE)
+  isPublished Boolean    @default(false)
+  isFeatured  Boolean    @default(false)
+  sortOrder   Int        @default(0)
+
+  tags            String[]
+  destinationTags String[]
+
+  viewCount     Int @default(0)
+  purchaseCount Int @default(0)
+  clickCount    Int @default(0)
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([creatorId, slug])
+}
+
+model MerchVariant {
+  id            String      @id @default(cuid())
+  merchandiseId String
+  merchandise   Merchandise @relation(fields: [merchandiseId], references: [id])
+
+  name           String
+  sku            String?
+  price          Int
+  stock          Int?
+  printVariantId String?
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COLLECTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Collection {
+  id        String  @id @default(cuid())
+  creatorId String
+  creator   Creator @relation(fields: [creatorId], references: [id])
+
+  title         String
+  slug          String
+  description   String?
+  coverImageUrl String?
+  isPublished   Boolean @default(false)
+  sortOrder     Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([creatorId, slug])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUBSCRIPTIONS & ACCESS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SubscriptionTier {
+  id        String  @id @default(cuid())
+  creatorId String
+  creator   Creator @relation(fields: [creatorId], references: [id])
+
+  name        String
+  description String?
+  monthlyPrice Int    @default(0)
+  yearlyPrice  Int?
+  currency     String @default("USD")
+
+  stripePriceId       String?
+  stripePriceIdYearly String?
+
+  perks           String[]
+  kitAccess       AccessTier @default(FREE)
+  earlyAccess     Boolean    @default(false)
+  brandDiscount   Boolean    @default(false)
+  communityAccess Boolean    @default(false)
+
+  sortOrder     Int           @default(0)
+  isActive      Boolean       @default(true)
+  subscriptions Subscription[]
+
+  createdAt DateTime @default(now())
+}
+
+model Subscription {
+  id           String     @id @default(cuid())
+  subscriberId String
+  subscriber   Subscriber @relation(fields: [subscriberId], references: [id])
+  creatorId    String
+  creator      Creator    @relation(fields: [creatorId], references: [id])
+  tierId       String
+  tier         SubscriptionTier @relation(fields: [tierId], references: [id])
+
+  status            SubscriptionStatus @default(ACTIVE)
+  billingPeriod     BillingPeriod      @default(MONTHLY)
+  stripeSubId       String?            @unique
+
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean   @default(false)
+  canceledAt         DateTime?
+  trialEnd           DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([subscriberId, creatorId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AFFILIATE LINKS & COMMISSIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AffiliateLink {
+  id        String  @id @default(cuid())
+  creatorId String
+  creator   Creator @relation(fields: [creatorId], references: [id])
+
+  type         AffiliateLinkType
+  targetName   String
+  targetUrl    String
+  affiliateUrl String
+  shortCode    String            @unique
+  provider     AffiliateProvider
+
+  providerProductId String?
+  city              String?
+  country           String?
+  googlePlaceId     String?
+  imageUrl          String?
+  description       String?
+  priceFrom         String?
+
+  estimatedCommissionPct Float?
+  commissionType         CommissionType @default(CPA)
+
+  extractedPlaceId String?
+  extractedPlace   ExtractedPlace? @relation(fields: [extractedPlaceId], references: [id])
+
+  tripKits      TripKit[]
+  kitSections   KitSection[]
+  dayActivities DayActivity[]
+  merchandise   Merchandise[]
+  packingItems  PackingItem[]
+  commissions   Commission[]
+  clickEvents   ClickEvent[]
+
+  clickCount      Int   @default(0)
+  conversionCount Int   @default(0)
+  totalEarnings   Float @default(0)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Commission {
+  id        String  @id @default(cuid())
+  creatorId String
+  creator   Creator @relation(fields: [creatorId], references: [id])
+
+  affiliateLinkId      String
+  affiliateLink        AffiliateLink @relation(fields: [affiliateLinkId], references: [id])
+  provider             AffiliateProvider
+  externalConversionId String            @unique
+
+  grossAmount     Int
+  commissionAmount Int
+  platformFee     Int
+  creatorEarnings Int
+  currency        String @default("USD")
+
+  attributedTripKitId String?
+  attributedTripKit   TripKit? @relation("CommissionAttribution", fields: [attributedTripKitId], references: [id])
+  attributionMethod   String?
+
+  status      CommissionStatus @default(PENDING)
+  convertedAt DateTime
+  paidAt      DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ANALYTICS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ClickEvent {
+  id           String        @id @default(cuid())
+  linkId       String
+  link         AffiliateLink @relation(fields: [linkId], references: [id])
+  creatorId    String
+  creator      Creator       @relation(fields: [creatorId], references: [id])
+  subscriberId String?
+  subscriber   Subscriber?   @relation(fields: [subscriberId], references: [id])
+  sessionId    String
+  tripKitId    String?
+  tripKit      TripKit?      @relation(fields: [tripKitId], references: [id])
+
+  referrer  String?
+  userAgent String?
+  country   String?
+  device    DeviceType @default(MOBILE)
+
+  createdAt DateTime @default(now())
+
+  @@index([creatorId, createdAt])
+  @@index([linkId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ORDERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Order {
+  id            String      @id @default(cuid())
+  subscriberId  String
+  subscriber    Subscriber  @relation(fields: [subscriberId], references: [id])
+  merchandiseId String
+  merchandise   Merchandise @relation(fields: [merchandiseId], references: [id])
+
+  status                String @default("pending")
+  amountCents           Int
+  currency              String @default("USD")
+  stripePaymentIntentId String?
+
+  printfulOrderId String?
+  trackingNumber  String?
+  trackingUrl     String?
+
+  downloadUrl    String?
+  downloadExpiry DateTime?
+
+  shippingName    String?
+  shippingAddress Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WAITLIST
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum WaitlistStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model WaitlistRequest {
+  id        String        @id @default(cuid())
+  email     String        @unique
+  name      String
+  reason    String?       // optional "why do you want access?" field
+  status    WaitlistStatus @default(PENDING)
+  approvedAt DateTime?
+  rejectedAt DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}

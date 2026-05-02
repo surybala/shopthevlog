@@ -1,0 +1,352 @@
+import { NextResponse } from 'next/server'
+import prisma from '@/lib/prisma/client'
+import { createSupabaseServer } from '@/lib/supabase/server'
+import { resolveAffiliateLink } from '@/lib/affiliateLinkResolver'
+import {
+  buildTripKitPublishSummary,
+  getItineraryBlueprint,
+  normalizeActivityType,
+  selectPublishableItineraryOpportunity,
+} from '@/lib/opportunityPublish'
+import { recordApiObservation } from '@/lib/observability'
+
+function hasItineraryBlueprint(metadataJson: unknown) {
+  return Boolean(getItineraryBlueprint({ metadataJson }))
+}
+
+function inferAffiliateResolveType(activity: {
+  type: string
+  title: string
+  description: string | null
+}) {
+  if (activity.type === 'ACCOMMODATION') return 'accommodation' as const
+
+  if (['TOUR', 'ADVENTURE', 'CULTURAL', 'ATTRACTION', 'WELLNESS', 'NIGHTLIFE'].includes(activity.type)) {
+    return 'experience' as const
+  }
+
+  if (activity.type === 'TRANSPORT') {
+    const haystack = `${activity.title} ${activity.description ?? ''}`.toLowerCase()
+    if (/\b(flight|airport|airline|terminal|depart|arrival|arrivals)\b/.test(haystack)) {
+      return 'flight' as const
+    }
+  }
+
+  return null
+}
+
+async function autoAttachAffiliateLinksForTripKit(input: {
+  creatorId: string
+  tripKitId: string
+  primaryCity: string | null
+  countries: string[]
+}) {
+  const days = await prisma.itineraryDay.findMany({
+    where: { tripKitId: input.tripKitId },
+    orderBy: { dayNumber: 'asc' },
+    include: {
+      activities: {
+        orderBy: { sortOrder: 'asc' },
+      },
+    },
+  })
+
+  const resolvedCache = new Map<string, string>()
+
+  for (const day of days) {
+    for (const activity of day.activities) {
+      if (activity.affiliateLinkId) continue
+
+      const resolveType = inferAffiliateResolveType(activity)
+      if (!resolveType) continue
+
+      const city = day.city ?? input.primaryCity
+      const country = day.country ?? input.countries[0] ?? null
+      if (!city) continue
+
+      const cacheKey = [
+        resolveType,
+        activity.title.trim().toLowerCase(),
+        city.trim().toLowerCase(),
+        (country ?? '').trim().toLowerCase(),
+      ].join('|')
+
+      if (resolvedCache.has(cacheKey)) {
+        await prisma.dayActivity.update({
+          where: { id: activity.id },
+          data: { affiliateLinkId: resolvedCache.get(cacheKey)! },
+        })
+        continue
+      }
+
+      try {
+        const link = await resolveAffiliateLink({
+          creatorId: input.creatorId,
+          name: activity.title,
+          city,
+          country,
+          type: resolveType,
+          lat: activity.latitude,
+          lng: activity.longitude,
+          kitId: input.tripKitId,
+          activityId: activity.id,
+        })
+
+        if (link?.id) {
+          resolvedCache.set(cacheKey, link.id)
+        }
+      } catch (error) {
+        console.warn('[publish] affiliate auto-resolution failed', {
+          tripKitId: input.tripKitId,
+          activityId: activity.id,
+          title: activity.title,
+          resolveType,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+  }
+}
+
+async function getOwnedVlogForPublish(vlogId: string, userId: string) {
+  const creator = await prisma.creator.findUnique({ where: { userId } })
+  if (!creator) return null
+
+  const vlog = await prisma.vlog.findFirst({
+    where: {
+      id: vlogId,
+      creatorId: creator.id,
+    },
+    select: {
+      id: true,
+      creatorId: true,
+      opportunities: {
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          reviewState: true,
+          publishState: true,
+          metadataJson: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+      tripKits: {
+        select: {
+          tripKit: {
+            select: {
+              id: true,
+              title: true,
+              slug: true,
+              isPublished: true,
+            },
+          },
+        },
+        take: 1,
+      },
+    },
+  })
+
+  if (!vlog) return null
+  return { creator, vlog }
+}
+
+export async function POST(_req: Request, { params }: { params: { id: string } }) {
+  const startedAt = Date.now()
+  const record = (status: number, detail?: string) => {
+    recordApiObservation('/api/vlogs/[id]/publish', status, Date.now() - startedAt, detail)
+  }
+
+  const supabase = createSupabaseServer()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    record(401, 'unauthorized')
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const owned = await getOwnedVlogForPublish(params.id, user.id)
+  if (!owned) {
+    record(404, 'not_found')
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  const existingTripKit = owned.vlog.tripKits[0]?.tripKit ?? null
+  const summary = buildTripKitPublishSummary({
+    creatorId: owned.creator.id,
+    opportunities: owned.vlog.opportunities,
+    existingTripKit,
+  })
+  if (!summary.readyToPublish) {
+    record(409, 'not_ready_to_publish')
+    return NextResponse.json({ error: 'No approved itinerary opportunity is ready to publish' }, { status: 409 })
+  }
+
+  const sourceOpportunity = selectPublishableItineraryOpportunity(owned.vlog.opportunities)
+  const itinerary = sourceOpportunity ? getItineraryBlueprint(sourceOpportunity) : null
+  if (!sourceOpportunity || !itinerary) {
+    record(409, 'missing_itinerary_blueprint')
+    return NextResponse.json({ error: 'Publishable itinerary blueprint is missing' }, { status: 409 })
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    let tripKitId = existingTripKit?.id ?? null
+
+    if (tripKitId) {
+      await tx.tripKit.update({
+        where: { id: tripKitId },
+        data: {
+          title: summary.itinerary!.title,
+          slug: summary.itinerary!.slug,
+          description: summary.itinerary!.summary,
+          countries: summary.itinerary!.countries,
+          cities: summary.itinerary!.destinations,
+          primaryCity: summary.itinerary!.primaryCity,
+          durationDays: itinerary.total_days ?? summary.totalDays ?? null,
+          estimatedBudgetLow: summary.itinerary!.estimatedBudgetUsd,
+          estimatedBudgetHigh: summary.itinerary!.estimatedBudgetUsd,
+          generatedByAI: true,
+          isPublished: true,
+        },
+      })
+
+      await tx.dayActivity.deleteMany({
+        where: {
+          day: {
+            tripKitId,
+          },
+        },
+      })
+      await tx.itineraryDay.deleteMany({
+        where: {
+          tripKitId,
+        },
+      })
+    } else {
+      const createdTripKit = await tx.tripKit.create({
+        data: {
+          creatorId: owned.creator.id,
+          title: summary.itinerary!.title,
+          slug: summary.itinerary!.slug,
+          description: summary.itinerary!.summary,
+          countries: summary.itinerary!.countries,
+          cities: summary.itinerary!.destinations,
+          primaryCity: summary.itinerary!.primaryCity,
+          durationDays: itinerary.total_days ?? summary.totalDays ?? null,
+          estimatedBudgetLow: summary.itinerary!.estimatedBudgetUsd,
+          estimatedBudgetHigh: summary.itinerary!.estimatedBudgetUsd,
+          generatedByAI: true,
+          isPublished: true,
+          isFeatured: false,
+        },
+        select: {
+          id: true,
+          title: true,
+          slug: true,
+        },
+      })
+      tripKitId = createdTripKit.id
+
+      await tx.tripKitsOnVlogs.create({
+        data: {
+          tripKitId,
+          vlogId: owned.vlog.id,
+        },
+      })
+    }
+
+    for (const [index, day] of (itinerary.days ?? []).entries()) {
+      await tx.itineraryDay.create({
+        data: {
+          tripKitId,
+          dayNumber: day.day_number ?? index + 1,
+          title: day.title ?? `Day ${day.day_number ?? index + 1}`,
+          summary: day.summary ?? null,
+          city: day.city ?? null,
+          country: day.country ?? null,
+          tips: day.tips ?? [],
+          activities: {
+            create: (day.activities ?? []).map((activity, activityIndex) => ({
+              sortOrder: activity.sort_order ?? activityIndex,
+              time: activity.time ?? null,
+              title: activity.title ?? '',
+              description: activity.description ?? null,
+              type: normalizeActivityType(activity.type) as never,
+              imageUrl: activity.image_url ?? null,
+              latitude: activity.latitude ?? null,
+              longitude: activity.longitude ?? null,
+            })),
+          },
+        },
+      })
+    }
+
+    await tx.opportunity.update({
+      where: { id: sourceOpportunity.id },
+      data: {
+        publishState: 'PUBLISHED',
+      },
+    })
+
+    const competingItineraryOpportunityIds = owned.vlog.opportunities
+      .filter((opportunity) =>
+        opportunity.id !== sourceOpportunity.id
+        && hasItineraryBlueprint(opportunity.metadataJson)
+        && opportunity.publishState !== 'SUPPRESSED'
+      )
+      .map((opportunity) => opportunity.id)
+
+    if (competingItineraryOpportunityIds.length > 0) {
+      await tx.opportunity.updateMany({
+        where: {
+          id: { in: competingItineraryOpportunityIds },
+        },
+        data: {
+          publishState: 'SUPPRESSED',
+        },
+      })
+    }
+
+    await tx.vlog.update({
+      where: { id: owned.vlog.id },
+        data: {
+        processingStatus: 'PUBLISHED',
+        processedAt: new Date(),
+        publishedFromGraphAt: new Date(),
+        lastPipelineRunAt: new Date(),
+      },
+    })
+
+    const tripKit = await tx.tripKit.findUnique({
+      where: { id: tripKitId },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        isPublished: true,
+      },
+    })
+
+    return {
+      tripKit,
+      opportunityId: sourceOpportunity.id,
+    }
+  })
+
+  if (result.tripKit?.id) {
+    await autoAttachAffiliateLinksForTripKit({
+      creatorId: owned.creator.id,
+      tripKitId: result.tripKit.id,
+      primaryCity: summary.itinerary?.primaryCity ?? null,
+      countries: summary.itinerary?.countries ?? [],
+    })
+  }
+
+  record(200, existingTripKit ? 'republished' : 'published')
+  return NextResponse.json({
+    ok: true,
+    action: existingTripKit ? 'republished' : 'published',
+    sourceOpportunityId: result.opportunityId,
+    tripKit: result.tripKit,
+  })
+}

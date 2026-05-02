@@ -1,44 +1,53 @@
-import hashlib
-import hmac
-import json
+"""
+Internal trigger endpoints for the AI processing pipeline.
+"""
 import logging
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 
-from fastapi import APIRouter, Request, HTTPException
-
-from app.core.config import settings
-from app.db.client import get_supabase
+from app.core.security import get_current_user, UserClaims
+from fastapi import Depends
+from app.db.pg_client import PgClient
+from app.tasks.process_vlog import process_vlog_task
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
 
 
-@router.post("/duffel")
-async def duffel_webhook(request: Request):
-    """Handle Duffel order status webhooks."""
-    body = await request.body()
+@router.post("/scan/trigger")
+async def trigger_scan(
+    background_tasks: BackgroundTasks,
+    user: UserClaims = Depends(get_current_user),
+):
+    """
+    Queue all PENDING or FAILED vlogs for the authenticated creator
+    through the AI processing pipeline (transcription + TripKit generation).
+    """
+    with PgClient() as db:
+        db.execute(
+            '''SELECT v.id
+               FROM "Vlog" v
+               JOIN "Creator" c ON c.id = v."creatorId"
+               WHERE c."userId" = %s
+                 AND v."processingStatus" IN ('PENDING', 'FAILED')''',
+            (user.user_id,)
+        )
+        vlogs = db.fetchall()
 
-    # Verify signature
-    sig = request.headers.get("Duffel-Signature", "")
-    if settings.DUFFEL_WEBHOOK_SECRET:
-        expected = hmac.new(
-            settings.DUFFEL_WEBHOOK_SECRET.encode(),
-            body,
-            hashlib.sha256,
-        ).hexdigest()
-        if not hmac.compare_digest(f"sha256={expected}", sig):
-            raise HTTPException(status_code=401, detail="Invalid signature")
+    if not vlogs:
+        return {"queued": 0, "message": "No vlogs pending processing"}
 
-    payload = json.loads(body)
-    event_type = payload.get("type", "")
-    data = payload.get("data", {})
+    vlog_ids = [v["id"] for v in vlogs]
 
-    db = get_supabase()
+    # Mark all as QUEUED before handing off to background tasks
+    with PgClient() as db:
+        for vlog_id in vlog_ids:
+            db.execute(
+                'UPDATE "Vlog" SET "processingStatus" = \'QUEUED\' WHERE id = %s',
+                (vlog_id,)
+            )
 
-    if event_type in ("order.updated", "order.cancelled"):
-        duffel_order_id = data.get("id")
-        if duffel_order_id:
-            new_status = "cancelled" if "cancelled" in event_type else "confirmed"
-            db.table("bookings").update({"status": new_status}).eq("duffel_order_id", duffel_order_id).execute()
-            logger.info(f"Duffel webhook: {event_type} for order {duffel_order_id}")
+    for vlog_id in vlog_ids:
+        background_tasks.add_task(process_vlog_task, vlog_id)
 
-    return {"ok": True}
+    logger.info(f"Queued {len(vlog_ids)} vlogs for user {user.user_id}")
+    return {"queued": len(vlog_ids), "vlog_ids": vlog_ids}

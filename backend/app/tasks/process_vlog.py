@@ -1,65 +1,217 @@
 """
-Background task: transcribe → generate itinerary for a vlog.
-Can be called via FastAPI BackgroundTasks or ARQ worker.
+Background task: transcribe, build the graph, and stop at review readiness.
+Reads and writes to the Prisma PostgreSQL schema.
 """
 import logging
+import time
 
+from app.core.observability import observability_store
+from app.db.pg_client import PgClient
+from app.services.fusion_service import fuse_candidate_entities
+from app.services.opportunity_ranking_service import rank_opportunities
+from app.services.resolution_service import resolve_candidates
+from app.services.transcript_graph_service import sync_transcript_graph
+from app.services.visual_enrichment_service import enrich_visual_graph
+from app.services.visual_evidence_service import sync_visual_evidence
 from app.services.transcription_service import transcribe_vlog
-from app.services.claude_service import generate_itinerary
-from app.db.client import get_supabase
 
 logger = logging.getLogger(__name__)
 
+TERMINAL_OR_ACTIVE_STATUSES = {
+    "TRANSCRIBING",
+    "EXTRACTING",
+    "PREPROCESSING",
+    "TRANSCRIPT_DONE",
+    "VISION_DONE",
+    "FUSED",
+    "RESOLVED",
+    "RANKED",
+    "REVIEW_PENDING",
+    "PUBLISHED",
+    "COMPLETE",
+}
+
+
+def _classify_visual_failure(error: Exception, *, stage: str) -> str:
+    message = str(error).lower()
+    if any(token in message for token in {"supabase", "bucket", "storage", "public url"}):
+        return f"{stage}_supabase"
+    if "gemini" in message:
+        return f"{stage}_gemini"
+    if "api key" in message:
+        return f"{stage}_credentials"
+    return f"{stage}_{type(error).__name__}"
+
+
+def _update_vlog_status(vlog_id: str, status: str) -> None:
+    with PgClient() as db:
+        db.execute(
+            '''UPDATE "Vlog"
+               SET "processingStatus" = %s, "lastPipelineRunAt" = NOW()
+               WHERE id = %s''',
+            (status, vlog_id),
+        )
+
+
+def _mark_vlog_failed(vlog_id: str) -> None:
+    _update_vlog_status(vlog_id, "FAILED")
+
+
+def _update_vlog_pipeline_error(vlog_id: str, message: str) -> None:
+    with PgClient() as db:
+        db.execute(
+            '''UPDATE "Vlog"
+               SET "pipelineError" = %s, "lastPipelineRunAt" = NOW()
+               WHERE id = %s''',
+            (message, vlog_id),
+        )
+
 
 async def process_vlog_task(vlog_id: str) -> None:
-    """Full pipeline: transcribe then generate itinerary, then rebuild feeds."""
-    logger.info(f"Processing vlog {vlog_id}")
-    db = get_supabase()
+    """Process a vlog through extraction, fusion, resolution, and review readiness."""
+    logger.info("Processing vlog %s", vlog_id)
+    started_at = time.perf_counter()
 
     try:
-        # Guard: skip only if actively transcribing or already done.
-        # "planning" means "queued but not started" — let it through so stuck-task
-        # re-queues (which reset status to "planning") actually run.
-        status_resp = db.table("vlogs").select("processing_status").eq("id", vlog_id).single().execute()
-        current_status = status_resp.data.get("processing_status") if status_resp.data else None
-        if current_status in ("transcribing", "ready"):
-            logger.info(f"Vlog {vlog_id} is already in status '{current_status}', skipping duplicate task")
+        with PgClient() as db:
+            db.execute(
+                '''SELECT id, "processingStatus", "creatorId", title,
+                          "durationSeconds", "thumbnailUrl", "externalUrl",
+                          EXISTS(
+                              SELECT 1
+                              FROM "Opportunity" opp
+                              WHERE opp."vlogId" = "Vlog".id
+                          ) AS "hasOpportunities"
+                   FROM "Vlog" WHERE id = %s''',
+                (vlog_id,),
+            )
+            vlog = db.fetchone()
+
+        if not vlog:
+            logger.error("Vlog %s not found", vlog_id)
+            observability_store.record(kind="pipeline", name="process_vlog", status="skipped", detail="missing_vlog")
             return
 
-        # Stamp 'transcribing' immediately so callers can distinguish
-        # "queued but not started" (pending) from "actively running" (transcribing).
-        db.table("vlogs").update({"processing_status": "transcribing"}).eq("id", vlog_id).execute()
+        status = vlog["processingStatus"]
+        if status in TERMINAL_OR_ACTIVE_STATUSES:
+            logger.info("Vlog %s already in status '%s', skipping", vlog_id, status)
+            observability_store.record(kind="pipeline", name="process_vlog", status="skipped", detail=f"status:{status}")
+            return
 
-        # Step 1: Transcribe
+        if vlog.get("hasOpportunities"):
+            logger.info("Vlog %s already has graph opportunities, skipping reprocessing", vlog_id)
+            observability_store.record(kind="pipeline", name="process_vlog", status="skipped", detail="has_opportunities")
+            return
+
+        creator_id = vlog["creatorId"]
+        title = vlog["title"]
+        duration_seconds = vlog.get("durationSeconds")
+        thumbnail_url = vlog.get("thumbnailUrl")
+        external_video_url = vlog.get("externalUrl")
+
         transcript = transcribe_vlog(vlog_id)
         if not transcript:
-            logger.error(f"Transcription failed for vlog {vlog_id}")
+            logger.error("Transcription failed for vlog %s", vlog_id)
+            _update_vlog_pipeline_error(vlog_id, "transcription_failed")
+            _mark_vlog_failed(vlog_id)
+            observability_store.record(kind="pipeline", name="process_vlog", status="failed", detail="transcription_failed")
             return
 
-        # Step 2: Fetch vlog title
-        resp = db.table("vlogs").select("title").eq("id", vlog_id).single().execute()
-        title = resp.data.get("title", "") if resp.data else ""
+        transcript_summary = sync_transcript_graph(vlog_id, creator_id, title, transcript, duration_seconds=duration_seconds)
+        _update_vlog_status(vlog_id, "TRANSCRIPT_DONE")
 
-        # Step 3: Generate itinerary (sets processing_status → 'ready')
-        success = generate_itinerary(vlog_id, transcript, title)
-        if not success:
-            logger.error(f"Itinerary generation failed for vlog {vlog_id}")
-            return
+        visual_opportunity_count = 0
+        visual_error_messages: list[str] = []
+        visual_sync_succeeded = False
+        inferred_duration_seconds = duration_seconds
+        if not inferred_duration_seconds:
+            transcript_segments = int(transcript_summary.get("segments") or 0)
+            if transcript_segments > 0:
+                inferred_duration_seconds = transcript_segments * 30
+        try:
+            sync_visual_evidence(
+                vlog_id,
+                creator_id,
+                title,
+                duration_seconds=inferred_duration_seconds,
+                external_video_url=external_video_url,
+                thumbnail_url=thumbnail_url,
+            )
+            visual_sync_succeeded = True
+        except Exception as visual_error:
+            logger.warning("Visual asset storage failed for vlog %s: %s", vlog_id, visual_error)
+            visual_error_message = f"visual_storage_failed: {visual_error}"
+            visual_error_messages.append(visual_error_message)
+            _update_vlog_pipeline_error(vlog_id, visual_error_message)
+            observability_store.record(
+                kind="pipeline",
+                name="process_vlog.visual_storage",
+                status="failed",
+                detail=_classify_visual_failure(visual_error, stage="visual_storage"),
+            )
 
-        logger.info(f"Vlog {vlog_id} processed successfully — rebuilding affected feeds")
-
-        # Step 4: Rebuild feed_cache for all users so the new ready vlog appears
-        from app.services.feed_ranking_service import build_feed_for_user
-        users_resp = db.table("profiles").select("id").execute()
-        for row in (users_resp.data or []):
+        if visual_sync_succeeded:
             try:
-                build_feed_for_user(row["id"])
-            except Exception as fe:
-                logger.warning(f"Feed rebuild failed for user {row['id']}: {fe}")
+                visual_summary = enrich_visual_graph(vlog_id, creator_id, title) or {}
+                visual_opportunity_count = int(visual_summary.get("opportunities") or 0)
+                _update_vlog_status(vlog_id, "VISION_DONE")
+            except Exception as visual_error:
+                logger.warning("Visual Gemini enrichment failed for vlog %s: %s", vlog_id, visual_error)
+                visual_error_message = f"visual_enrichment_failed: {visual_error}"
+                visual_error_messages.append(visual_error_message)
+                _update_vlog_pipeline_error(vlog_id, visual_error_message)
+                observability_store.record(
+                    kind="pipeline",
+                    name="process_vlog.visual_enrichment",
+                    status="failed",
+                    detail=_classify_visual_failure(visual_error, stage="visual_enrichment"),
+                )
 
-    except Exception as e:
-        logger.exception(f"Unexpected error processing vlog {vlog_id}: {e}")
-        db.table("vlogs").update({
-            "processing_status": "failed",
-            "processing_error": str(e),
-        }).eq("id", vlog_id).execute()
+        total_opportunities = int(transcript_summary.get("opportunities") or 0) + visual_opportunity_count
+        if total_opportunities <= 0:
+            failure_reason = "no_opportunities_extracted"
+            if visual_error_messages:
+                failure_reason = f"{failure_reason}; {'; '.join(visual_error_messages)}"
+            logger.warning("No reviewable opportunities created for vlog %s (%s)", vlog_id, failure_reason)
+            _update_vlog_pipeline_error(vlog_id, failure_reason)
+            _mark_vlog_failed(vlog_id)
+            observability_store.record(
+                kind="pipeline",
+                name="process_vlog",
+                status="failed",
+                duration_ms=(time.perf_counter() - started_at) * 1000,
+                detail="no_opportunities",
+            )
+            return
+
+        fuse_candidate_entities(vlog_id)
+        _update_vlog_status(vlog_id, "FUSED")
+
+        resolve_candidates(vlog_id)
+        _update_vlog_status(vlog_id, "RESOLVED")
+
+        rank_opportunities(vlog_id)
+        _update_vlog_status(vlog_id, "RANKED")
+
+        _update_vlog_status(vlog_id, "REVIEW_PENDING")
+        logger.info("Graph created reviewable opportunities for vlog %s; awaiting creator publish", vlog_id)
+        observability_store.record(
+            kind="pipeline",
+            name="process_vlog",
+            status="success",
+            duration_ms=(time.perf_counter() - started_at) * 1000,
+        )
+
+    except Exception as error:
+        logger.exception("Unexpected error processing vlog %s: %s", vlog_id, error)
+        observability_store.record(
+            kind="pipeline",
+            name="process_vlog",
+            status="failed",
+            duration_ms=(time.perf_counter() - started_at) * 1000,
+            detail=type(error).__name__,
+        )
+        try:
+            _mark_vlog_failed(vlog_id)
+        except Exception:
+            pass

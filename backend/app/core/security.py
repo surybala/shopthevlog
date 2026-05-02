@@ -1,4 +1,3 @@
-import base64
 import logging
 from dataclasses import dataclass
 
@@ -13,7 +12,10 @@ logger = logging.getLogger(__name__)
 bearer_scheme = HTTPBearer(auto_error=False)
 
 # ---------------------------------------------------------------------------
-# JWKS cache — fetched once per process from Supabase's well-known endpoint
+# JWKS cache — fetched once per process from Supabase's well-known endpoint.
+# Supabase now signs JWTs with ES256/RS256 via rotating JWT Signing Keys.
+# The JWKS endpoint publishes the current public keys; python-jose resolves
+# the correct key automatically using the token's `kid` header claim.
 # ---------------------------------------------------------------------------
 _JWKS: dict | None = None
 
@@ -22,53 +24,32 @@ def _jwks() -> dict:
     global _JWKS
     if _JWKS is None:
         url = f"{settings.SUPABASE_URL}/auth/v1/.well-known/jwks.json"
-        try:
-            resp = httpx.get(url, timeout=10)
-            resp.raise_for_status()
-            _JWKS = resp.json()
-            logger.info("Loaded %d key(s) from Supabase JWKS", len(_JWKS.get("keys", [])))
-        except Exception as e:
-            logger.warning("Could not fetch JWKS: %s — will use legacy HS256 secret", e)
-            _JWKS = {"keys": []}
+        resp = httpx.get(url, timeout=10)
+        resp.raise_for_status()
+        _JWKS = resp.json()
+        logger.info("Loaded %d key(s) from Supabase JWKS", len(_JWKS.get("keys", [])))
     return _JWKS
 
 
-# ---------------------------------------------------------------------------
-# Legacy HS256 secret (fallback for projects not yet on new signing keys)
-# ---------------------------------------------------------------------------
-def _get_jwt_secret() -> str | bytes:
-    secret = settings.SUPABASE_JWT_SECRET
-    try:
-        padded = secret + "=" * (-len(secret) % 4)
-        decoded = base64.urlsafe_b64decode(padded)
-        logger.debug("JWT secret decoded from base64url (%d bytes)", len(decoded))
-        return decoded
-    except Exception as e:
-        logger.debug("base64 decode failed (%s), using raw secret string", e)
-        return secret
-
-
-_JWT_SECRET: str | bytes | None = None
-
-
-def _jwt_secret() -> str | bytes:
-    global _JWT_SECRET
-    if _JWT_SECRET is None:
-        _JWT_SECRET = _get_jwt_secret()
-    return _JWT_SECRET
+def _reset_jwks_cache() -> None:
+    """Force a JWKS refresh on the next verification — used after a 401 to
+    handle key rotation transparently without a process restart."""
+    global _JWKS
+    _JWKS = None
 
 
 # ---------------------------------------------------------------------------
-# Token verification — ES256/RS256 (JWKS) with HS256 fallback
+# Token verification — ES256/RS256 via JWKS only (legacy HS256 removed)
 # ---------------------------------------------------------------------------
 def _verify_token(token: str) -> dict:
     """
-    Try ES256/RS256 via Supabase JWKS first (new JWT Signing Keys),
-    fall back to HS256 legacy secret.
+    Verify a Supabase JWT using the project's JWKS endpoint (ES256 / RS256).
+
+    On a first-time 401 the JWKS cache is cleared and the request is retried
+    once — this handles transparent key rotation without a process restart.
     """
-    # ── 1. JWKS (ES256 / RS256) ───────────────────────────────────────────
-    jwks = _jwks()
-    if jwks.get("keys"):
+    for attempt in range(2):
+        jwks = _jwks()
         try:
             payload = jwt.decode(
                 token,
@@ -76,22 +57,17 @@ def _verify_token(token: str) -> dict:
                 algorithms=["ES256", "RS256"],
                 options={"verify_aud": False},
             )
-            logger.debug("Token verified via JWKS")
+            logger.debug("Token verified via JWKS (attempt %d)", attempt + 1)
             return payload
         except ExpiredSignatureError:
-            raise  # definitive — don't fall through to HS256
-        except Exception as e:
-            logger.debug("JWKS verification failed (%s), trying HS256 legacy", e)
-
-    # ── 2. HS256 legacy secret ────────────────────────────────────────────
-    payload = jwt.decode(
-        token,
-        _jwt_secret(),
-        algorithms=["HS256"],
-        options={"verify_aud": False},
-    )
-    logger.debug("Token verified via HS256 legacy secret")
-    return payload
+            raise  # definitive — no point retrying
+        except JWTError as e:
+            if attempt == 0:
+                # Key may have rotated — bust the cache and retry once
+                logger.info("JWKS verification failed (%s), refreshing cache and retrying", e)
+                _reset_jwks_cache()
+            else:
+                raise
 
 
 # ---------------------------------------------------------------------------
