@@ -178,14 +178,14 @@ export default async function HomePage() {
           </div>
 
           <h1 className="mt-8 max-w-4xl text-5xl font-semibold leading-[0.95] tracking-tight text-[#17332d] sm:text-6xl lg:text-7xl">
-            Your vlog channel deserves
+            Your niche. Your audience.
             <span className="block bg-gradient-to-r from-[#17332d] via-teal-700 to-orange-500 bg-clip-text text-transparent">
-              a creator portal built for growth.
+              Your playbook.
             </span>
           </h1>
 
           <p className="mt-6 max-w-2xl text-lg leading-8 text-[#17332d]/82 sm:text-xl">
-            VlogShopper gives travel creators an insights-first portal — surface what's working, generate content briefs, benchmark your niche, and turn your best videos into revenue when you're ready.
+            The AI built for creators who want to own their corner of the internet — grow your reach, deepen your audience, and monetize when you're ready.
           </p>
 
           <div className="mt-10 flex flex-col gap-4 sm:flex-row">
