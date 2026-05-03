@@ -37,7 +37,7 @@ describe('media proxy route', () => {
     )
 
     expect(res.status).toBe(200)
-    expect(mockDownload).toHaveBeenCalledWith('creators/creator-1/creator portal/cover/cover.jpg')
+    expect(mockDownload).toHaveBeenCalledWith('creators/creator-1/storefront/cover/cover.jpg')
     expect(res.headers.get('content-type')).toBe('image/jpeg')
   })
 })

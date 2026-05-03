@@ -52,8 +52,8 @@ export default function SaveKitButton({ kitId, initialSaved, isLoggedIn, creator
         onClick={toggle}
         disabled={loading}
         aria-label={saved ? 'Unsave kit' : 'Save kit'}
-        className={`creator portal-outline-button rounded-xl ${
-          saved ? 'creator portal-outline-button--active' : ''
+        className={`storefront-outline-button rounded-xl ${
+          saved ? 'storefront-outline-button--active' : ''
         }`}
       >
         <span>{saved ? '★' : '☆'}</span>

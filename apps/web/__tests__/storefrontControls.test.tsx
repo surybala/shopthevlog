@@ -12,7 +12,7 @@ vi.mock('next/navigation', () => ({
 import FollowButton from '../components/FollowButton'
 import SaveKitButton from '../components/SaveKitButton'
 
-describe('creator portal controls', () => {
+describe('storefront controls', () => {
   it('renders themed follow states without legacy white-on-dark classes', () => {
     const followHtml = renderToStaticMarkup(
       <FollowButton creatorHandle="alexwanders" initialFollowing={false} isLoggedIn />,
@@ -23,7 +23,7 @@ describe('creator portal controls', () => {
 
     expect(followHtml).toContain('btn-primary')
     expect(followHtml).not.toContain('text-white/60')
-    expect(followingHtml).toContain('creator portal-outline-button--active')
+    expect(followingHtml).toContain('storefront-outline-button--active')
     expect(followingHtml).not.toContain('border-white/20')
   })
 
@@ -35,9 +35,9 @@ describe('creator portal controls', () => {
       <SaveKitButton kitId="kit-1" initialSaved isLoggedIn creatorHandle="alexwanders" />,
     )
 
-    expect(unsavedHtml).toContain('creator portal-outline-button')
+    expect(unsavedHtml).toContain('storefront-outline-button')
     expect(unsavedHtml).not.toContain('text-white')
-    expect(savedHtml).toContain('creator portal-outline-button--active')
+    expect(savedHtml).toContain('storefront-outline-button--active')
     expect(savedHtml).toContain('Saved')
   })
 })

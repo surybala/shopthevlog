@@ -210,11 +210,11 @@ export function buildImportedVlogInsight(vlog: ImportedVlogLike): ProcessingInsi
   if (published) {
     return {
       score: 100,
-      headline: 'Live on the creator portal and ready to keep driving subscriber traffic.',
+      headline: 'Live on the storefront and ready to keep driving subscriber traffic.',
       recommendation: 'Published',
-      primaryFit: 'Live creator portal kit',
+      primaryFit: 'Live storefront kit',
       chips: [
-        { label: 'Creator Portal live', tone: 'emerald' },
+        { label: 'Storefront live', tone: 'emerald' },
         { label: `${draftOpportunities.length} opportunity${draftOpportunities.length === 1 ? '' : 'ies'} converted`, tone: 'slate' },
       ],
       reasons: ['Already published and serving subscriber traffic'],

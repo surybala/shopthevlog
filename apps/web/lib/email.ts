@@ -23,7 +23,7 @@ function transporter() {
   })
 }
 
-const FROM  = () => `TripKits <${process.env.ZOHO_SMTP_USER ?? 'cherry@vlogshopper.com'}>`
+const FROM  = () => `VlogShopper <${process.env.ZOHO_SMTP_USER ?? 'cherry@vlogshopper.com'}>`
 const ADMIN = () => process.env.ADMIN_EMAIL ?? process.env.ZOHO_SMTP_USER ?? 'cherry@vlogshopper.com'
 const BASE  = () => process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
 
@@ -33,23 +33,23 @@ export async function sendWaitlistConfirmation(to: string, name: string) {
   return transporter().sendMail({
     from: FROM(),
     to,
-    subject: "You're on the TripKits waitlist 🎬",
+    subject: "You're on the VlogShopper waitlist 🎬",
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#111">
         <h2 style="margin-bottom:4px">Hey ${name} 👋</h2>
         <p style="color:#555">
-          Thanks for requesting early access to <strong>TripKits</strong>.
+          Thanks for requesting early access to <strong>VlogShopper</strong>.
           You're on our list — we'll email you as soon as your spot is ready.
         </p>
         <p style="color:#555">
-          In the meantime, you can browse public creator portals — no account needed.
+          In the meantime, you can browse public creator storefronts — no account needed.
         </p>
         <a href="${BASE()}/discover"
            style="display:inline-block;margin-top:16px;padding:12px 24px;background:#fff;color:#000;border:1px solid #000;border-radius:8px;text-decoration:none;font-weight:600">
-          Browse creator portals →
+          Browse storefronts →
         </a>
         <hr style="margin:32px 0;border:none;border-top:1px solid #eee" />
-        <p style="color:#999;font-size:12px">TripKits · Creator-first travel commerce</p>
+        <p style="color:#999;font-size:12px">VlogShopper · Creator-first travel commerce</p>
       </div>
     `,
   })
@@ -92,12 +92,12 @@ export async function sendApprovalEmail(to: string, name: string) {
   return transporter().sendMail({
     from: FROM(),
     to,
-    subject: "You're in — TripKits early access ✅",
+    subject: "You're in — VlogShopper early access ✅",
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#111">
         <h2>You're approved, ${name}! 🎉</h2>
         <p style="color:#555">
-          Your early access to <strong>TripKits</strong> is ready.
+          Your early access to <strong>VlogShopper</strong> is ready.
           Create your account using this email address (<strong>${to}</strong>) and
           you'll be let straight in.
         </p>
@@ -109,7 +109,7 @@ export async function sendApprovalEmail(to: string, name: string) {
           Make sure to sign up with <strong>${to}</strong> — other addresses won't be recognised.
         </p>
         <hr style="margin:32px 0;border:none;border-top:1px solid #eee" />
-        <p style="color:#999;font-size:12px">TripKits · Creator-first travel commerce</p>
+        <p style="color:#999;font-size:12px">VlogShopper · Creator-first travel commerce</p>
       </div>
     `,
   })

@@ -4,7 +4,7 @@ import { isAdminUser } from '@/lib/admin'
 import prisma from '@/lib/prisma/client'
 import WaitlistTable from './WaitlistTable'
 
-export const metadata = { title: 'Waitlist - TripKits Dashboard' }
+export const metadata = { title: 'Waitlist - VlogShopper Dashboard' }
 
 export default async function WaitlistAdminPage() {
   const supabase = createSupabaseServer()

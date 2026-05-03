@@ -1,4 +1,4 @@
-const CHUNK_RECOVERY_PREFIX = 'tripkits:chunk-recovery:'
+const CHUNK_RECOVERY_PREFIX = 'vlogshopper:chunk-recovery:'
 const CHUNK_RECOVERY_WINDOW_MS = 30_000
 
 export function isChunkLoadIssue(input: unknown): boolean {

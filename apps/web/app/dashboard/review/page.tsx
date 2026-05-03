@@ -130,7 +130,7 @@ export default async function DashboardReviewPage() {
         <div>
           <h1 className="text-2xl font-bold text-[#17332d]">Review Queue</h1>
           <p className="dashboard-mirror-subtle mt-1 text-sm">
-            Review extracted opportunities before they shape the creator portal.
+            Review extracted opportunities before they shape the storefront.
           </p>
         </div>
         <div className="grid grid-cols-4 gap-3">

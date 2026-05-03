@@ -1,7 +1,7 @@
 """
-Graph-backed creator portal publishing.
+Graph-backed storefront publishing.
 
-Manual graph-backed creator portal publishing.
+Manual graph-backed storefront publishing.
 
 When this service is invoked, it should behave like the explicit creator
 publish action and produce a live published TripKit projection.

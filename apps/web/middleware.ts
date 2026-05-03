@@ -6,7 +6,7 @@ import { isWhitelisted } from '@/lib/whitelist'
 
 // Routes that require the user to be on the whitelist.
 // Public routes (/, /discover, /@handle/*, /waitlist, /login, /signup) are
-// intentionally excluded — anyone can browse creator portals and the landing page.
+// intentionally excluded — anyone can browse storefronts and the landing page.
 const PROTECTED_PREFIXES = ['/dashboard', '/account', '/onboarding']
 
 async function hasApprovedWaitlistRequest(email: string) {
@@ -102,7 +102,7 @@ export async function middleware(req: NextRequest) {
   }
   // ─────────────────────────────────────────────────────────────────────────
 
-  // ── Creator Portal rewrite: /@handle/* → /store/[handle]/* ──────────────────
+  // ── Storefront rewrite: /@handle/* → /store/[handle]/* ──────────────────
   const match = pathname.match(/^\/@([^/]+)(\/.*)?$/)
   if (match) {
     const handle = match[1]

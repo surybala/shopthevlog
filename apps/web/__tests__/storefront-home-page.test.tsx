@@ -43,13 +43,13 @@ describe('StorefrontHomePage', () => {
       handle: 'alexwanders',
       displayName: 'Alex Wanders',
       bio: 'Travel creator',
-      avatarUrl: 'creators/creator-1/creator portal/avatar/avatar.jpg',
-      coverImageUrl: 'creators/creator-1/creator portal/cover/cover.jpg',
+      avatarUrl: 'creators/creator-1/storefront/avatar/avatar.jpg',
+      coverImageUrl: 'creators/creator-1/storefront/cover/cover.jpg',
       storefrontTheme: 'BEACH_RETREAT',
       storefrontTagline: 'Sunset itineraries and sea air',
-      storefrontIntro: 'A creator portal shaped by swims, ferries, and long beach dinners.',
-      storefrontMoodImageUrl: 'creators/creator-1/creator portal/mood/mood.jpg',
-      storefrontGalleryImages: ['creators/creator-1/creator portal/gallery/gallery-1.jpg'],
+      storefrontIntro: 'A storefront shaped by swims, ferries, and long beach dinners.',
+      storefrontMoodImageUrl: 'creators/creator-1/storefront/mood/mood.jpg',
+      storefrontGalleryImages: ['creators/creator-1/storefront/gallery/gallery-1.jpg'],
       isPublished: true,
       location: 'Los Angeles',
       youtubeHandle: 'alexwanders',
@@ -80,7 +80,7 @@ describe('StorefrontHomePage', () => {
     });
   });
 
-  it('renders published creator portal kits without crashing', async () => {
+  it('renders published storefront kits without crashing', async () => {
     const page = await StorefrontHomePage({ params: { handle: 'alexwanders' } });
     const html = renderToStaticMarkup(page);
 
@@ -90,10 +90,10 @@ describe('StorefrontHomePage', () => {
     expect(html).toContain('Sunset itineraries and sea air');
     expect(html).not.toContain('What subscribers get');
     expect(html).not.toContain('Moodboard');
-    expect(html).toContain('creator portal-shell');
+    expect(html).toContain('storefront-shell');
     expect(html).toContain('text-[#17332d]');
-    expect(html).toContain('--creator portal-page-bg');
-    expect(html).toContain('background-image:var(--creator portal-page-bg)');
+    expect(html).toContain('--storefront-page-bg');
+    expect(html).toContain('background-image:var(--storefront-page-bg)');
     expect(html).toContain('data:image/svg+xml');
     expect(html).toContain('/api/media?path=creators%2Fcreator-1%2Fstorefront%2Fcover%2Fcover.jpg');
     expect(html).toContain('https://img.youtube.com/vi/japan/hqdefault.jpg');

@@ -13,7 +13,7 @@ import { resolveStorageAssetUrl } from '@/lib/storageAssets'
 import { getTripKitCardImageUrl } from '@/lib/tripKitImages'
 
 export const metadata = {
-  title: 'Discover — TripKits',
+  title: 'Discover — VlogShopper',
   description: 'Explore Trip Kits from travel creators around the world',
 }
 

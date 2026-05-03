@@ -49,7 +49,7 @@ describe('NewAffiliateLinkPage', () => {
     const page = await NewAffiliateLinkPage()
     const html = renderToStaticMarkup(page)
 
-    expect(html).toContain('Add a monetized link to your creator portal.')
+    expect(html).toContain('Add a monetized link to your storefront.')
     expect(html).toContain('Paste a partner URL you already have')
     expect(html).toContain('Save affiliate link')
     expect(html).toContain('Resolve affiliate link')

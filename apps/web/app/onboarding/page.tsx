@@ -17,7 +17,7 @@ export default async function OnboardingPage() {
     <div className="editorial-shell min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-[#17332d]">Set up your creator portal</h1>
+          <h1 className="text-2xl font-bold text-[#17332d]">Set up your storefront</h1>
           <p className="editorial-subtle mt-2 text-sm">
             This takes 30 seconds. You can change everything later.
           </p>

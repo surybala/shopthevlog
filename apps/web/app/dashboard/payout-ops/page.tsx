@@ -4,7 +4,7 @@ import { isAdminUser } from '@/lib/admin'
 import prisma from '@/lib/prisma/client'
 import PayoutOpsTable from './PayoutOpsTable'
 
-export const metadata = { title: 'Payout Ops - TripKits Dashboard' }
+export const metadata = { title: 'Payout Ops - VlogShopper Dashboard' }
 
 function formatUsdFromCents(cents: number) {
   return `$${(cents / 100).toFixed(2)}`

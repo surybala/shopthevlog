@@ -49,7 +49,7 @@ describe('DashboardSettingsPage', () => {
 
     expect(html).toContain('Creator identity')
     expect(html).toContain('Settings')
-    expect(html).toContain('Manage your profile, channels, creator portal theme, and subscription tiers.')
+    expect(html).toContain('Manage your profile, channels, storefront theme, and subscription tiers.')
     expect(html).toContain('SettingsForm')
   })
 })

@@ -85,7 +85,7 @@ export function buildAffiliateDestination(
         : link.affiliateUrl
     case 'GETYOURGUIDE':
       return env.gygId && link.providerProductId
-        ? `https://www.getyourguide.com/activity/${link.providerProductId}/?partner_id=${env.gygId}&utm_source=tripkits${link.shortCode ? `&partner_ref=${encodeURIComponent(buildAffiliatePartnerRef(link.shortCode, options?.tripKitId))}` : ''}`
+        ? `https://www.getyourguide.com/activity/${link.providerProductId}/?partner_id=${env.gygId}&utm_source=vlogshopper${link.shortCode ? `&partner_ref=${encodeURIComponent(buildAffiliatePartnerRef(link.shortCode, options?.tripKitId))}` : ''}`
         : link.affiliateUrl
     case 'VIATOR':
       return env.viatorMcid ? `${link.targetUrl}?mcid=${env.viatorMcid}` : link.affiliateUrl

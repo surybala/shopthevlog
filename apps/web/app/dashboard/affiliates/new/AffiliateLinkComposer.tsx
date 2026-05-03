@@ -142,7 +142,7 @@ export default function AffiliateLinkComposer() {
 
       <form onSubmit={submitResolved} className="dashboard-mirror-card p-6">
         <p className="dashboard-mirror-kicker text-xs">Smart resolve</p>
-        <h2 className="mt-3 text-2xl font-semibold text-[#17332d]">Let TripKits look up the partner link for you.</h2>
+        <h2 className="mt-3 text-2xl font-semibold text-[#17332d]">Let VlogShopper look up the partner link for you.</h2>
         <p className="dashboard-mirror-subtle mt-2 text-sm">
           Best for hotels, tours, and flights when you know the place but do not already have the affiliate URL.
         </p>

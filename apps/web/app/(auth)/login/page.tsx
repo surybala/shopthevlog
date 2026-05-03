@@ -40,7 +40,7 @@ function LoginForm() {
     <div className="editorial-shell min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <Link href="/" className="text-2xl font-bold text-[#17332d]">TripKits</Link>
+          <Link href="/" className="text-2xl font-bold text-[#17332d]">VlogShopper</Link>
           <p className="editorial-subtle mt-2 text-sm">Sign in to your account</p>
         </div>
 

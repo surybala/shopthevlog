@@ -1,5 +1,5 @@
 /**
- * TripKits dev seed
+ * VlogShopper dev seed
  *
  * Creates one fully-fleshed creator (handle: "alexwanders") with:
  *   - 40 vlogs across 8 destinations (COMPLETE processing status)
@@ -393,7 +393,7 @@ function shortCode(prefix: string, n: number): string {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('🌱  Seeding TripKits dev database…\n')
+  console.log('🌱  Seeding VlogShopper dev database…\n')
 
   // ── 1. Creator ─────────────────────────────────────────────────────────────
   const creator = await prisma.creator.upsert({
@@ -794,7 +794,7 @@ async function main() {
   console.log(`✓  Click events: 30`)
 
   console.log('\n✅  Seed complete!\n')
-  console.log('  Creator creator portal: http://localhost:3000/@alexwanders')
+  console.log('  Creator storefront: http://localhost:3000/@alexwanders')
   console.log('  Dashboard:          http://localhost:3000/dashboard')
   console.log(`  User ID for auth:   ${CREATOR_USER_ID}`)
   console.log('\n  To log in as this creator, create a Supabase auth user with that UUID,')

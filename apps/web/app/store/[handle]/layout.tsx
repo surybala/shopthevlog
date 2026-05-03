@@ -80,18 +80,18 @@ export default async function StorefrontLayout({
   const theme = getStorefrontTheme(creator.storefrontTheme)
 
   return (
-    <div className="min-h-screen text-[var(--creator portal-text)]" style={theme.cssVars}>
+    <div className="min-h-screen text-[var(--storefront-text)]" style={theme.cssVars}>
       {isPreview && (
         <div
           className="flex items-center justify-between border-b px-6 py-2.5"
-          style={{ borderColor: 'var(--creator portal-border)', background: 'var(--creator portal-soft-bg)' }}
+          style={{ borderColor: 'var(--storefront-border)', background: 'var(--storefront-soft-bg)' }}
         >
-          <p className="creator portal-subtle text-xs">
-            Preview mode - this creator portal is not yet published. Only you can see it.
+          <p className="storefront-subtle text-xs">
+            Preview mode - this storefront is not yet published. Only you can see it.
           </p>
           <Link
             href="/dashboard/settings"
-            className="creator portal-heading text-xs underline underline-offset-2"
+            className="storefront-heading text-xs underline underline-offset-2"
           >
             Publish in Settings -&gt;
           </Link>
@@ -102,27 +102,27 @@ export default async function StorefrontLayout({
         className="fixed inset-x-0 top-0 z-50 border-b backdrop-blur"
         style={{
           ...(isPreview ? { top: '41px' } : undefined),
-          borderColor: 'var(--creator portal-border)',
-          background: 'var(--creator portal-nav-bg)',
+          borderColor: 'var(--storefront-border)',
+          background: 'var(--storefront-nav-bg)',
         }}
       >
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
           <Link href="/" className="group flex items-center gap-1.5">
             <Image
               src="/logo.png"
-              alt="TripKits"
+              alt="VlogShopper"
               width={24}
               height={24}
               className="rounded-md opacity-60 transition-opacity group-hover:opacity-100"
             />
-            <span className="creator portal-muted text-sm font-semibold transition-colors group-hover:text-[var(--creator portal-text)]">
-              TripKits
+            <span className="storefront-muted text-sm font-semibold transition-colors group-hover:text-[var(--storefront-text)]">
+              VlogShopper
             </span>
           </Link>
 
-          <div className="creator portal-muted flex items-center gap-2 text-sm">
+          <div className="storefront-muted flex items-center gap-2 text-sm">
             <span>by</span>
-            <Link href={`/@${creator.handle}`} className="creator portal-heading font-medium">
+            <Link href={`/@${creator.handle}`} className="storefront-heading font-medium">
               {creator.displayName}
             </Link>
           </div>

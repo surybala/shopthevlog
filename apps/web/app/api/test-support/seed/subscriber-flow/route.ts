@@ -126,7 +126,7 @@ export async function POST(req: Request) {
           creatorId: CREATOR_ID,
           title: 'Tokyo Free Starter',
           slug: 'tokyo-free-starter',
-          description: 'Free kit for creator portal sanity checks.',
+          description: 'Free kit for storefront sanity checks.',
           countries: ['Japan'],
           cities: ['Tokyo'],
           primaryCity: 'Tokyo',

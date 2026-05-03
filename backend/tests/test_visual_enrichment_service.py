@@ -44,7 +44,7 @@ def test_enrich_visual_graph_persists_visual_evidence_candidates_and_opportuniti
             "subtype": "brand",
             "title": "Starbucks",
             "raw_label": "Starbucks",
-            "description": "Coffee brand logo visible on creator portal.",
+            "description": "Coffee brand logo visible on storefront.",
             "confidence": 0.55,
             "claim_type": "recommends",
             "evidence_summary": "Recognizable Starbucks logo on cafe exterior.",

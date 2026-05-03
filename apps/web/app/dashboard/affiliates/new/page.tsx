@@ -21,9 +21,9 @@ export default async function NewAffiliateLinkPage() {
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
             <p className="dashboard-mirror-kicker text-xs">New affiliate link</p>
-            <h1 className="mt-3 text-3xl font-bold text-[#17332d]">Add a monetized link to your creator portal.</h1>
+            <h1 className="mt-3 text-3xl font-bold text-[#17332d]">Add a monetized link to your storefront.</h1>
             <p className="dashboard-mirror-subtle mt-2 max-w-2xl text-sm">
-              Paste a partner URL you already have or let TripKits resolve a stay, experience, or flight into an affiliate-ready link.
+              Paste a partner URL you already have or let VlogShopper resolve a stay, experience, or flight into an affiliate-ready link.
             </p>
           </div>
           <Link href="/dashboard/affiliates" className="dashboard-action-chip text-sm">

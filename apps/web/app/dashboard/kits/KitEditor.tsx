@@ -182,7 +182,7 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
           </div>
 
           <div className="md:col-span-2">
-            <label className={labelCls}>Creator Portal Slug</label>
+            <label className={labelCls}>Storefront Slug</label>
             <div className="flex items-center gap-3 rounded-[1.35rem] bg-white/[0.05] px-4 py-3 ring-1 ring-white/10">
               <span className="shrink-0 text-sm text-[rgba(23,51,45,0.52)]">/@{creatorHandle}/kits/</span>
               <input
@@ -285,7 +285,7 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-[#17332d]">Featured placement</p>
-                <p className="mt-1 text-sm text-[rgba(23,51,45,0.72)]">Lift this kit toward the top of your creator portal collection.</p>
+                <p className="mt-1 text-sm text-[rgba(23,51,45,0.72)]">Lift this kit toward the top of your storefront collection.</p>
               </div>
               <div className={`h-6 w-11 rounded-full transition ${form.isFeatured ? 'bg-[#f0b16b]' : 'bg-white/12'}`}>
                 <div className={`mt-0.5 h-5 w-5 rounded-full bg-[#163328] transition-transform ${form.isFeatured ? 'translate-x-5' : 'translate-x-0.5'}`} />
@@ -294,10 +294,10 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
           </button>
 
           <div className="rounded-[1.5rem] bg-white/[0.04] p-4 ring-1 ring-white/10">
-            <p className="text-sm font-semibold text-[#17332d]">Creator Portal visibility</p>
+            <p className="text-sm font-semibold text-[#17332d]">Storefront visibility</p>
             <p className="mt-1 text-sm text-[rgba(23,51,45,0.72)]">
               {kit?.isPublished
-                ? 'This Trip Kit is live on your creator portal right now.'
+                ? 'This Trip Kit is live on your storefront right now.'
                 : 'Save your edits first. You can publish once the kit is ready for subscribers.'}
             </p>
           </div>
@@ -353,7 +353,7 @@ export default function KitEditor({ creatorId, creatorHandle, kit }: Props) {
             rel="noopener noreferrer"
             className="ml-auto text-sm text-[rgba(23,51,45,0.62)] transition hover:text-[#17332d]"
           >
-            View on creator portal
+            View on storefront
           </a>
         ) : null}
       </div>

@@ -104,10 +104,10 @@ describe('creator media route', () => {
 
     expect(res.status).toBe(200)
     expect(mockUpload).toHaveBeenCalledTimes(1)
-    expect(mockUpload.mock.calls[0]?.[0]).toContain('creators/creator-1/creator portal/cover/')
+    expect(mockUpload.mock.calls[0]?.[0]).toContain('creators/creator-1/storefront/cover/')
     expect(mockUpload.mock.calls[0]?.[0]).toContain('cover-image.jpg')
     await expect(res.json()).resolves.toEqual({
-      paths: [expect.stringContaining('creators/creator-1/creator portal/cover/')],
+      paths: [expect.stringContaining('creators/creator-1/storefront/cover/')],
     })
   })
 })

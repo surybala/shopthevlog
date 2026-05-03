@@ -140,7 +140,7 @@ Rules:
 """
 
 TRANSCRIPT_GRAPH_SYSTEM_PROMPT = """You convert a travel vlog transcript into both:
-1. an itinerary blueprint for creator portal publishing
+1. an itinerary blueprint for storefront publishing
 2. evidence-backed structured opportunities for the review graph
 
 Return ONE valid JSON object only. No markdown, no prose.
@@ -768,7 +768,7 @@ def extract_itinerary_blueprint(transcript: str, title: str) -> Optional[dict]:
     Return a structured itinerary blueprint without writing any DB rows.
 
     This is the graph-era replacement for letting the model write TripKit tables
-    directly. The publish layer can project this blueprint into creator portal data.
+    directly. The publish layer can project this blueprint into storefront data.
     """
     user_content = f"Vlog title: {title}\n\nTranscript:\n{transcript[:30000]}"
     itinerary_data: Optional[dict] = None
