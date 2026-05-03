@@ -1,3 +1,0 @@
-ALTER TABLE "ChannelInsight"
-ADD COLUMN "usedBenchmarks" BOOLEAN NOT NULL DEFAULT false,
-ADD COLUMN "benchmarkVideoCount" INTEGER NOT NULL DEFAULT 0;
