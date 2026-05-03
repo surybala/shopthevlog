@@ -54,7 +54,7 @@ describe('creator vlog routes', () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
     mockGetSession.mockResolvedValue({ data: { session: { access_token: 'session-token' } } });
     mockRateLimit.mockReturnValue(false);
-    mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1', plan: 'PRO', processingCreditsUsed: 2, processingCreditsResetAt: '2026-04-01T00:00:00.000Z', catalogScanStatus: 'COMPLETE', lastCatalogScan: '2025-01-01', _count: { vlogs: 2 } });
+    mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1', plan: 'PRO', processingCreditsUsed: 2, processingCreditsResetAt: '2099-01-01T00:00:00.000Z', catalogScanStatus: 'COMPLETE', lastCatalogScan: '2025-01-01', _count: { vlogs: 2 } });
     mockVlogFindMany.mockResolvedValue([{ id: 'vlog-1', pipelineError: null, opportunities: [] }]);
     mockVlogFindFirst.mockResolvedValue({ id: 'vlog-1', creatorId: 'creator-1', processingStatus: 'PENDING', processingCreditsConsumed: false });
     mockVlogUpdate.mockResolvedValue({});
@@ -97,7 +97,7 @@ describe('creator vlog routes', () => {
       processingCreditsUsed: 2,
       processingCreditsLimit: 20,
       remainingProcessingCredits: 18,
-      processingCreditsResetAt: new Date('2026-05-01T00:00:00.000Z').toJSON(),
+      processingCreditsResetAt: new Date('2026-06-01T00:00:00.000Z').toJSON(),
     });
   });
 
@@ -159,7 +159,7 @@ describe('creator vlog routes', () => {
       id: 'creator-1',
       plan: 'FREE',
       processingCreditsUsed: 3,
-      processingCreditsResetAt: '2026-04-01T00:00:00.000Z',
+      processingCreditsResetAt: '2099-01-01T00:00:00.000Z',
     });
 
     const res = await processVlog(new NextRequest('http://localhost/api/vlogs/vlog-1/process', { method: 'POST' }), { params: { id: 'vlog-1' } });

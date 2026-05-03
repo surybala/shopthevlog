@@ -46,6 +46,11 @@ const navItems = [
     icon: <NavIcon><path d="M10 10.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" /><path d="M5 15.5a5 5 0 0 1 10 0" /><path d="M3.5 8.5a2 2 0 1 0 0-4" /><path d="M16.5 8.5a2 2 0 1 1 0-4" /></NavIcon>,
   },
   {
+    href: '/dashboard/insights',
+    label: 'Insights',
+    icon: <NavIcon><path d="M10 4.5v2" /><path d="M10 13.5v2" /><path d="M4.5 10h2" /><path d="M13.5 10h2" /><path d="M10 10a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" /><path d="M10 14a4 4 0 0 0 0-8" /></NavIcon>,
+  },
+  {
     href: '/dashboard/analytics',
     label: 'Analytics',
     icon: <NavIcon><path d="M4.5 15.5V11" /><path d="M9.5 15.5V8" /><path d="M14.5 15.5V5" /><path d="M3.5 15.5h13" /></NavIcon>,
