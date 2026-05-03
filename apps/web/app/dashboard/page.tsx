@@ -2,83 +2,24 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
-import { buildRecentPerformanceSummary, formatCurrencyFromCents } from '@/lib/dashboardAnalytics'
+import { rankBriefsByScore, parseTopPatterns } from '@/lib/channelInsights'
 
 export default async function DashboardOverviewPage() {
   const supabase = createSupabaseServer()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
   const creator = await prisma.creator.findUnique({
     where: { userId: user.id },
-    include: {
-      _count: {
-        select: {
-          tripKits: { where: { isPublished: true } },
-          subscribers: { where: { status: 'ACTIVE' } },
-          affiliateLinks: { where: { isActive: true } },
-        },
-      },
-    },
   })
-
-  const totalEarnings = creator
-    ? await prisma.commission.aggregate({
-        where: { creatorId: creator.id },
-        _sum: { creatorEarnings: true },
-      })
-    : null
-
-  const pendingEarnings = creator
-    ? await prisma.commission.aggregate({
-        where: { creatorId: creator.id, status: 'PENDING' },
-        _sum: { creatorEarnings: true },
-      })
-    : null
-
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-  const [recentClicks, recentConversions, recentEarnings] = creator
-    ? await Promise.all([
-        prisma.clickEvent.count({
-          where: { creatorId: creator.id, createdAt: { gte: sevenDaysAgo } },
-        }),
-        prisma.commission.count({
-          where: { creatorId: creator.id, convertedAt: { gte: sevenDaysAgo } },
-        }),
-        prisma.commission.aggregate({
-          where: { creatorId: creator.id, convertedAt: { gte: sevenDaysAgo } },
-          _sum: { creatorEarnings: true },
-        }),
-      ])
-    : [0, 0, { _sum: { creatorEarnings: 0 } }]
-
-  const recentKits = creator
-    ? await prisma.tripKit.findMany({
-        where: { creatorId: creator.id },
-        orderBy: { updatedAt: 'desc' },
-        take: 5,
-        select: {
-          id: true,
-          title: true,
-          slug: true,
-          isPublished: true,
-          viewCount: true,
-          clickCount: true,
-          accessTier: true,
-          createdAt: true,
-        },
-      })
-    : []
 
   if (!creator) {
     return (
-      <div className="p-8">
-        <div className="max-w-lg">
-          <h1 className="mb-2 text-2xl font-bold text-[#17332d]">Welcome to VlogShopper</h1>
-          <p className="dashboard-mirror-subtle mb-6">
-            You do not have a creator profile yet. Set one up to start building your storefront.
+      <div className="flex min-h-screen items-center justify-center p-8">
+        <div className="max-w-md text-center">
+          <h1 className="mb-3 text-2xl font-bold text-[#17332d]">Welcome to VlogShopper</h1>
+          <p className="dashboard-mirror-subtle mb-6 text-sm">
+            Set up your creator profile to start growing your channel with AI-powered insights.
           </p>
           <Link href="/dashboard/settings" className="btn-primary">
             Set up your profile
@@ -88,207 +29,216 @@ export default async function DashboardOverviewPage() {
     )
   }
 
-  const recentPerformance = buildRecentPerformanceSummary({
-    clicksLast7d: recentClicks,
-    conversionsLast7d: recentConversions,
-    earningsLast7dCents: recentEarnings._sum.creatorEarnings ?? 0,
-  })
+  const [recentVlogs, insight] = await Promise.all([
+    prisma.vlog.findMany({
+      where: { creatorId: creator.id },
+      orderBy: [{ viewCount: 'desc' }, { publishedAt: 'desc' }],
+      take: 5,
+      select: {
+        id: true,
+        title: true,
+        thumbnailUrl: true,
+        viewCount: true,
+        likeCount: true,
+        publishedAt: true,
+        processingStatus: true,
+      },
+    }),
+    prisma.channelInsight.findUnique({
+      where: { creatorId: creator.id },
+      include: { briefs: { orderBy: { estimatedScore: 'desc' }, take: 1 } },
+    }),
+  ])
 
-  const scanBadgeColor: Record<string, string> = {
-    COMPLETE: 'bg-green-500/18 text-green-900',
-    SCANNING: 'bg-yellow-500/18 text-yellow-900',
-    QUEUED: 'bg-blue-500/16 text-blue-900',
-    FAILED: 'bg-red-500/18 text-red-900',
-    PENDING: 'bg-[#17332d]/8 text-[#17332d]/76',
-  }
+  const totalVlogs = await prisma.vlog.count({ where: { creatorId: creator.id } })
+  const topBrief = insight ? rankBriefsByScore(insight.briefs as any)[0] ?? null : null
+  const patterns = parseTopPatterns(insight?.topPatterns)
+  const insightStatus = insight?.status ?? null
+  const insightReady = insightStatus === 'COMPLETE' && topBrief !== null
+  const insightRunning = insightStatus === 'QUEUED' || insightStatus === 'ANALYZING'
+  const firstName = creator.displayName.split(' ')[0]
 
   return (
     <div className="p-8">
-      <div className="dashboard-mirror-panel mb-8 flex items-start justify-between gap-6 p-7">
-        <div>
-          <p className="dashboard-mirror-kicker text-xs">Creator command center</p>
-          <h1 className="mt-3 text-4xl font-bold text-[#17332d]">
-            Good morning, {creator.displayName.split(' ')[0]}
-          </h1>
-          <p className="dashboard-mirror-subtle mt-2 text-sm">
-            Your storefront is {creator.isPublished ? 'live' : 'not yet published'}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-3">
-          <Link href={`/@${creator.handle}`} className="btn-ghost text-sm">
-            {creator.isPublished ? 'View Storefront' : 'Preview Storefront'} {'->'}
-          </Link>
-          <Link href="/dashboard/kits" className="btn-primary text-sm">
-            + New Kit
-          </Link>
-        </div>
+
+      {/* Hero */}
+      <div className="dashboard-mirror-panel mb-8 p-7">
+        <p className="dashboard-mirror-kicker text-xs">Creator Studio</p>
+        <h1 className="mt-3 text-4xl font-bold text-[#17332d]">
+          Welcome back, {firstName}
+        </h1>
+        <p className="dashboard-mirror-subtle mt-2 text-sm">
+          {insightReady
+            ? `Your channel is a ${patterns.channel_niche ?? 'travel'} channel. Here's what to create next.`
+            : totalVlogs === 0
+              ? 'Import your videos to unlock AI-powered growth insights.'
+              : 'Run a channel analysis to get personalized content ideas.'}
+        </p>
+
+        {!creator.youtubeChannelId && (
+          <div className="mt-5">
+            <Link href="/dashboard/settings" className="btn-primary text-sm">
+              Connect YouTube to get started
+            </Link>
+          </div>
+        )}
       </div>
 
-      {!creator.isPublished ? (
-        <div className="dashboard-mirror-card mb-6 flex items-center justify-between gap-4 p-4">
-          <div className="flex items-center gap-3">
-            <span className="text-lg text-amber-800">*</span>
+      {/* Top content brief — the main reason to come back */}
+      {insightReady && topBrief ? (
+        <div className="dashboard-mirror-card mb-6 p-6">
+          <div className="mb-4 flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-[#17332d]">Your storefront is unpublished</p>
-              <p className="dashboard-mirror-subtle mt-0.5 text-xs">
-                Publish it so your audience can find and follow you.
-              </p>
+              <p className="dashboard-mirror-kicker text-xs">Your top video idea right now</p>
+              <h2 className="mt-1 text-lg font-semibold text-[#17332d]">{topBrief.title}</h2>
             </div>
-          </div>
-          <Link href="/dashboard/settings" className="dashboard-action-chip text-xs">
-            Publish storefront {'->'}
-          </Link>
-        </div>
-      ) : null}
-
-      {creator.catalogScanStatus !== 'COMPLETE' ? (
-        <div className="dashboard-mirror-card mb-6 flex items-center justify-between gap-4 p-4">
-          <div className="flex items-center gap-3">
-            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${scanBadgeColor[creator.catalogScanStatus]}`}>
-              {creator.catalogScanStatus}
+            <span className="shrink-0 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
+              Score {topBrief.estimatedScore}/100
             </span>
-            <p className="dashboard-mirror-subtle text-sm">
-              {creator.catalogScanStatus === 'PENDING'
-                ? 'Your vlog catalog scan is pending. Connect a YouTube channel to start.'
-                : creator.catalogScanStatus === 'SCANNING'
-                  ? 'AI is scanning your vlog catalog and generating Trip Kits.'
-                  : creator.catalogScanStatus === 'QUEUED'
-                    ? 'Your catalog scan is queued and will start shortly.'
-                    : 'Catalog scan failed. You can re-trigger from Settings.'}
-            </p>
           </div>
-          {creator.catalogScanStatus === 'PENDING' ? (
-            <Link href="/dashboard/settings" className="dashboard-mirror-subtle text-xs hover:text-[#17332d]">
-              Connect YouTube {'->'}
+          {topBrief.reasoning && (
+            <p className="mb-4 text-sm text-[#17332d]/70">{topBrief.reasoning}</p>
+          )}
+          <div className="grid grid-cols-2 gap-4">
+            {topBrief.hookIdeas.length > 0 && (
+              <div>
+                <p className="dashboard-mirror-kicker mb-2 text-xs">Hook ideas</p>
+                <ul className="space-y-1">
+                  {topBrief.hookIdeas.slice(0, 2).map((h, i) => (
+                    <li key={i} className="text-xs text-[#17332d]/76">• {h}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {topBrief.contentOutline.length > 0 && (
+              <div>
+                <p className="dashboard-mirror-kicker mb-2 text-xs">Outline</p>
+                <ol className="space-y-1">
+                  {topBrief.contentOutline.slice(0, 3).map((s, i) => (
+                    <li key={i} className="text-xs text-[#17332d]/76">{i + 1}. {s}</li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </div>
+          <div className="mt-5 flex items-center gap-3">
+            <Link href="/dashboard/insights" className="btn-primary text-sm">
+              See all 4 video ideas
             </Link>
-          ) : null}
+            <Link href="/dashboard/insights" className="dashboard-mirror-subtle text-xs hover:text-[#17332d]">
+              Re-analyze channel →
+            </Link>
+          </div>
+        </div>
+      ) : insightRunning ? (
+        <div className="dashboard-mirror-card mb-6 p-6">
+          <div className="flex items-center gap-3">
+            <div className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
+            <p className="text-sm font-medium text-[#17332d]">Analysis running — your content briefs will appear here shortly.</p>
+          </div>
+        </div>
+      ) : totalVlogs > 0 ? (
+        <div className="dashboard-mirror-card mb-6 p-6">
+          <p className="dashboard-mirror-kicker text-xs">Growth Intelligence</p>
+          <h2 className="mt-1 mb-1 text-base font-semibold text-[#17332d]">
+            Find out why your best videos work — and what to film next
+          </h2>
+          <p className="dashboard-mirror-subtle mb-4 text-sm">
+            AI analyzes your {totalVlogs} video{totalVlogs !== 1 ? 's' : ''}, mines audience comments, and generates
+            {' '}4 personalized content briefs ranked by predicted performance.
+          </p>
+          <Link href="/dashboard/insights" className="btn-primary text-sm">
+            Run channel analysis
+          </Link>
+        </div>
+      ) : creator.youtubeChannelId ? (
+        <div className="dashboard-mirror-card mb-6 p-6">
+          <p className="dashboard-mirror-kicker text-xs">First step</p>
+          <h2 className="mt-1 mb-1 text-base font-semibold text-[#17332d]">Import your YouTube videos</h2>
+          <p className="dashboard-mirror-subtle mb-4 text-sm">
+            Pull in your catalog to unlock content analysis, audience demand signals, and personalized video ideas.
+          </p>
+          <Link href="/dashboard/vlogs" className="btn-primary text-sm">
+            Import videos
+          </Link>
         </div>
       ) : null}
 
-      <div className="mb-4 grid grid-cols-4 gap-4">
-        <MetricCard
-          label="Total Earnings"
-          value={`$${((totalEarnings?._sum?.creatorEarnings ?? 0) / 100).toFixed(2)}`}
-          detail={`$${((pendingEarnings?._sum?.creatorEarnings ?? 0) / 100).toFixed(2)} pending`}
-        />
-        <MetricCard
-          label="Published Kits"
-          value={String(creator._count.tripKits)}
-          detailLink={{ href: '/dashboard/kits', label: 'Manage kits ->' }}
-        />
-        <MetricCard
-          label="Subscribers"
-          value={String(creator._count.subscribers)}
-          detailLink={{ href: '/dashboard/subscribers', label: 'View subscribers ->' }}
-        />
-        <MetricCard
-          label="Active Links"
-          value={String(creator._count.affiliateLinks)}
-          detailLink={{ href: '/dashboard/affiliates', label: 'View links ->' }}
-        />
-      </div>
-
-      <div className="dashboard-mirror-card mb-8 p-5">
-        <div className="flex items-center justify-between gap-6">
-          <div>
-            <p className="dashboard-mirror-kicker mb-1 text-xs">Last 7 Days</p>
-            <p className="text-2xl font-semibold text-[#17332d]">
-              ${formatCurrencyFromCents(recentPerformance.earningsLast7dCents)} earned
-            </p>
+      {/* Content gaps — quick signal if insights exist */}
+      {insightReady && (patterns.content_gaps ?? []).length > 0 && (
+        <div className="mb-6 grid grid-cols-2 gap-4">
+          <div className="dashboard-mirror-card p-5">
+            <p className="dashboard-mirror-kicker mb-3 text-xs">What's working for you</p>
+            <ul className="space-y-2">
+              {(patterns.top_patterns ?? []).slice(0, 3).map((p, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-[#17332d]/76">
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                  {p}
+                </li>
+              ))}
+            </ul>
           </div>
-          <DashboardStat value={recentPerformance.clicksLast7d.toLocaleString()} label="clicks" />
-          <DashboardStat value={recentPerformance.conversionsLast7d.toLocaleString()} label="conversions" />
-          <DashboardStat value={`${recentPerformance.conversionRate.toFixed(1)}%`} label="CVR" />
+          <div className="dashboard-mirror-card p-5">
+            <p className="dashboard-mirror-kicker mb-3 text-xs">Untapped opportunities</p>
+            <ul className="space-y-2">
+              {(patterns.content_gaps ?? []).slice(0, 3).map((g, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-[#17332d]/76">
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+                  {g}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="dashboard-mirror-card overflow-hidden">
-        <div className="flex items-center justify-between border-b border-[rgba(214,205,184,0.08)] p-5">
-          <h2 className="font-semibold text-[#17332d]">Recent Trip Kits</h2>
-          <Link href="/dashboard/kits" className="dashboard-mirror-subtle text-xs hover:text-[#17332d]">
-            View all {'->'}
-          </Link>
-        </div>
-        {recentKits.length === 0 ? (
-          <div className="p-8 text-center">
-            <p className="dashboard-mirror-subtle mb-4 text-sm">No Trip Kits yet.</p>
-            <Link href="/dashboard/kits" className="btn-primary text-sm">
-              Create your first kit
+      {/* Recent videos */}
+      {recentVlogs.length > 0 && (
+        <div className="dashboard-mirror-card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[rgba(214,205,184,0.08)] p-5">
+            <h2 className="font-semibold text-[#17332d]">Your videos</h2>
+            <Link href="/dashboard/vlogs" className="dashboard-mirror-subtle text-xs hover:text-[#17332d]">
+              View all {totalVlogs} →
             </Link>
           </div>
-        ) : (
           <div className="divide-y divide-[rgba(214,205,184,0.08)]">
-            {recentKits.map((kit) => (
-              <div key={kit.id} className="flex items-center justify-between px-5 py-4">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-[#17332d]">{kit.title}</p>
-                  <div className="mt-0.5 flex items-center gap-3">
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-xs ${
-                        kit.isPublished ? 'bg-green-500/18 text-green-900' : 'bg-[#17332d]/8 text-[#17332d]/76'
-                      }`}
-                    >
-                      {kit.isPublished ? 'Published' : 'Draft'}
-                    </span>
-                    <span className="dashboard-mirror-muted text-xs">{kit.accessTier}</span>
-                    <span className="text-xs text-[#17332d]/30">·</span>
-                    <span className="dashboard-mirror-muted text-xs">{kit.createdAt.toLocaleDateString()}</span>
-                  </div>
+            {recentVlogs.map((vlog) => (
+              <div key={vlog.id} className="flex items-center gap-4 px-5 py-3">
+                {vlog.thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={vlog.thumbnailUrl}
+                    alt=""
+                    className="h-10 w-16 shrink-0 rounded object-cover"
+                  />
+                ) : (
+                  <div className="h-10 w-16 shrink-0 rounded bg-[#17332d]/8" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-[#17332d]">{vlog.title}</p>
+                  <p className="dashboard-mirror-muted mt-0.5 text-xs">
+                    {vlog.publishedAt ? new Date(vlog.publishedAt).toLocaleDateString() : 'No date'}
+                  </p>
                 </div>
-                <div className="ml-4 flex shrink-0 items-center gap-6">
-                  <DashboardStat value={kit.viewCount.toLocaleString()} label="views" align="right" />
-                  <DashboardStat value={kit.clickCount.toLocaleString()} label="clicks" align="right" />
-                  <Link href={`/dashboard/kits/${kit.id}`} className="dashboard-action-chip text-xs">
-                    Edit
-                  </Link>
+                <div className="flex shrink-0 items-center gap-5 text-right">
+                  <div>
+                    <p className="text-sm font-semibold text-[#17332d]">
+                      {(vlog.viewCount ?? 0).toLocaleString()}
+                    </p>
+                    <p className="dashboard-mirror-muted text-xs">views</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[#17332d]">
+                      {(vlog.likeCount ?? 0).toLocaleString()}
+                    </p>
+                    <p className="dashboard-mirror-muted text-xs">likes</p>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function MetricCard({
-  label,
-  value,
-  detail,
-  detailLink,
-}: {
-  label: string
-  value: string
-  detail?: string
-  detailLink?: { href: string; label: string }
-}) {
-  return (
-    <div className="dashboard-mirror-card p-5">
-      <p className="dashboard-mirror-kicker mb-2 text-xs">{label}</p>
-      <p className="text-4xl font-semibold tracking-tight text-[#17332d]">{value}</p>
-      {detail ? <p className="dashboard-mirror-subtle mt-2 text-xs">{detail}</p> : null}
-      {detailLink ? (
-        <Link href={detailLink.href} className="dashboard-mirror-subtle mt-2 inline-block text-xs hover:text-[#17332d]">
-          {detailLink.label}
-        </Link>
-      ) : null}
-    </div>
-  )
-}
-
-function DashboardStat({
-  value,
-  label,
-  align = 'left',
-}: {
-  value: string
-  label: string
-  align?: 'left' | 'right'
-}) {
-  return (
-    <div className={align === 'right' ? 'text-right' : undefined}>
-      <p className="text-3xl font-semibold tracking-tight text-[#17332d]">{value}</p>
-      <p className="dashboard-mirror-subtle text-xs">{label}</p>
+        </div>
+      )}
     </div>
   )
 }
