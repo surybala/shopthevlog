@@ -195,15 +195,5 @@ async function runScan(creatorId: string, channelId: string, plan: string, selec
     },
   })
 
-  // Optionally notify AI pipeline
-  const aiUrl = process.env.AI_PIPELINE_URL
-  if (aiUrl) {
-    fetch(`${aiUrl}/api/v1/webhooks/scan/trigger`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ creator_id: creatorId }),
-    }).catch(() => {})
-  }
-
   return { importedCount, limitReached }
 }
