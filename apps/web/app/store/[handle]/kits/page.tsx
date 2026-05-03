@@ -14,7 +14,7 @@ import { getTripKitCardImageUrl } from '@/lib/tripKitImages'
 
 export async function generateMetadata({ params }: { params: { handle: string } }) {
   const creator = await prisma.creator.findUnique({ where: { handle: params.handle }, select: { displayName: true } })
-  return { title: `Trip Kits - ${creator?.displayName ?? params.handle} - VlogShopper` }
+  return { title: `Trip Kits - ${creator?.displayName ?? params.handle} - TripKits` }
 }
 
 export default async function StorefrontKitsPage({ params }: { params: { handle: string } }) {
@@ -113,26 +113,26 @@ export default async function StorefrontKitsPage({ params }: { params: { handle:
 
   return (
     <div
-      className="storefront-shell mx-auto max-w-6xl px-6 py-12"
-      style={{ ...theme.cssVars, backgroundImage: `var(--storefront-page-bg), url(${theme.storefrontBackdropImageUrl})` }}
+      className="creator portal-shell mx-auto max-w-6xl px-6 py-12"
+      style={{ ...theme.cssVars, backgroundImage: `var(--creator portal-page-bg), url(${theme.storefrontBackdropImageUrl})` }}
     >
       <div className="mb-10">
-        <Link href={`/@${creator.handle}`} className="storefront-muted mb-4 inline-block text-sm hover:text-[var(--storefront-text)]">
+        <Link href={`/@${creator.handle}`} className="creator portal-muted mb-4 inline-block text-sm hover:text-[var(--creator portal-text)]">
           &larr; {creator.displayName}
         </Link>
-        <h1 className="storefront-heading text-3xl font-bold">All Trip Kits</h1>
-        <p className="storefront-muted mt-1">{rankedTripKits.length} kits by {creator.displayName}</p>
+        <h1 className="creator portal-heading text-3xl font-bold">All Trip Kits</h1>
+        <p className="creator portal-muted mt-1">{rankedTripKits.length} kits by {creator.displayName}</p>
       </div>
 
       {rankedTripKits.length === 0 ? (
         <div className="py-24 text-center">
-          <p className="storefront-muted">No kits published yet.</p>
+          <p className="creator portal-muted">No kits published yet.</p>
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-6">
           {rankedTripKits.map((kit) => (
-            <Link key={kit.id} href={`/@${creator.handle}/kits/${kit.slug}`} className="storefront-card group overflow-hidden">
-              <div className="storefront-surface relative aspect-video overflow-hidden border-0">
+            <Link key={kit.id} href={`/@${creator.handle}/kits/${kit.slug}`} className="creator portal-card group overflow-hidden">
+              <div className="creator portal-surface relative aspect-video overflow-hidden border-0">
                 {getTripKitCardImageUrl(kit) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -145,7 +145,7 @@ export default async function StorefrontKitsPage({ params }: { params: { handle:
                 )}
                 <div className="absolute right-2 top-2 flex gap-1">
                   {kit.isFeatured && (
-                    <span className="rounded-full px-2 py-0.5 text-xs text-[#fff6ee]" style={{ background: 'var(--storefront-text)' }}>
+                    <span className="rounded-full px-2 py-0.5 text-xs text-[#fff6ee]" style={{ background: 'var(--creator portal-text)' }}>
                       Featured
                     </span>
                   )}
@@ -160,20 +160,20 @@ export default async function StorefrontKitsPage({ params }: { params: { handle:
                     />
                   )}
                   {kit.generatedByAI && (
-                    <span className="rounded-full px-2 py-0.5 text-xs text-[#fff6ee]" style={{ background: 'color-mix(in srgb, var(--storefront-text) 80%, transparent)' }}>
+                    <span className="rounded-full px-2 py-0.5 text-xs text-[#fff6ee]" style={{ background: 'color-mix(in srgb, var(--creator portal-text) 80%, transparent)' }}>
                       AI
                     </span>
                   )}
                 </div>
               </div>
               <div className="p-5">
-                <h3 className="storefront-heading line-clamp-2 font-semibold leading-snug group-hover:opacity-80">
+                <h3 className="creator portal-heading line-clamp-2 font-semibold leading-snug group-hover:opacity-80">
                   {kit.title}
                 </h3>
-                {kit.description && <p className="storefront-muted mt-1.5 line-clamp-2 text-sm">{kit.description}</p>}
-                <div className="storefront-muted mt-3 flex flex-wrap items-center gap-2 text-xs">
+                {kit.description && <p className="creator portal-muted mt-1.5 line-clamp-2 text-sm">{kit.description}</p>}
+                <div className="creator portal-muted mt-3 flex flex-wrap items-center gap-2 text-xs">
                   {kit.countries.map((country) => (
-                    <span key={country} className="storefront-chip rounded px-2 py-0.5">
+                    <span key={country} className="creator portal-chip rounded px-2 py-0.5">
                       {country}
                     </span>
                   ))}

@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
       },
       business_profile: {
         name: creator.displayName,
-        product_description: 'Travel creator subscriptions and affiliate earnings from VlogShopper storefronts',
+        product_description: 'Travel creator subscriptions and affiliate earnings from TripKits creator portals',
       },
     })
 

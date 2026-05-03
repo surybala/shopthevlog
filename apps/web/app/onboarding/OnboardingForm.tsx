@@ -90,7 +90,7 @@ export default function OnboardingForm() {
             className="flex-1 bg-transparent px-1 py-2.5 text-sm text-[#17332d] placeholder-[#17332d]/35 outline-none"
           />
         </div>
-        <p className="mt-1 text-xs text-[#17332d]/44">Your storefront will be at vlogshopper.com/@{handle || 'yourhandle'}</p>
+        <p className="mt-1 text-xs text-[#17332d]/44">Your creator portal will be at vlogshopper.com/@{handle || 'yourhandle'}</p>
       </div>
 
       <div>
@@ -125,7 +125,7 @@ export default function OnboardingForm() {
         disabled={loading}
         className="btn-primary w-full py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {loading ? 'Setting up...' : 'Set up my storefront ->'}
+        {loading ? 'Setting up...' : 'Set up my creator portal ->'}
       </button>
     </form>
   )

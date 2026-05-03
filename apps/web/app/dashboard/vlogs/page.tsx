@@ -57,7 +57,7 @@ export default async function VlogsPage() {
         <div className="dashboard-mirror-panel mb-8 flex items-center justify-between p-6">
           <div>
             <p className="dashboard-mirror-kicker text-xs">Video library</p>
-            <h1 className="mt-3 text-3xl font-bold text-[#17332d]">Source videos powering your storefront.</h1>
+            <h1 className="mt-3 text-3xl font-bold text-[#17332d]">Source videos powering your creator portal.</h1>
             <div className="dashboard-mirror-subtle mt-2 space-y-1 text-sm">
               <p>
                 {vlogs.length}/{planConfig.maxImportedVlogs} video{planConfig.maxImportedVlogs !== 1 ? 's' : ''} imported

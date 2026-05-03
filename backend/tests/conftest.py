@@ -1,5 +1,5 @@
 """
-Shared pytest fixtures for the VlogShopper backend test suite.
+Shared pytest fixtures for the TripKits backend test suite.
 
 Environment variables are set BEFORE any app module is imported so that
 pydantic-settings resolves them correctly at Settings() instantiation time.

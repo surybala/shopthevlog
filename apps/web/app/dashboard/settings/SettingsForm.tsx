@@ -23,8 +23,8 @@ const metaText = 'text-xs text-[rgba(23,51,45,0.52)]'
 
 export default function SettingsForm({ userId, creator }: Props) {
   const router = useRouter()
-  const tabs = ['profile', 'storefront', 'channels', 'tiers', 'billing'] as const
-  const [tab, setTab] = useState<'profile' | 'storefront' | 'channels' | 'tiers' | 'billing'>('profile')
+  const tabs = ['profile', 'creator portal', 'channels', 'tiers', 'billing'] as const
+  const [tab, setTab] = useState<'profile' | 'creator portal' | 'channels' | 'tiers' | 'billing'>('profile')
   const [saving, setSaving] = useState(false)
   const [showThemePicker, setShowThemePicker] = useState(false)
   const [error, setError] = useState('')
@@ -99,7 +99,7 @@ export default function SettingsForm({ userId, creator }: Props) {
   }, [scanStatus])
 
   const [profile, setProfile] = useState({ handle: creator?.handle ?? '', displayName: creator?.displayName ?? '', bio: creator?.bio ?? '', location: creator?.location ?? '', websiteUrl: creator?.websiteUrl ?? '' })
-  const [storefront, setStorefront] = useState({
+  const [creator portal, setStorefront] = useState({
     storefrontTheme: creator?.storefrontTheme ?? 'CITY_EDITORIAL',
     storefrontTagline: creator?.storefrontTagline ?? '',
     storefrontIntro: creator?.storefrontIntro ?? '',
@@ -109,7 +109,7 @@ export default function SettingsForm({ userId, creator }: Props) {
   })
 
   const setP = (key: keyof typeof profile, value: string) => setProfile((prev) => ({ ...prev, [key]: value }))
-  const setStorefrontValue = (key: keyof typeof storefront, value: string) => setStorefront((prev) => ({ ...prev, [key]: value }))
+  const setStorefrontValue = (key: keyof typeof creator portal, value: string) => setStorefront((prev) => ({ ...prev, [key]: value }))
 
   async function saveProfile() {
     setSaving(true); setError(''); setSuccess('')
@@ -117,7 +117,7 @@ export default function SettingsForm({ userId, creator }: Props) {
       const res = await fetch('/api/creator/profile', {
         method: creator ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...profile, ...storefront, userId }),
+        body: JSON.stringify({ ...profile, ...creator portal, userId }),
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
@@ -141,7 +141,7 @@ export default function SettingsForm({ userId, creator }: Props) {
       const res = await fetch('/api/creator/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isPublished: !creator.isPublished }) })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error ?? (creator.isPublished ? 'Could not unpublish storefront' : 'Could not publish storefront'))
+        throw new Error(data.error ?? (creator.isPublished ? 'Could not unpublish creator portal' : 'Could not publish creator portal'))
       }
       router.refresh()
     } catch (e) {
@@ -256,8 +256,8 @@ export default function SettingsForm({ userId, creator }: Props) {
 
   const inputCls = 'dashboard-input'
   const labelCls = 'dashboard-mirror-kicker mb-1.5 block text-[11px]'
-  const activeTheme = getStorefrontTheme(storefront.storefrontTheme)
-  const galleryImages = storefront.storefrontGalleryImages
+  const activeTheme = getStorefrontTheme(creator portal.storefrontTheme)
+  const galleryImages = creator portal.storefrontGalleryImages
 
   return (
     <div className="max-w-2xl">
@@ -285,9 +285,9 @@ export default function SettingsForm({ userId, creator }: Props) {
         <button onClick={saveProfile} disabled={saving} className="btn-primary disabled:opacity-50">{saving ? 'Saving...' : 'Save Profile'}</button>
       </div> : null}
 
-      {tab === 'storefront' ? <div className="space-y-5">
+      {tab === 'creator portal' ? <div className="space-y-5">
         <div className="dashboard-mirror-card space-y-5 p-6">
-          <div><h2 className={sectionTitle}>Storefront Theme</h2><p className={sectionCopy}>Pick a travel style template, then layer in your own imagery and copy to make the storefront feel like you.</p></div>
+          <div><h2 className={sectionTitle}>Creator Portal Theme</h2><p className={sectionCopy}>Pick a travel style template, then layer in your own imagery and copy to make the creator portal feel like you.</p></div>
           <div className="rounded-[1.75rem] border border-[rgba(23,51,45,0.1)] bg-[rgba(255,255,255,0.54)] p-4">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-4">
@@ -300,10 +300,10 @@ export default function SettingsForm({ userId, creator }: Props) {
         </div>
         {showThemePicker ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#02140f]/80 px-5 backdrop-blur-md">
           <div className="max-h-[84vh] w-full max-w-6xl overflow-hidden rounded-[2rem] border border-[rgba(23,51,45,0.12)] bg-[rgba(255,248,240,0.97)] shadow-[0_40px_160px_rgba(0,0,0,0.25)]">
-            <div className="flex items-center justify-between border-b border-[rgba(23,51,45,0.1)] px-6 py-5"><div><h3 className="text-lg font-semibold text-[#17332d]">Choose a storefront mood</h3><p className="mt-1 text-sm text-[rgba(23,51,45,0.62)]">Pick the visual world your subscribers step into first.</p></div><button type="button" onClick={() => setShowThemePicker(false)} className="dashboard-pill-button px-4 py-2 text-sm text-[#17332d]">Close</button></div>
+            <div className="flex items-center justify-between border-b border-[rgba(23,51,45,0.1)] px-6 py-5"><div><h3 className="text-lg font-semibold text-[#17332d]">Choose a creator portal mood</h3><p className="mt-1 text-sm text-[rgba(23,51,45,0.62)]">Pick the visual world your subscribers step into first.</p></div><button type="button" onClick={() => setShowThemePicker(false)} className="dashboard-pill-button px-4 py-2 text-sm text-[#17332d]">Close</button></div>
             <div className="grid max-h-[calc(84vh-88px)] gap-4 overflow-y-auto p-6 lg:grid-cols-2">
               {STOREFRONT_THEMES.map((theme) => {
-                const selected = storefront.storefrontTheme === theme.id
+                const selected = creator portal.storefrontTheme === theme.id
                 return <button key={theme.id} type="button" onClick={() => { setStorefrontValue('storefrontTheme', theme.id); setShowThemePicker(false) }} className={`overflow-hidden rounded-[1.75rem] border text-left transition-all ${selected ? 'border-[rgba(23,51,45,0.24)] bg-[rgba(23,51,45,0.08)] shadow-[0_0_0_1px_rgba(23,51,45,0.08)]' : 'border-[rgba(23,51,45,0.1)] bg-[rgba(255,255,255,0.62)] hover:border-[rgba(23,51,45,0.18)] hover:bg-[rgba(255,255,255,0.8)]'}`}>
                   <div className="relative h-48">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={theme.previewImageUrl} alt={theme.name} className="h-full w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />{selected ? <span className="absolute right-4 top-4 rounded-full border border-[rgba(255,255,255,0.5)] bg-[rgba(255,247,239,0.82)] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.22em] text-[#17332d]">Selected</span> : null}</div>
                   <div className="p-5"><div className="flex items-center justify-between gap-3"><p className="font-medium text-[#17332d]">{theme.name}</p><p className="text-[11px] uppercase tracking-[0.22em] text-[rgba(23,51,45,0.42)]">{theme.chip}</p></div><p className="mt-3 text-sm leading-6 text-[rgba(23,51,45,0.66)]">{theme.vibe}</p></div>
@@ -316,13 +316,13 @@ export default function SettingsForm({ userId, creator }: Props) {
           <div><h2 className={sectionTitle}>Personal Touches</h2><p className={sectionCopy}>Use your own cover art, atmosphere image, and custom words so subscribers feel like they are stepping into your travel world.</p></div>
           <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="space-y-4">
-              <div><label className={labelCls}>Storefront tagline</label><input className={inputCls} placeholder={activeTheme.headline} value={storefront.storefrontTagline} onChange={(e) => setStorefrontValue('storefrontTagline', e.target.value)} /></div>
-              <div><label className={labelCls}>Intro copy</label><textarea className={`${inputCls} resize-none`} rows={4} placeholder={activeTheme.subheadline} value={storefront.storefrontIntro} onChange={(e) => setStorefrontValue('storefrontIntro', e.target.value)} /></div>
+              <div><label className={labelCls}>Creator Portal tagline</label><input className={inputCls} placeholder={activeTheme.headline} value={creator portal.storefrontTagline} onChange={(e) => setStorefrontValue('storefrontTagline', e.target.value)} /></div>
+              <div><label className={labelCls}>Intro copy</label><textarea className={`${inputCls} resize-none`} rows={4} placeholder={activeTheme.subheadline} value={creator portal.storefrontIntro} onChange={(e) => setStorefrontValue('storefrontIntro', e.target.value)} /></div>
               <div className="rounded-[1.4rem] border border-[rgba(23,51,45,0.1)] bg-[rgba(255,255,255,0.58)] p-4">
                 <label className={labelCls}>Hero cover image</label>
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   <input type="file" accept="image/*" onChange={(e) => void uploadImages('cover', e.target.files)} className="text-sm text-[rgba(23,51,45,0.66)]" />
-                  {storefront.coverImageUrl ? <button type="button" onClick={() => setStorefrontValue('coverImageUrl', '')} className="dashboard-pill-button px-3 py-1.5 text-xs">Remove</button> : null}
+                  {creator portal.coverImageUrl ? <button type="button" onClick={() => setStorefrontValue('coverImageUrl', '')} className="dashboard-pill-button px-3 py-1.5 text-xs">Remove</button> : null}
                 </div>
                 {uploading === 'cover' ? <p className="mt-2 text-xs text-[rgba(23,51,45,0.52)]">Uploading cover image...</p> : null}
               </div>
@@ -330,7 +330,7 @@ export default function SettingsForm({ userId, creator }: Props) {
                 <label className={labelCls}>Mood image</label>
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   <input type="file" accept="image/*" onChange={(e) => void uploadImages('mood', e.target.files)} className="text-sm text-[rgba(23,51,45,0.66)]" />
-                  {storefront.storefrontMoodImageUrl ? <button type="button" onClick={() => setStorefrontValue('storefrontMoodImageUrl', '')} className="dashboard-pill-button px-3 py-1.5 text-xs">Remove</button> : null}
+                  {creator portal.storefrontMoodImageUrl ? <button type="button" onClick={() => setStorefrontValue('storefrontMoodImageUrl', '')} className="dashboard-pill-button px-3 py-1.5 text-xs">Remove</button> : null}
                 </div>
                 {uploading === 'mood' ? <p className="mt-2 text-xs text-[rgba(23,51,45,0.52)]">Uploading mood image...</p> : null}
               </div>
@@ -359,18 +359,18 @@ export default function SettingsForm({ userId, creator }: Props) {
             <div className={`rounded-[2rem] border ${activeTheme.cardClassName} p-5`}>
               <div className={`rounded-[1.75rem] border ${activeTheme.heroClassName} p-5`}>
                 <div className="flex items-center justify-between"><span className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.24em] ${activeTheme.pillClassName}`}>{activeTheme.chip}</span><span className="text-[11px] uppercase tracking-[0.22em] text-[rgba(23,51,45,0.42)]">Preview</span></div>
-                <h3 className="mt-5 text-2xl font-semibold text-[#17332d]">{storefront.storefrontTagline || activeTheme.headline}</h3>
-                <p className="mt-3 text-sm leading-7 text-[rgba(23,51,45,0.7)]">{storefront.storefrontIntro || activeTheme.subheadline}</p>
+                <h3 className="mt-5 text-2xl font-semibold text-[#17332d]">{creator portal.storefrontTagline || activeTheme.headline}</h3>
+                <p className="mt-3 text-sm leading-7 text-[rgba(23,51,45,0.7)]">{creator portal.storefrontIntro || activeTheme.subheadline}</p>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="col-span-2 overflow-hidden rounded-[1.4rem] border border-[rgba(23,51,45,0.1)] bg-[rgba(255,255,255,0.46)]">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={activeTheme.previewImageUrl} alt="" className="h-32 w-full object-cover" /></div>
-                {[storefront.coverImageUrl, storefront.storefrontMoodImageUrl, ...galleryImages].slice(0, 4).map((imageUrl, index) => <div key={`${imageUrl}-${index}`} className="overflow-hidden rounded-2xl border border-[rgba(23,51,45,0.1)] bg-[rgba(255,255,255,0.46)]">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={resolveStorageAssetUrl(imageUrl) ?? ''} alt="" className="h-24 w-full object-cover" /></div>)}
-                {galleryImages.length === 0 && !storefront.coverImageUrl && !storefront.storefrontMoodImageUrl ? <div className="col-span-2 rounded-2xl border border-dashed border-[rgba(23,51,45,0.15)] bg-[rgba(255,255,255,0.46)] px-4 py-8 text-center text-sm text-[rgba(23,51,45,0.46)]">Add your own imagery to make this storefront feel personal.</div> : null}
+                {[creator portal.coverImageUrl, creator portal.storefrontMoodImageUrl, ...galleryImages].slice(0, 4).map((imageUrl, index) => <div key={`${imageUrl}-${index}`} className="overflow-hidden rounded-2xl border border-[rgba(23,51,45,0.1)] bg-[rgba(255,255,255,0.46)]">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={resolveStorageAssetUrl(imageUrl) ?? ''} alt="" className="h-24 w-full object-cover" /></div>)}
+                {galleryImages.length === 0 && !creator portal.coverImageUrl && !creator portal.storefrontMoodImageUrl ? <div className="col-span-2 rounded-2xl border border-dashed border-[rgba(23,51,45,0.15)] bg-[rgba(255,255,255,0.46)] px-4 py-8 text-center text-sm text-[rgba(23,51,45,0.46)]">Add your own imagery to make this creator portal feel personal.</div> : null}
               </div>
             </div>
           </div>
         </div>
-        <button onClick={saveProfile} disabled={saving} className="btn-primary disabled:opacity-50">{saving ? 'Saving...' : 'Save Storefront'}</button>
+        <button onClick={saveProfile} disabled={saving} className="btn-primary disabled:opacity-50">{saving ? 'Saving...' : 'Save Creator Portal'}</button>
       </div> : null}
 
       {tab === 'channels' ? <div className="space-y-4">
@@ -447,7 +447,7 @@ export default function SettingsForm({ userId, creator }: Props) {
       </div> : null}
 
       {tab === 'billing' ? <div className="space-y-4">
-        <div className="dashboard-mirror-card p-6"><h2 className="mb-4 font-semibold text-[#17332d]">VlogShopper Plan</h2><div className="space-y-3">{(Object.entries(billingPlans) as [keyof typeof billingPlans, typeof billingPlans.FREE][]).map(([key, p]) => <div key={key} className={`flex items-center justify-between rounded-xl border p-4 ${creator?.plan === key ? 'border-[rgba(23,51,45,0.22)] bg-[rgba(255,255,255,0.5)]' : 'border-[rgba(23,51,45,0.1)]'}`}><div><p className="font-medium text-[#17332d]">{p.label}</p><p className={metaText}>{p.description}</p></div><div className="text-right"><p className="text-sm font-semibold text-[#17332d]">{p.price}</p>{creator?.plan === key ? <p className="text-xs text-green-400">Current plan</p> : null}</div></div>)}</div></div>
+        <div className="dashboard-mirror-card p-6"><h2 className="mb-4 font-semibold text-[#17332d]">TripKits Plan</h2><div className="space-y-3">{(Object.entries(billingPlans) as [keyof typeof billingPlans, typeof billingPlans.FREE][]).map(([key, p]) => <div key={key} className={`flex items-center justify-between rounded-xl border p-4 ${creator?.plan === key ? 'border-[rgba(23,51,45,0.22)] bg-[rgba(255,255,255,0.5)]' : 'border-[rgba(23,51,45,0.1)]'}`}><div><p className="font-medium text-[#17332d]">{p.label}</p><p className={metaText}>{p.description}</p></div><div className="text-right"><p className="text-sm font-semibold text-[#17332d]">{p.price}</p>{creator?.plan === key ? <p className="text-xs text-green-400">Current plan</p> : null}</div></div>)}</div></div>
         <div className="dashboard-mirror-card p-6">
           <h2 className="mb-2 font-semibold text-[#17332d]">Creator payouts</h2>
           <p className={sectionCopy}>

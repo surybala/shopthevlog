@@ -73,7 +73,7 @@ describe('VlogsPage', () => {
     const html = renderToStaticMarkup(page)
 
     expect(html).toContain('Video library')
-    expect(html).toContain('Source videos powering your storefront.')
+    expect(html).toContain('Source videos powering your creator portal.')
     expect(html).toContain('1/5 videos imported')
     expect(html).toContain('Recommended next videos')
     expect(html).toContain('Use credits where the kit potential looks strongest.')

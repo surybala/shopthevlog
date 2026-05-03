@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     }
 
     const extension = file.name.includes('.') ? file.name.split('.').pop() : 'jpg'
-    const path = `creators/${creator.id}/storefront/${kind}/${Date.now()}-${crypto.randomUUID()}-${sanitizeFileName(
+    const path = `creators/${creator.id}/creator portal/${kind}/${Date.now()}-${crypto.randomUUID()}-${sanitizeFileName(
       file.name || `upload.${extension}`,
     )}`
 

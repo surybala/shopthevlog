@@ -41,7 +41,7 @@ function WaitlistForm() {
     <div className="w-full max-w-md space-y-8">
       <div className="flex flex-col items-center text-center">
         <Link href="/" className="inline-block text-[1.9rem] font-semibold tracking-tight text-[#17332d]">
-          VlogShopper
+          TripKits
         </Link>
         <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#17332d]/10 bg-white/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-[#17332d]/62">
           <span className="h-2 w-2 rounded-full bg-emerald-600 shadow-[0_0_12px_rgba(5,150,105,0.35)]" />
@@ -51,7 +51,7 @@ function WaitlistForm() {
           Early access only
         </h1>
         <p className="editorial-subtle mx-auto mt-3 max-w-sm text-[15px] leading-7">
-          VlogShopper is in private beta. Request access below and we will email you when your spot is ready.
+          TripKits is in private beta. Request access below and we will email you when your spot is ready.
         </p>
       </div>
 
@@ -65,7 +65,7 @@ function WaitlistForm() {
             We sent a confirmation to <strong className="text-[#17332d]/84">{email}</strong>. We will reach out as soon as your spot opens up.
           </p>
           <Link href="/discover" className="btn-primary mt-2 inline-block text-sm">
-            Browse storefronts while you wait
+            Browse creator portals while you wait
           </Link>
         </div>
       ) : (
@@ -107,7 +107,7 @@ function WaitlistForm() {
 
       <div className="flex flex-col justify-center gap-3 text-sm sm:flex-row sm:items-center sm:justify-center">
         <Link href="/discover" className="editorial-muted text-center transition-colors hover:text-[#17332d]">
-          Browse public storefronts
+          Browse public creator portals
         </Link>
         <span className="hidden sm:inline text-[#17332d]/25">•</span>
         <Link href="/login" className="editorial-muted text-center transition-colors hover:text-[#17332d]">

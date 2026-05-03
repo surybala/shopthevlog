@@ -35,9 +35,9 @@ export default function StorefrontNavActions({
       {isLoggedIn && displayName ? (
         <Link
           href={accountHref}
-          className="storefront-account-pill group"
+          className="creator portal-account-pill group"
         >
-          <span className="storefront-account-avatar">
+          <span className="creator portal-account-avatar">
             {displayName[0]?.toUpperCase()}
           </span>
           <span className="max-w-[100px] truncate text-xs hidden sm:inline">
@@ -47,7 +47,7 @@ export default function StorefrontNavActions({
       ) : (
         <Link
           href="/login"
-          className="storefront-muted text-xs transition-colors hover:text-[var(--storefront-text)]"
+          className="creator portal-muted text-xs transition-colors hover:text-[var(--creator portal-text)]"
         >
           Sign in
         </Link>

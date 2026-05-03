@@ -24,7 +24,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/components/SaveKitButton', () => ({
   default: ({ initialSaved }: { initialSaved: boolean }) =>
-    React.createElement('button', { className: 'storefront-outline-button' }, initialSaved ? 'Saved' : 'Save'),
+    React.createElement('button', { className: 'creator portal-outline-button' }, initialSaved ? 'Saved' : 'Save'),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -69,7 +69,7 @@ describe('KitDetailPage', () => {
       id: 'creator-1',
       handle: 'alexwanders',
       displayName: 'Alex Wanders',
-      avatarUrl: 'creators/creator-1/storefront/avatar.jpg',
+      avatarUrl: 'creators/creator-1/creator portal/avatar.jpg',
       isPublished: true,
       storefrontTheme: 'BEACH_RETREAT',
     })
@@ -126,12 +126,12 @@ describe('KitDetailPage', () => {
     mockTripKitUpdate.mockResolvedValue({})
   })
 
-  it('renders the kit detail page with stronger storefront detail contrast classes', async () => {
+  it('renders the kit detail page with stronger creator portal detail contrast classes', async () => {
     const page = await KitDetailPage({ params: { handle: 'alexwanders', slug: 'three-islands-thailand' } })
     const html = renderToStaticMarkup(page)
 
-    expect(html).toContain('storefront-detail-page')
-    expect(html).toContain('storefront-detail-affiliate-link')
+    expect(html).toContain('creator portal-detail-page')
+    expect(html).toContain('creator portal-detail-affiliate-link')
     expect(html).toContain('Three Islands in Thailand')
     expect(html).toContain('Day 1 - Koh Tao: Arrive and Dive')
     expect(html).toContain('Book on GETYOURGUIDE')

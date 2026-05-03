@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: { params: { handle: string } 
   })
   if (!creator) return {}
   return {
-    title: `${creator.displayName} - VlogShopper`,
+    title: `${creator.displayName} - TripKits`,
     description: creator.bio ?? `Travel kits by ${creator.displayName}`,
     openGraph: {
       title: creator.displayName,
@@ -139,10 +139,10 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
 
   return (
     <div
-      className={`storefront-shell relative min-h-screen overflow-hidden ${theme.pageClassName}`}
+      className={`creator portal-shell relative min-h-screen overflow-hidden ${theme.pageClassName}`}
       style={{
         ...theme.cssVars,
-        backgroundImage: `var(--storefront-page-bg), url(${theme.storefrontBackdropImageUrl})`,
+        backgroundImage: `var(--creator portal-page-bg), url(${theme.storefrontBackdropImageUrl})`,
       }}
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.1),transparent_28%)]" />
@@ -157,28 +157,28 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
                   <img
                     src={resolveStorageAssetUrl(creator.avatarUrl) ?? ''}
                     alt={creator.displayName}
-                    className="h-20 w-20 shrink-0 rounded-full object-cover ring-2 ring-[color:var(--storefront-border)]"
+                    className="h-20 w-20 shrink-0 rounded-full object-cover ring-2 ring-[color:var(--creator portal-border)]"
                   />
                 ) : (
-                  <div className="storefront-surface storefront-heading flex h-20 w-20 shrink-0 items-center justify-center rounded-full border text-3xl">
+                  <div className="creator portal-surface creator portal-heading flex h-20 w-20 shrink-0 items-center justify-center rounded-full border text-3xl">
                     {creator.displayName[0]}
                   </div>
                 )}
                 <div className="min-w-0">
-                  <h1 className="storefront-heading text-3xl font-semibold tracking-tight md:text-4xl">
+                  <h1 className="creator portal-heading text-3xl font-semibold tracking-tight md:text-4xl">
                     {creator.displayName}
                   </h1>
                 </div>
               </div>
 
-              <h2 className="storefront-heading mt-8 max-w-2xl text-3xl font-semibold leading-tight md:text-5xl">
+              <h2 className="creator portal-heading mt-8 max-w-2xl text-3xl font-semibold leading-tight md:text-5xl">
                 {heroTitle}
               </h2>
-              <p className="storefront-subtle mt-5 max-w-2xl text-sm leading-7 md:text-base">
+              <p className="creator portal-subtle mt-5 max-w-2xl text-sm leading-7 md:text-base">
                 {heroBody}
               </p>
 
-              <div className="storefront-muted mt-6 flex flex-wrap items-center gap-4 text-xs md:text-sm">
+              <div className="creator portal-muted mt-6 flex flex-wrap items-center gap-4 text-xs md:text-sm">
                 {creator.location && <span>Based in {creator.location}</span>}
                 <span>{creator._count.subscribers.toLocaleString()} subscribers</span>
                 {creator.youtubeHandle && (
@@ -186,7 +186,7 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
                     href={`https://youtube.com/@${creator.youtubeHandle}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="transition-colors hover:text-[var(--storefront-text)]"
+                    className="transition-colors hover:text-[var(--creator portal-text)]"
                   >
                     YouTube {'->'}
                   </a>
@@ -196,7 +196,7 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
                     href={`https://tiktok.com/@${creator.tiktokHandle}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="transition-colors hover:text-[var(--storefront-text)]"
+                    className="transition-colors hover:text-[var(--creator portal-text)]"
                   >
                     TikTok {'->'}
                   </a>
@@ -218,15 +218,15 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
                 {storefrontImages.slice(0, 4).map((imageUrl, index) => (
                   <div
                     key={`${imageUrl}-${index}`}
-                    className={`${index === 0 ? 'col-span-2' : ''} storefront-surface overflow-hidden rounded-[1.5rem] border`}
+                    className={`${index === 0 ? 'col-span-2' : ''} creator portal-surface overflow-hidden rounded-[1.5rem] border`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={imageUrl} alt="" className={`w-full object-cover ${index === 0 ? 'h-56' : 'h-32'}`} />
                   </div>
                 ))}
                 {storefrontImages.length === 0 && (
-                  <div className="storefront-muted storefront-surface col-span-2 flex min-h-72 items-center justify-center rounded-[1.5rem] border border-dashed px-6 text-center text-sm leading-7">
-                    This storefront will feel even more personal once the creator adds travel imagery in settings.
+                  <div className="creator portal-muted creator portal-surface col-span-2 flex min-h-72 items-center justify-center rounded-[1.5rem] border border-dashed px-6 text-center text-sm leading-7">
+                    This creator portal will feel even more personal once the creator adds travel imagery in settings.
                   </div>
                 )}
               </div>
@@ -239,8 +239,8 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
         {featuredKits.length > 0 && (
           <section>
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="storefront-heading text-xl font-bold">Featured Trip Kits</h2>
-              <Link href={`/@${creator.handle}/kits`} className="storefront-muted text-sm hover:text-[var(--storefront-text)]">
+              <h2 className="creator portal-heading text-xl font-bold">Featured Trip Kits</h2>
+              <Link href={`/@${creator.handle}/kits`} className="creator portal-muted text-sm hover:text-[var(--creator portal-text)]">
                 View all {'->'}
               </Link>
             </div>
@@ -261,8 +261,8 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
         {recentKits.length > 0 && (
           <section>
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="storefront-heading text-xl font-bold">Latest Drops</h2>
-              <Link href={`/@${creator.handle}/kits`} className="storefront-muted text-sm hover:text-[var(--storefront-text)]">
+              <h2 className="creator portal-heading text-xl font-bold">Latest Drops</h2>
+              <Link href={`/@${creator.handle}/kits`} className="creator portal-muted text-sm hover:text-[var(--creator portal-text)]">
                 View all {'->'}
               </Link>
             </div>
@@ -282,7 +282,7 @@ export default async function StorefrontHomePage({ params }: { params: { handle:
 
         {creator.tripKits.length === 0 && (
           <div className={`py-16 text-center ${theme.cardClassName}`}>
-            <p className="storefront-muted">No kits published yet. Check back soon!</p>
+            <p className="creator portal-muted">No kits published yet. Check back soon!</p>
           </div>
         )}
       </div>
@@ -353,10 +353,10 @@ function KitCard({
         )}
       </div>
       <div className="p-4">
-        <h3 className="storefront-heading line-clamp-2 text-sm font-semibold leading-snug group-hover:opacity-80">
+        <h3 className="creator portal-heading line-clamp-2 text-sm font-semibold leading-snug group-hover:opacity-80">
           {kit.title}
         </h3>
-        <div className="storefront-muted mt-2 flex items-center gap-3 text-xs">
+        <div className="creator portal-muted mt-2 flex items-center gap-3 text-xs">
           {kit.primaryCity && <span>{kit.primaryCity}</span>}
           {kit.durationDays && <span>{kit.durationDays}d</span>}
           {kit.estimatedBudgetLow && <span>from ${kit.estimatedBudgetLow.toLocaleString()}</span>}

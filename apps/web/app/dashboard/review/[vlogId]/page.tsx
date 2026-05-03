@@ -199,7 +199,7 @@ export default async function DashboardReviewVideoPage({ params }: { params: { v
             </h2>
             <p className="dashboard-mirror-subtle mt-2 max-w-3xl text-sm">
               {publishSummary.readyToPublish
-                ? 'Publishing will project the selected itinerary opportunity into the storefront Trip Kit.'
+                ? 'Publishing will project the selected itinerary opportunity into the creator portal Trip Kit.'
                 : 'Approve or edit an itinerary opportunity first, then publish it here.'}
             </p>
           </div>

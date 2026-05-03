@@ -40,10 +40,10 @@ describe('StorefrontNavActions', () => {
 
     expect(html).not.toContain('Follow alexwanders');
     expect(html).toContain('QA Subscriber');
-    expect(html).toContain('storefront-account-pill');
+    expect(html).toContain('creator portal-account-pill');
   });
 
-  it('shows the header follow button on non-subscribe storefront pages', () => {
+  it('shows the header follow button on non-subscribe creator portal pages', () => {
     mockUsePathname.mockReturnValue('/@alexwanders');
 
     const html = renderToStaticMarkup(
@@ -58,6 +58,6 @@ describe('StorefrontNavActions', () => {
 
     expect(html).toContain('Follow alexwanders');
     expect(html).toContain('QA Subscriber');
-    expect(html).toContain('storefront-account-pill');
+    expect(html).toContain('creator portal-account-pill');
   });
 });

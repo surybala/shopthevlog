@@ -32,7 +32,7 @@ export function buildE2EUser(userId: string) {
   const isAdmin = getE2EAdminUserIds().has(userId)
   return {
     id: userId,
-    email: `e2e+${userId}@vlogshopper.test`,
+    email: `e2e+${userId}@tripkits.test`,
     app_metadata: {
       approved: true,
       admin: isAdmin,

@@ -209,7 +209,7 @@ export default async function DashboardPayoutsPage({
 
           {commissions.length === 0 ? (
             <div className="p-8 text-center text-sm text-[rgba(23,51,45,0.62)]">
-              No commissions yet. Share your storefront and Trip Kit affiliate links to start earning.
+              No commissions yet. Share your creator portal and Trip Kit affiliate links to start earning.
             </div>
           ) : (
             <div className="divide-y divide-[rgba(23,51,45,0.08)]">

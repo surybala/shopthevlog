@@ -26,7 +26,7 @@ test.describe('creator review publish flow', () => {
     await page.context().request.delete('/api/test-support/login')
   })
 
-  test('creator can review a seeded vlog, publish its itinerary, and see it on the storefront', async ({ page }) => {
+  test('creator can review a seeded vlog, publish its itinerary, and see it on the creator portal', async ({ page }) => {
     const seed = await authenticateAndSeed(page)
 
     await page.goto('/dashboard/review')

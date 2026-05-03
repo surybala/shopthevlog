@@ -68,11 +68,11 @@ export default async function DashboardAffiliatesPage() {
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div>
             <p className="dashboard-mirror-kicker text-xs">Revenue links</p>
-            <h1 className="mt-3 text-3xl font-bold text-[#17332d]">Track what subscribers tap, book, and buy across every storefront surface.</h1>
+            <h1 className="mt-3 text-3xl font-bold text-[#17332d]">Track what subscribers tap, book, and buy across every creator portal surface.</h1>
             <p className="dashboard-mirror-subtle mt-2 max-w-2xl text-sm">
               See which providers convert, which kits drive revenue, and how much commission is still pending versus confirmed.
             </p>
-            <p className="dashboard-mirror-muted mt-3 text-xs">{links.length} active links across your storefront and Trip Kits</p>
+            <p className="dashboard-mirror-muted mt-3 text-xs">{links.length} active links across your creator portal and Trip Kits</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <Link href="/dashboard/payouts" className="dashboard-action-chip text-sm">

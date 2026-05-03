@@ -68,8 +68,8 @@ describe('creator profile route', () => {
         storefrontTheme: 'BEACH_RETREAT',
         storefrontTagline: 'Salt, sun, and soft landings',
         storefrontIntro: 'Come for the beaches, stay for the food.',
-        storefrontMoodImageUrl: 'creators/creator-1/storefront/mood/mood.jpg',
-        storefrontGalleryImages: ['creators/creator-1/storefront/gallery/one.jpg', 'creators/creator-1/storefront/gallery/two.jpg'],
+        storefrontMoodImageUrl: 'creators/creator-1/creator portal/mood/mood.jpg',
+        storefrontGalleryImages: ['creators/creator-1/creator portal/gallery/one.jpg', 'creators/creator-1/creator portal/gallery/two.jpg'],
       }),
     }));
     expect(mockCreate).toHaveBeenCalledWith({
@@ -83,14 +83,14 @@ describe('creator profile route', () => {
         storefrontTheme: 'BEACH_RETREAT',
         storefrontTagline: 'Salt, sun, and soft landings',
         storefrontIntro: 'Come for the beaches, stay for the food.',
-        storefrontMoodImageUrl: 'creators/creator-1/storefront/mood/mood.jpg',
-        storefrontGalleryImages: ['creators/creator-1/storefront/gallery/one.jpg', 'creators/creator-1/storefront/gallery/two.jpg'],
+        storefrontMoodImageUrl: 'creators/creator-1/creator portal/mood/mood.jpg',
+        storefrontGalleryImages: ['creators/creator-1/creator portal/gallery/one.jpg', 'creators/creator-1/creator portal/gallery/two.jpg'],
       },
     });
     expect(res.status).toBe(201);
   });
 
-  it('PATCH validates storefront theme and gallery images', async () => {
+  it('PATCH validates creator portal theme and gallery images', async () => {
     mockFindUnique.mockResolvedValue({ id: 'creator-1', handle: 'creator' });
     const res = await PATCH(new NextRequest('http://localhost/api/creator/profile', {
       method: 'PATCH',
@@ -133,7 +133,7 @@ describe('creator profile route', () => {
         isPublished: true,
         storefrontTheme: 'FOOD_TRAIL',
         storefrontTagline: 'Eat first, plan later',
-        storefrontGalleryImages: ['creators/creator-1/storefront/gallery/gallery.jpg'],
+        storefrontGalleryImages: ['creators/creator-1/creator portal/gallery/gallery.jpg'],
       }),
     }));
     expect(mockUpdate).toHaveBeenCalledWith({
@@ -143,7 +143,7 @@ describe('creator profile route', () => {
         isPublished: true,
         storefrontTheme: 'FOOD_TRAIL',
         storefrontTagline: 'Eat first, plan later',
-        storefrontGalleryImages: ['creators/creator-1/storefront/gallery/gallery.jpg'],
+        storefrontGalleryImages: ['creators/creator-1/creator portal/gallery/gallery.jpg'],
       },
     });
     expect(res.status).toBe(200);

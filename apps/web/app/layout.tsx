@@ -19,19 +19,19 @@ const metadataBase = (() => {
 
 export const metadata: Metadata = {
   metadataBase,
-  title: 'VlogShopper - Creator-first travel storefronts',
+  title: 'TripKits - The creator portal for travel vloggers',
   description:
-    'Turn your vlog back-catalog into a shoppable travel storefront. AI-powered Trip Kits, affiliate income, subscriber subscriptions.',
+    'TripKits is an AI-powered creator portal — grow your audience, benchmark your niche, and turn your travel vlogs into revenue when you\'re ready.',
   icons: {
     icon: [{ url: '/logo.png', type: 'image/png' }],
     apple: [{ url: '/logo.png', type: 'image/png' }],
     shortcut: '/logo.png',
   },
   openGraph: {
-    title: 'VlogShopper',
+    title: 'TripKits',
     description: 'Creator-first vlog-based travel commerce platform',
     type: 'website',
-    images: [{ url: '/logo.png', width: 1024, height: 1024, alt: 'VlogShopper' }],
+    images: [{ url: '/logo.png', width: 1024, height: 1024, alt: 'TripKits' }],
   },
 }
 

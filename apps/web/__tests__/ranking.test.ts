@@ -54,7 +54,7 @@ describe('partitionStorefrontTripKits', () => {
     ]);
   });
 
-  it('supports custom storefront limits', () => {
+  it('supports custom creator portal limits', () => {
     const result = partitionStorefrontTripKits(kits, {
       featuredLimit: 2,
       recentLimit: 2,

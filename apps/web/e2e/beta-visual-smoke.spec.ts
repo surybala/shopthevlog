@@ -83,7 +83,7 @@ test.describe('beta visual smoke coverage', () => {
     const subscriberSeed = await authenticateSubscriberAndSeed(page)
 
     await page.goto('/')
-    await expectReadableDarkText(page.getByText('VlogShopper').first())
+    await expectReadableDarkText(page.getByText('TripKits').first())
     await expectReadableDarkText(page.getByRole('link', { name: 'Discover' }))
     await expectNoWrap(
       page.locator('a', {
@@ -107,15 +107,15 @@ test.describe('beta visual smoke coverage', () => {
     const creatorSeed = await authenticateCreatorAndSeed(page)
 
     await page.goto('/dashboard')
-    await expectReadableDarkText(page.getByText(/Good morning|Storefront performance/i).first())
+    await expectReadableDarkText(page.getByText(/Good morning|Creator Portal performance/i).first())
     await expectNoWrap(page.getByRole('link', { name: /\+ New Kit|New Kit/i }))
 
     await page.goto('/dashboard/vlogs')
-    await expectReadableDarkText(page.getByRole('heading', { name: 'Source videos powering your storefront.' }))
+    await expectReadableDarkText(page.getByRole('heading', { name: 'Source videos powering your creator portal.' }))
 
     await page.goto('/dashboard/settings')
     await expectReadableDarkText(page.getByRole('heading', { name: 'Settings' }))
-    await expectReadableDarkText(page.getByRole('button', { name: 'storefront' }))
+    await expectReadableDarkText(page.getByRole('button', { name: 'creator portal' }))
     await expectReadableDarkText(page.getByRole('button', { name: 'channels' }))
 
     await page.goto('/dashboard/review')

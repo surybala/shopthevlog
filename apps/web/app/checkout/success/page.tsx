@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 
 export const metadata = {
-  title: 'Subscription Confirmed — VlogShopper',
+  title: 'Subscription Confirmed — TripKits',
 }
 
 function SuccessContent({

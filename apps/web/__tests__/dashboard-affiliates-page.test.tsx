@@ -80,7 +80,7 @@ describe('DashboardAffiliatesPage', () => {
     const html = renderToStaticMarkup(page)
 
     expect(html).toContain('Revenue links')
-    expect(html).toContain('Track what subscribers tap, book, and buy across every storefront surface.')
+    expect(html).toContain('Track what subscribers tap, book, and buy across every creator portal surface.')
     expect(html).toContain('Provider earnings mix')
     expect(html).toContain('Top earning kits')
     expect(html).toContain('Recent commission activity')

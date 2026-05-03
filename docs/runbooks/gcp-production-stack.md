@@ -1,4 +1,4 @@
-# VlogShopper Production Runbook on Google Cloud
+# TripKits Production Runbook on Google Cloud
 
 This runbook stands up the first production stack for `vlogshopper.com` with:
 
@@ -13,10 +13,10 @@ This document assumes a single Google Cloud project for the first production env
 
 - `https://vlogshopper.com` and `https://www.vlogshopper.com`
   - global external Application Load Balancer
-  - serverless NEG pointing at Cloud Run service `vlogshopper-web`
+  - serverless NEG pointing at Cloud Run service `tripkits-web`
 - `https://api.vlogshopper.com`
   - global external Application Load Balancer
-  - serverless NEG pointing at Cloud Run service `vlogshopper-ai`
+  - serverless NEG pointing at Cloud Run service `tripkits-ai`
 - Supabase
   - primary Postgres
   - auth
@@ -53,7 +53,7 @@ gcloud services enable \
 
 Use a dedicated project, for example:
 
-- Project ID: `vlogshopper-prod`
+- Project ID: `tripkits-prod`
 - Region: `us-central1`
 
 ## 3. Artifact Registry
@@ -61,10 +61,10 @@ Use a dedicated project, for example:
 Create one Docker repository:
 
 ```bash
-gcloud artifacts repositories create vlogshopper-prod \
+gcloud artifacts repositories create tripkits-prod \
   --repository-format=docker \
   --location=us-central1 \
-  --description="VlogShopper production images"
+  --description="TripKits production images"
 ```
 
 ## 4. Secrets and Runtime Configuration
@@ -174,7 +174,7 @@ The repo now includes:
 ```bash
 gcloud builds submit \
   --config deploy/cloudbuild.web.yaml \
-  --substitutions _REGION=us-central1,_AR_REPO=vlogshopper-prod,_SERVICE=vlogshopper-web
+  --substitutions _REGION=us-central1,_AR_REPO=tripkits-prod,_SERVICE=tripkits-web
 ```
 
 ### Backend deploy
@@ -182,7 +182,7 @@ gcloud builds submit \
 ```bash
 gcloud builds submit \
   --config deploy/cloudbuild.backend.yaml \
-  --substitutions _REGION=us-central1,_AR_REPO=vlogshopper-prod,_SERVICE=vlogshopper-ai
+  --substitutions _REGION=us-central1,_AR_REPO=tripkits-prod,_SERVICE=tripkits-ai
 ```
 
 After the first deploy, update each Cloud Run service to attach its secrets.
@@ -199,7 +199,7 @@ After the first deploy, update each Cloud Run service to attach its secrets.
 Suggested secret/env wiring:
 
 ```bash
-gcloud run services update vlogshopper-web \
+gcloud run services update tripkits-web \
   --region us-central1 \
   --set-env-vars NEXT_PUBLIC_BASE_URL=https://vlogshopper.com,AI_PIPELINE_URL=https://api.vlogshopper.com,ALLOW_OPEN_SIGNUPS=false \
   --set-secrets NEXT_PUBLIC_SUPABASE_URL=next-public-supabase-url:latest,NEXT_PUBLIC_SUPABASE_ANON_KEY=next-public-supabase-anon-key:latest,NEXT_PUBLIC_SENTRY_DSN=next-public-sentry-dsn:latest,SENTRY_DSN=sentry-dsn-web:latest,ADMIN_EMAILS=admin-emails:latest,ALLOWED_EMAILS=allowed-emails:latest
@@ -217,7 +217,7 @@ gcloud run services update vlogshopper-web \
 Suggested secret/env wiring:
 
 ```bash
-gcloud run services update vlogshopper-ai \
+gcloud run services update tripkits-ai \
   --region us-central1 \
   --set-env-vars APP_ENV=production,CORS_ORIGINS=https://vlogshopper.com,https://www.vlogshopper.com,SUPABASE_STORAGE_BUCKET=ai-pipeline-assets \
   --set-secrets DATABASE_URL=database-url:latest,APP_SECRET_KEY=app-secret-key:latest,SUPABASE_URL=supabase-url:latest,SUPABASE_SECRET_KEY=supabase-secret-key:latest,YOUTUBE_CLIENT_ID=youtube-client-id:latest,YOUTUBE_CLIENT_SECRET=youtube-client-secret:latest,YOUTUBE_REDIRECT_URI=youtube-redirect-uri:latest,YOUTUBE_API_KEY=youtube-api-key:latest,INSTAGRAM_CLIENT_ID=instagram-client-id:latest,INSTAGRAM_CLIENT_SECRET=instagram-client-secret:latest,INSTAGRAM_REDIRECT_URI=instagram-redirect-uri:latest,TIKTOK_CLIENT_KEY=tiktok-client-key:latest,TIKTOK_CLIENT_SECRET=tiktok-client-secret:latest,TIKTOK_REDIRECT_URI=tiktok-redirect-uri:latest,GEMINI_API_KEY=gemini-api-key:latest,GOOGLE_PLACES_API_KEY=google-places-api-key:latest,REDIS_URL=redis-url:latest,SENTRY_DSN=sentry-dsn-backend:latest
@@ -236,50 +236,50 @@ Recommended public host split:
 ### 7.1 Reserve a global IP
 
 ```bash
-gcloud compute addresses create vlogshopper-web-ip --global
-gcloud compute addresses create vlogshopper-api-ip --global
+gcloud compute addresses create tripkits-web-ip --global
+gcloud compute addresses create tripkits-api-ip --global
 ```
 
 Fetch the IPs:
 
 ```bash
-gcloud compute addresses describe vlogshopper-web-ip --global
-gcloud compute addresses describe vlogshopper-api-ip --global
+gcloud compute addresses describe tripkits-web-ip --global
+gcloud compute addresses describe tripkits-api-ip --global
 ```
 
 ### 7.2 Create serverless NEGs
 
 ```bash
-gcloud compute network-endpoint-groups create vlogshopper-web-neg \
+gcloud compute network-endpoint-groups create tripkits-web-neg \
   --region=us-central1 \
   --network-endpoint-type=serverless \
-  --cloud-run-service=vlogshopper-web
+  --cloud-run-service=tripkits-web
 
-gcloud compute network-endpoint-groups create vlogshopper-ai-neg \
+gcloud compute network-endpoint-groups create tripkits-ai-neg \
   --region=us-central1 \
   --network-endpoint-type=serverless \
-  --cloud-run-service=vlogshopper-ai
+  --cloud-run-service=tripkits-ai
 ```
 
 ### 7.3 Create backend services
 
 ```bash
-gcloud compute backend-services create vlogshopper-web-backend \
+gcloud compute backend-services create tripkits-web-backend \
   --global \
   --load-balancing-scheme=EXTERNAL_MANAGED
 
-gcloud compute backend-services add-backend vlogshopper-web-backend \
+gcloud compute backend-services add-backend tripkits-web-backend \
   --global \
-  --network-endpoint-group=vlogshopper-web-neg \
+  --network-endpoint-group=tripkits-web-neg \
   --network-endpoint-group-region=us-central1
 
-gcloud compute backend-services create vlogshopper-ai-backend \
+gcloud compute backend-services create tripkits-ai-backend \
   --global \
   --load-balancing-scheme=EXTERNAL_MANAGED
 
-gcloud compute backend-services add-backend vlogshopper-ai-backend \
+gcloud compute backend-services add-backend tripkits-ai-backend \
   --global \
-  --network-endpoint-group=vlogshopper-ai-neg \
+  --network-endpoint-group=tripkits-ai-neg \
   --network-endpoint-group-region=us-central1
 ```
 
@@ -290,10 +290,10 @@ Use Certificate Manager with DNS authorization.
 Create DNS authorizations:
 
 ```bash
-gcloud certificate-manager dns-authorizations create vlogshopper-root-auth \
+gcloud certificate-manager dns-authorizations create tripkits-root-auth \
   --domain="vlogshopper.com"
 
-gcloud certificate-manager dns-authorizations create vlogshopper-api-auth \
+gcloud certificate-manager dns-authorizations create tripkits-api-auth \
   --domain="api.vlogshopper.com"
 ```
 
@@ -302,13 +302,13 @@ Create the DNS CNAME records exactly as Certificate Manager tells you to.
 Then create certificates:
 
 ```bash
-gcloud certificate-manager certificates create vlogshopper-web-cert \
+gcloud certificate-manager certificates create tripkits-web-cert \
   --domains="vlogshopper.com,www.vlogshopper.com" \
-  --dns-authorizations="vlogshopper-root-auth"
+  --dns-authorizations="tripkits-root-auth"
 
-gcloud certificate-manager certificates create vlogshopper-api-cert \
+gcloud certificate-manager certificates create tripkits-api-cert \
   --domains="api.vlogshopper.com" \
-  --dns-authorizations="vlogshopper-api-auth"
+  --dns-authorizations="tripkits-api-auth"
 ```
 
 ## 9. URL Maps, Proxies, and Forwarding Rules
@@ -316,42 +316,42 @@ gcloud certificate-manager certificates create vlogshopper-api-cert \
 Create one HTTPS proxy per frontend:
 
 ```bash
-gcloud compute url-maps create vlogshopper-web-map \
-  --default-service=vlogshopper-web-backend
+gcloud compute url-maps create tripkits-web-map \
+  --default-service=tripkits-web-backend
 
-gcloud compute url-maps create vlogshopper-api-map \
-  --default-service=vlogshopper-ai-backend
+gcloud compute url-maps create tripkits-api-map \
+  --default-service=tripkits-ai-backend
 ```
 
 Attach certificates using target HTTPS proxies:
 
 ```bash
-gcloud compute target-https-proxies create vlogshopper-web-proxy \
-  --url-map=vlogshopper-web-map \
-  --certificate-manager-certificates=vlogshopper-web-cert
+gcloud compute target-https-proxies create tripkits-web-proxy \
+  --url-map=tripkits-web-map \
+  --certificate-manager-certificates=tripkits-web-cert
 
-gcloud compute target-https-proxies create vlogshopper-api-proxy \
-  --url-map=vlogshopper-api-map \
-  --certificate-manager-certificates=vlogshopper-api-cert
+gcloud compute target-https-proxies create tripkits-api-proxy \
+  --url-map=tripkits-api-map \
+  --certificate-manager-certificates=tripkits-api-cert
 ```
 
 Create forwarding rules:
 
 ```bash
-gcloud compute forwarding-rules create vlogshopper-web-https \
+gcloud compute forwarding-rules create tripkits-web-https \
   --global \
   --load-balancing-scheme=EXTERNAL_MANAGED \
   --network-tier=PREMIUM \
-  --address=vlogshopper-web-ip \
-  --target-https-proxy=vlogshopper-web-proxy \
+  --address=tripkits-web-ip \
+  --target-https-proxy=tripkits-web-proxy \
   --ports=443
 
-gcloud compute forwarding-rules create vlogshopper-api-https \
+gcloud compute forwarding-rules create tripkits-api-https \
   --global \
   --load-balancing-scheme=EXTERNAL_MANAGED \
   --network-tier=PREMIUM \
-  --address=vlogshopper-api-ip \
-  --target-https-proxy=vlogshopper-api-proxy \
+  --address=tripkits-api-ip \
+  --target-https-proxy=tripkits-api-proxy \
   --ports=443
 ```
 
@@ -370,9 +370,9 @@ You can manage DNS in Cloud DNS or in your registrar. Since you asked for wiring
 If using Cloud DNS:
 
 ```bash
-gcloud dns managed-zones create vlogshopper-zone \
+gcloud dns managed-zones create tripkits-zone \
   --dns-name="vlogshopper.com." \
-  --description="VlogShopper production zone"
+  --description="TripKits production zone"
 ```
 
 Then create records in the zone:
@@ -413,7 +413,7 @@ npx prisma migrate deploy
 - process the vlog
 - confirm review queue shows opportunities
 - publish a Trip Kit
-- verify storefront renders the published kit
+- verify creator portal renders the published kit
 
 ### Subscriber flow
 
@@ -452,7 +452,7 @@ Alert if:
 
 ### Cloud Run alert policies
 
-Create policies for both `vlogshopper-web` and `vlogshopper-ai`:
+Create policies for both `tripkits-web` and `tripkits-ai`:
 
 - request count drops unexpectedly during active periods
 - 5xx rate exceeds 2% for 5 minutes
@@ -489,7 +489,7 @@ Recommended alerts:
 
 ### Web 5xx spike
 
-1. Check Cloud Run revisions for `vlogshopper-web`
+1. Check Cloud Run revisions for `tripkits-web`
 2. Check Sentry release health
 3. Roll back to prior revision if needed
 4. Confirm `https://vlogshopper.com/` and `/discover`

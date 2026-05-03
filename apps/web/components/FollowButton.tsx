@@ -62,7 +62,7 @@ export default function FollowButton({
         onClick={handleClick}
         disabled={loading}
         className={`${sizeCls} disabled:opacity-50 ${
-          following ? 'storefront-outline-button storefront-outline-button--active' : 'btn-primary'
+          following ? 'creator portal-outline-button creator portal-outline-button--active' : 'btn-primary'
         } ${className}`}
       >
         {loading ? '...' : following ? 'Following' : 'Follow'}
