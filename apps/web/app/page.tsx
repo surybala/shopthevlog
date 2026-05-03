@@ -349,7 +349,7 @@ export default async function HomePage() {
                 body: 'See how your channel stacks up in your niche and get context on what top-performing creators in your space are doing differently.',
               },
               {
-                title: 'Monetization when you're ready',
+                title: "Monetization when you're ready",
                 body: 'Affiliate-ready Trip Kits, subscriber unlocks, and portal analytics are all there — you decide when to turn them on.',
               },
             ].map((item) => (
