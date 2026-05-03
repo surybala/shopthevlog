@@ -166,9 +166,26 @@ class TestAnalyzeContentPatterns:
             analyze_content_patterns(SAMPLE_VLOGS, "testcreator")
 
         assert len(captured_prompts) == 1
-        # highest-view video should appear in TOP PERFORMING section
+        # highest-view video should appear in the sorted videos section
         assert "Japan" in captured_prompts[0]
-        assert "TOP PERFORMING" in captured_prompts[0]
+        assert "CREATOR'S VIDEOS" in captured_prompts[0]
+
+    def test_zero_view_data_adds_note_to_prompt(self):
+        zero_view_vlogs = [
+            {"title": "Bali Trip Vlog", "viewCount": 0, "transcript_excerpt": "..."},
+            {"title": "Tokyo Food Guide", "viewCount": 0, "transcript_excerpt": "..."},
+        ]
+        captured_prompts = []
+
+        def _capture(system, user_content, max_tokens):
+            captured_prompts.append(user_content)
+            return json.dumps(SAMPLE_PATTERNS)
+
+        with patch("app.services.insights_gemini_service._call_gemini", side_effect=_capture):
+            from app.services.insights_gemini_service import analyze_content_patterns
+            analyze_content_patterns(zero_view_vlogs, "testcreator")
+
+        assert "View count data is unavailable" in captured_prompts[0]
 
 
 class TestAnalyzeAudienceDemands:

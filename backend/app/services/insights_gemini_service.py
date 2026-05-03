@@ -49,10 +49,12 @@ Schema:
 Rules:
 - top_patterns: max 5 items
 - weak_patterns: max 3 items
-- content_gaps must be grounded in the data — never invent gaps not supported by the videos
 - Be specific to THIS creator, not generic YouTube advice
-- If data is too sparse to judge, use niche benchmarks (when provided) to fill gaps honestly
+- If ALL creator videos show 0 views, view count data is unavailable — analyze based on titles, transcripts, and niche instead
+- If view counts are unavailable or identical, skip weak_patterns and top_patterns based on views; instead derive patterns from content topics and titles
+- content_gaps: when view data is sparse, use benchmark videos to identify proven formats this creator hasn't covered; if no benchmarks, derive gaps from title/topic analysis
 - When benchmarks are present: identify what proven formats the creator hasn't explored, and what angles they could own that benchmarks don't cover
+- Never output "data is insufficient" as a gap or pattern — always provide actionable, topic-specific observations based on whatever data IS available
 """
 
 AUDIENCE_DEMAND_PROMPT = """You are a YouTube audience analyst. You receive a batch of real viewer comments from a travel creator's videos.
@@ -139,6 +141,9 @@ def analyze_content_patterns(
     if not vlogs:
         return None
 
+    view_counts = [v.get("viewCount") or 0 for v in vlogs]
+    has_view_data = any(c > 0 for c in view_counts)
+
     top = sorted(vlogs, key=lambda v: v.get("viewCount") or 0, reverse=True)[:5]
     bottom = sorted(vlogs, key=lambda v: v.get("viewCount") or 0)[:5]
 
@@ -151,11 +156,20 @@ def analyze_content_patterns(
         for v in bottom
     )
 
+    view_data_note = (
+        ""
+        if has_view_data
+        else "\nNOTE: View count data is unavailable for this creator (all show 0). "
+             "Analyze patterns based on titles, topics, and transcript content only. "
+             "Rely heavily on niche benchmarks when provided.\n"
+    )
+
     prompt = (
         f"Creator: @{creator_handle}\n"
-        f"Total videos analyzed: {len(vlogs)}\n\n"
-        f"TOP PERFORMING VIDEOS (highest view counts):\n{top_section}\n\n"
-        f"LOWER PERFORMING VIDEOS (lowest view counts):\n{bottom_section}"
+        f"Total videos analyzed: {len(vlogs)}\n"
+        f"{view_data_note}\n"
+        f"CREATOR'S VIDEOS (sorted by view count):\n{top_section}\n\n"
+        f"LOWER PERFORMING VIDEOS:\n{bottom_section}"
     )
 
     if benchmarks:
