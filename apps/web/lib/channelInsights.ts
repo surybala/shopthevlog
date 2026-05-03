@@ -30,6 +30,8 @@ export type AudienceDemand = {
   underserved_needs?: string[]
 }
 
+export type BriefStatus = 'IDEA' | 'FILMING' | 'PUBLISHED'
+
 export type ContentBriefRow = {
   id: string
   title: string
@@ -39,6 +41,8 @@ export type ContentBriefRow = {
   audienceSignal: string | null
   estimatedScore: number
   reasoning: string | null
+  briefStatus: BriefStatus
+  publishedVlogId: string | null
   createdAt: string | null
 }
 
@@ -179,4 +183,161 @@ export function parseAudienceDemands(audienceDemands: unknown): AudienceDemand {
     }
   }
   return {}
+}
+
+// ─── Brief status display ─────────────────────────────────────────────────────
+
+export type BriefStatusDisplay = {
+  label: string
+  tone: InsightTone
+  nextLabel: string
+  nextStatus: BriefStatus
+  canAdvance: boolean
+}
+
+export function buildBriefStatusDisplay(status: BriefStatus): BriefStatusDisplay {
+  switch (status) {
+    case 'FILMING':
+      return {
+        label: 'Filming',
+        tone: 'amber',
+        nextLabel: 'Mark published',
+        nextStatus: 'PUBLISHED',
+        canAdvance: true,
+      }
+    case 'PUBLISHED':
+      return {
+        label: 'Published',
+        tone: 'emerald',
+        nextLabel: '',
+        nextStatus: 'PUBLISHED',
+        canAdvance: false,
+      }
+    default:
+      return {
+        label: 'Idea',
+        tone: 'slate',
+        nextLabel: 'Start filming',
+        nextStatus: 'FILMING',
+        canAdvance: true,
+      }
+  }
+}
+
+// ─── Niche benchmark comparison ───────────────────────────────────────────────
+
+export type NicheStats = {
+  creatorAvgViews?: number
+  nicheAvgViews?: number
+  creatorEngagementRate?: number
+  nicheEngagementRate?: number
+  creatorUploadsPerMonth?: number
+  nicheUploadsPerMonth?: number
+}
+
+export type NicheComparisonRow = {
+  label: string
+  creatorValue: string
+  nicheValue: string
+  delta: string
+  ahead: boolean
+}
+
+export type NicheComparison = {
+  rows: NicheComparisonRow[]
+  show: boolean
+}
+
+function fmtViews(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+  return String(Math.round(n))
+}
+
+function fmtPct(n: number): string {
+  return `${n.toFixed(1)}%`
+}
+
+function fmtFreq(n: number): string {
+  return `${n.toFixed(1)}/mo`
+}
+
+function deltaPct(creator: number, niche: number): string {
+  if (niche === 0) return '—'
+  const d = ((creator - niche) / niche) * 100
+  return `${d >= 0 ? '+' : ''}${d.toFixed(0)}%`
+}
+
+export function buildNicheComparison(nicheStats: unknown): NicheComparison {
+  const stats = parseNicheStats(nicheStats)
+  const rows: NicheComparisonRow[] = []
+
+  if (stats.creatorAvgViews != null && stats.nicheAvgViews != null) {
+    rows.push({
+      label: 'Avg views / video',
+      creatorValue: fmtViews(stats.creatorAvgViews),
+      nicheValue: fmtViews(stats.nicheAvgViews),
+      delta: deltaPct(stats.creatorAvgViews, stats.nicheAvgViews),
+      ahead: stats.creatorAvgViews >= stats.nicheAvgViews,
+    })
+  }
+
+  if (stats.creatorEngagementRate != null && stats.nicheEngagementRate != null) {
+    rows.push({
+      label: 'Engagement rate',
+      creatorValue: fmtPct(stats.creatorEngagementRate),
+      nicheValue: fmtPct(stats.nicheEngagementRate),
+      delta: deltaPct(stats.creatorEngagementRate, stats.nicheEngagementRate),
+      ahead: stats.creatorEngagementRate >= stats.nicheEngagementRate,
+    })
+  }
+
+  if (stats.creatorUploadsPerMonth != null && stats.nicheUploadsPerMonth != null) {
+    rows.push({
+      label: 'Upload frequency',
+      creatorValue: fmtFreq(stats.creatorUploadsPerMonth),
+      nicheValue: fmtFreq(stats.nicheUploadsPerMonth),
+      delta: deltaPct(stats.creatorUploadsPerMonth, stats.nicheUploadsPerMonth),
+      ahead: stats.creatorUploadsPerMonth >= stats.nicheUploadsPerMonth,
+    })
+  }
+
+  return { rows, show: rows.length > 0 }
+}
+
+export function parseNicheStats(nicheStats: unknown): NicheStats {
+  if (!nicheStats) return {}
+  if (typeof nicheStats === 'object' && !Array.isArray(nicheStats)) {
+    return nicheStats as NicheStats
+  }
+  if (typeof nicheStats === 'string') {
+    try {
+      return JSON.parse(nicheStats) as NicheStats
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+
+// ─── Staleness detection ──────────────────────────────────────────────────────
+
+export const STALE_THRESHOLD_DAYS = 21
+
+export type StalenessNote = {
+  show: boolean
+  daysOld: number
+  message: string
+}
+
+export function buildStalenessNote(analyzedAt: Date | string | null): StalenessNote {
+  if (!analyzedAt) return { show: false, daysOld: 0, message: '' }
+  const ms = Date.now() - new Date(analyzedAt).getTime()
+  const daysOld = Math.floor(ms / (1000 * 60 * 60 * 24))
+  if (daysOld < STALE_THRESHOLD_DAYS) return { show: false, daysOld, message: '' }
+  return {
+    show: true,
+    daysOld,
+    message: `Your briefs are ${daysOld} days old — niches shift fast. Re-analyze to stay ahead.`,
+  }
 }

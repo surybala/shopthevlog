@@ -2,14 +2,21 @@ import { describe, it, expect } from 'vitest'
 import {
   buildInsightStatusDisplay,
   buildBenchmarkNote,
+  buildBriefStatusDisplay,
+  buildNicheComparison,
+  buildStalenessNote,
+  parseNicheStats,
   rankBriefsByScore,
   parseBrief,
   scoreTone,
   scoreLabel,
   parseTopPatterns,
   parseAudienceDemands,
+  STALE_THRESHOLD_DAYS,
   type ContentBriefRow,
   type AnalysisStatus,
+  type BriefStatus,
+  type NicheStats,
 } from '@/lib/channelInsights'
 
 // ─── buildInsightStatusDisplay ────────────────────────────────────────────────
@@ -67,6 +74,8 @@ const RAW_BRIEF: ContentBriefRow = {
   audienceSignal: 'Top comment request: budget breakdown',
   estimatedScore: 78,
   reasoning: 'Budget content outperforms by 3x for this creator.',
+  briefStatus: 'IDEA',
+  publishedVlogId: null,
   createdAt: null,
 }
 
@@ -249,5 +258,178 @@ describe('buildBenchmarkNote', () => {
 
   it('returns show=false for null-ish inputs', () => {
     expect(buildBenchmarkNote(false, 0).show).toBe(false)
+  })
+})
+
+// ─── buildBriefStatusDisplay ──────────────────────────────────────────────────
+
+describe('buildBriefStatusDisplay', () => {
+  it('IDEA: slate tone, can advance to FILMING', () => {
+    const d = buildBriefStatusDisplay('IDEA')
+    expect(d.label).toBe('Idea')
+    expect(d.tone).toBe('slate')
+    expect(d.canAdvance).toBe(true)
+    expect(d.nextStatus).toBe('FILMING')
+    expect(d.nextLabel).toBeTruthy()
+  })
+
+  it('FILMING: amber tone, can advance to PUBLISHED', () => {
+    const d = buildBriefStatusDisplay('FILMING')
+    expect(d.label).toBe('Filming')
+    expect(d.tone).toBe('amber')
+    expect(d.canAdvance).toBe(true)
+    expect(d.nextStatus).toBe('PUBLISHED')
+  })
+
+  it('PUBLISHED: emerald tone, terminal — canAdvance is false', () => {
+    const d = buildBriefStatusDisplay('PUBLISHED')
+    expect(d.label).toBe('Published')
+    expect(d.tone).toBe('emerald')
+    expect(d.canAdvance).toBe(false)
+    expect(d.nextLabel).toBe('')
+  })
+
+  it('covers all BriefStatus values without throwing', () => {
+    const statuses: BriefStatus[] = ['IDEA', 'FILMING', 'PUBLISHED']
+    for (const s of statuses) {
+      expect(() => buildBriefStatusDisplay(s)).not.toThrow()
+    }
+  })
+})
+
+// ─── parseNicheStats ──────────────────────────────────────────────────────────
+
+describe('parseNicheStats', () => {
+  it('returns empty object for null', () => expect(parseNicheStats(null)).toEqual({}))
+  it('returns empty object for undefined', () => expect(parseNicheStats(undefined)).toEqual({}))
+  it('returns empty object for arrays', () => expect(parseNicheStats([1, 2])).toEqual({}))
+
+  it('passes through a plain object', () => {
+    const stats: NicheStats = { creatorAvgViews: 5000, nicheAvgViews: 18000 }
+    expect(parseNicheStats(stats)).toEqual(stats)
+  })
+
+  it('parses a JSON string', () => {
+    const stats: NicheStats = { creatorEngagementRate: 3.2, nicheEngagementRate: 4.5 }
+    expect(parseNicheStats(JSON.stringify(stats))).toEqual(stats)
+  })
+
+  it('returns empty object for invalid JSON string', () => {
+    expect(parseNicheStats('not-json{')).toEqual({})
+  })
+})
+
+// ─── buildNicheComparison ─────────────────────────────────────────────────────
+
+describe('buildNicheComparison', () => {
+  it('returns show=false when nicheStats is null', () => {
+    const result = buildNicheComparison(null)
+    expect(result.show).toBe(false)
+    expect(result.rows).toHaveLength(0)
+  })
+
+  it('returns show=false when object has no matching fields', () => {
+    expect(buildNicheComparison({}).show).toBe(false)
+  })
+
+  it('builds a views row and marks creator behind niche', () => {
+    const result = buildNicheComparison({ creatorAvgViews: 5000, nicheAvgViews: 18000 })
+    expect(result.show).toBe(true)
+    const row = result.rows.find((r) => r.label === 'Avg views / video')!
+    expect(row.creatorValue).toBe('5.0k')
+    expect(row.nicheValue).toBe('18.0k')
+    expect(row.ahead).toBe(false)
+    expect(row.delta).toMatch(/-\d+%/)
+  })
+
+  it('marks creator ahead when above niche average', () => {
+    const result = buildNicheComparison({ creatorAvgViews: 25000, nicheAvgViews: 18000 })
+    const row = result.rows.find((r) => r.label === 'Avg views / video')!
+    expect(row.ahead).toBe(true)
+    expect(row.delta).toContain('+')
+  })
+
+  it('builds engagement rate row', () => {
+    const result = buildNicheComparison({ creatorEngagementRate: 3.2, nicheEngagementRate: 4.5 })
+    const row = result.rows.find((r) => r.label === 'Engagement rate')!
+    expect(row.creatorValue).toBe('3.2%')
+    expect(row.nicheValue).toBe('4.5%')
+  })
+
+  it('builds upload frequency row', () => {
+    const result = buildNicheComparison({ creatorUploadsPerMonth: 2.5, nicheUploadsPerMonth: 4.0 })
+    const row = result.rows.find((r) => r.label === 'Upload frequency')!
+    expect(row.creatorValue).toBe('2.5/mo')
+  })
+
+  it('skips a metric when only creator side is present', () => {
+    expect(buildNicheComparison({ creatorAvgViews: 5000 }).rows).toHaveLength(0)
+  })
+
+  it('builds all three rows when all stats are present', () => {
+    const result = buildNicheComparison({
+      creatorAvgViews: 5000, nicheAvgViews: 18000,
+      creatorEngagementRate: 3.2, nicheEngagementRate: 4.5,
+      creatorUploadsPerMonth: 2, nicheUploadsPerMonth: 4,
+    })
+    expect(result.rows).toHaveLength(3)
+    expect(result.show).toBe(true)
+  })
+
+  it('formats millions correctly', () => {
+    const result = buildNicheComparison({ creatorAvgViews: 1_500_000, nicheAvgViews: 2_000_000 })
+    const row = result.rows[0]
+    expect(row.creatorValue).toBe('1.5M')
+    expect(row.nicheValue).toBe('2.0M')
+  })
+
+  it('shows em-dash delta when niche value is zero', () => {
+    const result = buildNicheComparison({ creatorAvgViews: 5000, nicheAvgViews: 0 })
+    expect(result.rows[0].delta).toBe('—')
+  })
+})
+
+// ─── buildStalenessNote ───────────────────────────────────────────────────────
+
+describe('buildStalenessNote', () => {
+  it('returns show=false for null', () => {
+    expect(buildStalenessNote(null).show).toBe(false)
+  })
+
+  it('returns show=false when analyzed recently (5 days ago)', () => {
+    const recent = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)
+    const note = buildStalenessNote(recent)
+    expect(note.show).toBe(false)
+    expect(note.daysOld).toBe(5)
+  })
+
+  it(`returns show=false at ${STALE_THRESHOLD_DAYS - 1} days`, () => {
+    const d = new Date(Date.now() - (STALE_THRESHOLD_DAYS - 1) * 24 * 60 * 60 * 1000)
+    expect(buildStalenessNote(d).show).toBe(false)
+  })
+
+  it(`returns show=true at exactly ${STALE_THRESHOLD_DAYS} days`, () => {
+    const d = new Date(Date.now() - STALE_THRESHOLD_DAYS * 24 * 60 * 60 * 1000)
+    const note = buildStalenessNote(d)
+    expect(note.show).toBe(true)
+    expect(note.daysOld).toBe(STALE_THRESHOLD_DAYS)
+    expect(note.message).toMatch(/\d+ days old/)
+  })
+
+  it('returns show=true for very old dates (90 days)', () => {
+    const d = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+    const note = buildStalenessNote(d)
+    expect(note.show).toBe(true)
+    expect(note.daysOld).toBe(90)
+  })
+
+  it('accepts a date string', () => {
+    const old = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    expect(buildStalenessNote(old).show).toBe(true)
+  })
+
+  it('message includes re-analyze call to action', () => {
+    const d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    expect(buildStalenessNote(d).message).toMatch(/re-analy/i)
   })
 })

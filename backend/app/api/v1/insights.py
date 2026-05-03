@@ -4,13 +4,17 @@ Insights endpoints — trigger channel analysis and fetch results.
 Mirrors the vlogs.py pattern: auth guard → ownership check → background task.
 POST /insights/analyze  — queue analysis for the authenticated creator
 GET  /insights          — return latest ChannelInsight + ContentBriefs
+POST /insights/augment  — augment a creator's rough video idea with personalized recommendations
 """
+import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from pydantic import BaseModel, Field
 
 from app.core.security import get_current_user, UserClaims
 from app.db.pg_client import PgClient
 from app.tasks.analyze_channel import analyze_channel_task
+from app.services.insights_gemini_service import augment_creator_idea
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/insights", tags=["insights"])
@@ -88,3 +92,108 @@ async def get_insights(user: UserClaims = Depends(get_current_user)):
         briefs = [dict(row) for row in (db.fetchall() or [])]
 
     return {"insight": dict(insight), "briefs": briefs}
+
+
+# ─── Idea Augmentation ────────────────────────────────────────────────────────
+
+class AugmentIdeaRequest(BaseModel):
+    idea: str = Field(..., min_length=10, max_length=2000)
+
+
+@router.post("/augment")
+async def augment_idea(
+    body: AugmentIdeaRequest,
+    user: UserClaims = Depends(get_current_user),
+):
+    """
+    Augment a creator's rough video idea with personalized AI recommendations.
+    Synchronous — typically takes 3-8 seconds. Persists and returns the result.
+    """
+    with PgClient() as db:
+        db.execute(
+            'SELECT id, handle FROM "Creator" WHERE "userId" = %s',
+            (user.user_id,),
+        )
+        creator = db.fetchone()
+
+    if not creator:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    creator_id = creator["id"]
+    creator_handle = creator["handle"]
+
+    # Fetch channel insights for context
+    with PgClient() as db:
+        db.execute(
+            'SELECT "topPatterns", "audienceDemands" FROM "ChannelInsight" WHERE "creatorId" = %s AND status = \'COMPLETE\'',
+            (creator_id,),
+        )
+        insight = db.fetchone()
+
+    patterns = {}
+    audience = None
+    if insight:
+        try:
+            patterns = json.loads(insight["topPatterns"]) if isinstance(insight["topPatterns"], str) else (insight["topPatterns"] or {})
+        except Exception:
+            patterns = {}
+        try:
+            audience = json.loads(insight["audienceDemands"]) if isinstance(insight["audienceDemands"], str) else insight["audienceDemands"]
+        except Exception:
+            audience = None
+
+    # Fetch top performing vlogs for additional context
+    with PgClient() as db:
+        db.execute(
+            '''SELECT title, "viewCount" FROM "Vlog"
+               WHERE "creatorId" = %s AND "viewCount" IS NOT NULL
+               ORDER BY "viewCount" DESC LIMIT 8''',
+            (creator_id,),
+        )
+        top_vlogs = [dict(row) for row in (db.fetchall() or [])]
+
+    result = augment_creator_idea(
+        raw_idea=body.idea,
+        patterns=patterns,
+        audience=audience,
+        creator_handle=creator_handle,
+        top_vlogs=top_vlogs,
+    )
+
+    if not result:
+        raise HTTPException(status_code=503, detail="Could not augment idea right now. Try again shortly.")
+
+    # Persist the augmentation
+    with PgClient() as db:
+        db.execute(
+            '''INSERT INTO "IdeaAugmentation"
+               ("id", "creatorId", "rawIdea", "refinedTitles", "hookConcepts",
+                "contentEnhancements", "audienceConnections", "nichelearnings",
+                "overallAssessment", "confidenceScore", "createdAt")
+               VALUES (gen_random_uuid(), %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+               RETURNING id''',
+            (
+                creator_id,
+                body.idea,
+                json.dumps(result.get("refined_titles", [])),
+                json.dumps(result.get("hook_concepts", [])),
+                json.dumps(result.get("content_enhancements", [])),
+                json.dumps(result.get("audience_connections", [])),
+                json.dumps(result.get("niche_learnings", [])),
+                result.get("overall_assessment", ""),
+                result.get("confidence_score", 50),
+            ),
+        )
+        row = db.fetchone()
+
+    return {
+        "id": row["id"] if row else None,
+        "rawIdea": body.idea,
+        "refinedTitles": result.get("refined_titles", []),
+        "hookConcepts": result.get("hook_concepts", []),
+        "contentEnhancements": result.get("content_enhancements", []),
+        "audienceConnections": result.get("audience_connections", []),
+        "nicheLearnings": result.get("niche_learnings", []),
+        "overallAssessment": result.get("overall_assessment", ""),
+        "confidenceScore": result.get("confidence_score", 50),
+    }

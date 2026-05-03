@@ -303,6 +303,12 @@ enum AnalysisStatus {
   FAILED
 }
 
+enum BriefStatus {
+  IDEA
+  FILMING
+  PUBLISHED
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CREATOR
 // ─────────────────────────────────────────────────────────────────────────────
@@ -352,7 +358,8 @@ model Creator {
   opportunities Opportunity[]
   opportunityFeedback OpportunityFeedback[]
   creatorMemory CreatorMemory[]
-  channelInsight ChannelInsight?
+  channelInsight      ChannelInsight?
+  ideaAugmentations   IdeaAugmentation[]
 
   plan              CreatorPlan @default(FREE)
   catalogScanStatus ScanStatus  @default(PENDING)
@@ -1182,6 +1189,7 @@ model ChannelInsight {
   channelNiche         String?
   topPatterns          Json?
   audienceDemands      Json?
+  nicheStats           Json?
   analyzedVideoCount   Int            @default(0)
   usedBenchmarks       Boolean        @default(false)
   benchmarkVideoCount  Int            @default(0)
@@ -1192,17 +1200,34 @@ model ChannelInsight {
 }
 
 model ContentBrief {
-  id             String         @id @default(cuid())
-  creatorId      String
-  insightId      String
-  insight        ChannelInsight @relation(fields: [insightId], references: [id], onDelete: Cascade)
-  title          String
-  hookIdeas      Json
-  contentOutline Json
-  trendSignal    String?
-  audienceSignal String?
-  estimatedScore Int            @default(50)
-  reasoning      String?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  creatorId       String
+  insightId       String
+  insight         ChannelInsight @relation(fields: [insightId], references: [id], onDelete: Cascade)
+  title           String
+  hookIdeas       Json
+  contentOutline  Json
+  trendSignal     String?
+  audienceSignal  String?
+  estimatedScore  Int            @default(50)
+  reasoning       String?
+  briefStatus     BriefStatus    @default(IDEA)
+  publishedVlogId String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model IdeaAugmentation {
+  id                  String   @id @default(cuid())
+  creatorId           String
+  creator             Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  rawIdea             String
+  refinedTitles       Json
+  hookConcepts        Json
+  contentEnhancements Json
+  audienceConnections Json
+  nichelearnings      Json
+  overallAssessment   String
+  confidenceScore     Int      @default(50)
+  createdAt           DateTime @default(now())
 }

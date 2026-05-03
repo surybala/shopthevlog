@@ -257,3 +257,95 @@ def generate_content_briefs(
     except Exception as e:
         logger.error("generate_content_briefs failed for %s: %s", creator_handle, e)
         return []
+
+
+# ─── Idea Augmentation ────────────────────────────────────────────────────────
+
+IDEA_AUGMENTATION_SYSTEM = """You are a YouTube content strategist embedded inside a creator's growth tool.
+A travel creator has a rough idea for their next video. You have their full channel profile:
+their niche, what performs well, what underperforms, what their audience repeatedly asks for,
+and what top creators in their niche do with similar content.
+
+Your job: take their rough idea and make it significantly better — more specific, more likely
+to outperform their average, and more aligned with proven patterns from their niche and audience.
+
+Return ONE valid JSON object only. No markdown, no backticks.
+
+Schema:
+{
+  "refined_titles": [
+    "string — compelling YouTube title under 70 chars (provide 4 options, each with a different angle)"
+  ],
+  "hook_concepts": [
+    "string — concrete opening 30-second hook concept that grabs attention (provide 3)"
+  ],
+  "content_enhancements": [
+    {
+      "suggestion": "string — specific enhancement to their idea",
+      "why": "string — grounded in their channel data or niche patterns (cite specifics)",
+      "how": "string — practical implementation advice"
+    }
+  ],
+  "audience_connections": [
+    "string — how this idea directly addresses a specific, documented demand from their audience"
+  ],
+  "niche_learnings": [
+    "string — what top-performing videos in this niche do with similar content that this creator should adopt"
+  ],
+  "confidence_score": integer (0-100, how strongly this idea aligns with what works for this creator),
+  "overall_assessment": "string (2-3 sentences: honest assessment of the idea's potential, what makes it strong, and the one thing to get right)"
+}
+
+Rules:
+- refined_titles: exactly 4, each with a distinct angle (cost-focused, curiosity, authority, outcome)
+- hook_concepts: exactly 3
+- content_enhancements: 3-5 items, each grounded in actual data from their channel
+- audience_connections: 2-4 items tied to specific audience signals
+- niche_learnings: 2-4 items specific to the niche, not generic YouTube advice
+- Be brutally honest — if the idea is generic, say so and explain how to make it specific
+- Reference actual patterns, numbers, and signals from the creator's data
+"""
+
+
+def augment_creator_idea(
+    raw_idea: str,
+    patterns: dict,
+    audience: Optional[dict],
+    creator_handle: str,
+    top_vlogs: Optional[list[dict]] = None,
+) -> dict:
+    """
+    Augment a creator's rough video idea using their channel insights and niche benchmarks.
+    Returns a structured augmentation dict, or an empty dict on failure.
+    """
+    audience_section = (
+        json.dumps(audience, indent=2)
+        if audience
+        else "No audience comment data available."
+    )
+
+    top_vlogs_section = ""
+    if top_vlogs:
+        vlog_lines = [
+            f"  - \"{v.get('title', 'Untitled')}\" — {v.get('viewCount', 0):,} views"
+            for v in top_vlogs[:8]
+        ]
+        top_vlogs_section = f"\nTOP PERFORMING VIDEOS:\n" + "\n".join(vlog_lines)
+
+    prompt = (
+        f"Creator: @{creator_handle}\n\n"
+        f"CREATOR'S ROUGH IDEA:\n{raw_idea}\n\n"
+        f"CHANNEL PROFILE & PERFORMANCE PATTERNS:\n{json.dumps(patterns, indent=2)}\n\n"
+        f"AUDIENCE DEMAND SIGNALS:\n{audience_section}"
+        f"{top_vlogs_section}"
+    )
+
+    try:
+        raw = _call_gemini(IDEA_AUGMENTATION_SYSTEM, prompt, max_tokens=4096)
+        parsed = _parse_response(raw, creator_handle, "idea-augmentation")
+        if not parsed or not isinstance(parsed, dict):
+            return {}
+        return parsed
+    except Exception as e:
+        logger.error("augment_creator_idea failed for %s: %s", creator_handle, e)
+        return {}

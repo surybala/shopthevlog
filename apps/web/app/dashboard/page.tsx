@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
-import { rankBriefsByScore, parseTopPatterns } from '@/lib/channelInsights'
+import { rankBriefsByScore, parseTopPatterns, buildStalenessNote } from '@/lib/channelInsights'
 
 export default async function DashboardOverviewPage() {
   const supabase = createSupabaseServer()
@@ -56,6 +56,7 @@ export default async function DashboardOverviewPage() {
   const insightStatus = insight?.status ?? null
   const insightReady = insightStatus === 'COMPLETE' && topBrief !== null
   const insightRunning = insightStatus === 'QUEUED' || insightStatus === 'ANALYZING'
+  const stalenessNote = buildStalenessNote(insight?.analyzedAt ?? null)
   const firstName = creator.displayName.split(' ')[0]
 
   return (
@@ -121,6 +122,16 @@ export default async function DashboardOverviewPage() {
               </div>
             )}
           </div>
+          {stalenessNote.show && (
+            <div className="mt-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+              <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 shrink-0 text-amber-600" strokeWidth="1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Z" />
+                <path d="M8 5.5v3" />
+                <path d="M8 10.5v.5" />
+              </svg>
+              <p className="text-xs text-amber-700">{stalenessNote.message}</p>
+            </div>
+          )}
           <div className="mt-5 flex items-center gap-3">
             <Link href="/dashboard/insights" className="btn-primary text-sm">
               See all 4 video ideas
