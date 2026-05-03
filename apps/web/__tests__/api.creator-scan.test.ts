@@ -110,6 +110,7 @@ describe('creator scan trigger route', () => {
               {
                 id: 'video-1',
                 contentDetails: { duration: 'PT15M9S' },
+                statistics: { viewCount: '12345', likeCount: '678' },
               },
             ],
           }),
@@ -171,8 +172,8 @@ describe('creator scan trigger route', () => {
       expect(mockVlogUpsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { platform_externalId: { platform: 'YOUTUBE', externalId: 'video-1' } },
-          create: expect.objectContaining({ durationSeconds: 909 }),
-          update: expect.objectContaining({ durationSeconds: 909 }),
+          create: expect.objectContaining({ durationSeconds: 909, viewCount: 12345, likeCount: 678 }),
+          update: expect.objectContaining({ durationSeconds: 909, viewCount: 12345, likeCount: 678 }),
         })
       )
       expect(mockCreatorUpdate).toHaveBeenCalledWith(
@@ -201,6 +202,8 @@ describe('creator scan trigger route', () => {
           thumbnailUrl: 'https://img.example/1.jpg',
           publishedAt: '2024-01-01T00:00:00.000Z',
           durationSeconds: 909,
+          viewCount: 12345,
+          likeCount: 678,
           imported: true,
           importedVlogId: 'vlog-1',
           importedProcessingStatus: 'PENDING',
@@ -262,10 +265,12 @@ describe('creator scan trigger route', () => {
               {
                 id: 'video-1',
                 contentDetails: { duration: 'PT11M' },
+                statistics: { viewCount: '5000', likeCount: '200' },
               },
               {
                 id: 'video-2',
                 contentDetails: { duration: 'PT7M30S' },
+                statistics: { viewCount: '8000', likeCount: '350' },
               },
             ],
           }),
@@ -287,6 +292,8 @@ describe('creator scan trigger route', () => {
           thumbnailUrl: 'https://img.example/2.jpg',
           publishedAt: '2024-01-02T00:00:00.000Z',
           durationSeconds: 450,
+          viewCount: 8000,
+          likeCount: 350,
           imported: false,
           importedVlogId: null,
           importedProcessingStatus: null,
@@ -321,6 +328,8 @@ describe('creator scan trigger route', () => {
         thumbnailUrl: 'https://img.example/1.jpg',
         publishedAt: '2024-01-01T00:00:00.000Z',
         durationSeconds: 909,
+        viewCount: 12345,
+        likeCount: 678,
         imported: false,
         importedVlogId: null,
         insights: expect.objectContaining({
@@ -379,10 +388,12 @@ describe('creator scan trigger route', () => {
               {
                 id: 'video-1',
                 contentDetails: { duration: 'PT15M9S' },
+                statistics: { viewCount: '100', likeCount: '10' },
               },
               {
                 id: 'video-2',
                 contentDetails: { duration: 'PT5M5S' },
+                statistics: { viewCount: '200', likeCount: '20' },
               },
             ],
           }),
@@ -404,8 +415,8 @@ describe('creator scan trigger route', () => {
     expect(mockVlogUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { platform_externalId: { platform: 'YOUTUBE', externalId: 'video-2' } },
-        create: expect.objectContaining({ durationSeconds: 305 }),
-        update: expect.objectContaining({ durationSeconds: 305 }),
+        create: expect.objectContaining({ durationSeconds: 305, viewCount: 200, likeCount: 20 }),
+        update: expect.objectContaining({ durationSeconds: 305, viewCount: 200, likeCount: 20 }),
       }),
     )
   })

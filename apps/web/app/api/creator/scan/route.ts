@@ -167,6 +167,8 @@ async function runScan(creatorId: string, channelId: string, plan: string, selec
         thumbnailUrl: item.thumbnailUrl,
         publishedAt: item.publishedAt ? new Date(item.publishedAt) : null,
         durationSeconds: item.durationSeconds,
+        viewCount: item.viewCount ?? 0,
+        likeCount: item.likeCount ?? 0,
         processingStatus: 'PENDING',
       },
       update: {
@@ -174,6 +176,8 @@ async function runScan(creatorId: string, channelId: string, plan: string, selec
         description: item.description,
         thumbnailUrl: item.thumbnailUrl,
         durationSeconds: item.durationSeconds,
+        viewCount: item.viewCount ?? 0,
+        likeCount: item.likeCount ?? 0,
       },
     })
 
