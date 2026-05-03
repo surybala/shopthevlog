@@ -295,6 +295,14 @@ enum DeviceType {
   TABLET
 }
 
+enum AnalysisStatus {
+  PENDING
+  QUEUED
+  ANALYZING
+  COMPLETE
+  FAILED
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CREATOR
 // ─────────────────────────────────────────────────────────────────────────────
@@ -344,6 +352,7 @@ model Creator {
   opportunities Opportunity[]
   opportunityFeedback OpportunityFeedback[]
   creatorMemory CreatorMemory[]
+  channelInsight ChannelInsight?
 
   plan              CreatorPlan @default(FREE)
   catalogScanStatus ScanStatus  @default(PENDING)
@@ -1159,4 +1168,41 @@ model WaitlistRequest {
   rejectedAt DateTime?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GROWTH INSIGHTS (Phase 2 — parallel analytics pipeline)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ChannelInsight {
+  id                   String         @id @default(cuid())
+  creatorId            String         @unique
+  creator              Creator        @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  status               AnalysisStatus @default(PENDING)
+  channelNiche         String?
+  topPatterns          Json?
+  audienceDemands      Json?
+  analyzedVideoCount   Int            @default(0)
+  usedBenchmarks       Boolean        @default(false)
+  benchmarkVideoCount  Int            @default(0)
+  analyzedAt           DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  briefs               ContentBrief[]
+}
+
+model ContentBrief {
+  id             String         @id @default(cuid())
+  creatorId      String
+  insightId      String
+  insight        ChannelInsight @relation(fields: [insightId], references: [id], onDelete: Cascade)
+  title          String
+  hookIdeas      Json
+  contentOutline Json
+  trendSignal    String?
+  audienceSignal String?
+  estimatedScore Int            @default(50)
+  reasoning      String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 }

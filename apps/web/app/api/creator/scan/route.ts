@@ -167,6 +167,8 @@ async function runScan(creatorId: string, channelId: string, plan: string, selec
         thumbnailUrl: item.thumbnailUrl,
         publishedAt: item.publishedAt ? new Date(item.publishedAt) : null,
         durationSeconds: item.durationSeconds,
+        viewCount: item.viewCount ?? 0,
+        likeCount: item.likeCount ?? 0,
         processingStatus: 'PENDING',
       },
       update: {
@@ -174,6 +176,8 @@ async function runScan(creatorId: string, channelId: string, plan: string, selec
         description: item.description,
         thumbnailUrl: item.thumbnailUrl,
         durationSeconds: item.durationSeconds,
+        viewCount: item.viewCount ?? 0,
+        likeCount: item.likeCount ?? 0,
       },
     })
 
@@ -190,16 +194,6 @@ async function runScan(creatorId: string, channelId: string, plan: string, selec
       lastCatalogScan: new Date(),
     },
   })
-
-  // Optionally notify AI pipeline
-  const aiUrl = process.env.AI_PIPELINE_URL
-  if (aiUrl) {
-    fetch(`${aiUrl}/scan/trigger`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ creator_id: creatorId }),
-    }).catch(() => {})
-  }
 
   return { importedCount, limitReached }
 }

@@ -82,6 +82,14 @@ export type YouTubeCatalogItem = {
   thumbnailUrl: string | null
   publishedAt: string | null
   durationSeconds: number | null
+  viewCount: number | null
+  likeCount: number | null
+}
+
+type VideoDetail = {
+  id?: string
+  contentDetails?: { duration?: string }
+  statistics?: { viewCount?: string; likeCount?: string }
 }
 
 export async function fetchYouTubeCatalog(channelId: string, accessToken: string) {
@@ -108,10 +116,10 @@ export async function fetchYouTubeCatalog(channelId: string, accessToken: string
       .map((item) => item.contentDetails?.videoId as string | undefined)
       .filter((videoId): videoId is string => !!videoId)
 
-    let durationsByVideoId = new Map<string, number | null>()
+    const detailsByVideoId = new Map<string, { durationSeconds: number | null; viewCount: number | null; likeCount: number | null }>()
     if (videoIds.length > 0) {
       const videoParams = new URLSearchParams({
-        part: 'contentDetails',
+        part: 'contentDetails,statistics',
         id: videoIds.join(','),
         maxResults: '50',
       })
@@ -121,12 +129,14 @@ export async function fetchYouTubeCatalog(channelId: string, accessToken: string
         { headers: { Authorization: `Bearer ${accessToken}` } },
       )
       const videosData = await videosRes.json()
-      durationsByVideoId = new Map(
-        (videosData.items ?? []).map((video: { id?: string; contentDetails?: { duration?: string } }) => [
-          video.id as string,
-          parseIso8601DurationToSeconds(video.contentDetails?.duration),
-        ]),
-      )
+      for (const video of (videosData.items ?? []) as VideoDetail[]) {
+        if (!video.id) continue
+        detailsByVideoId.set(video.id, {
+          durationSeconds: parseIso8601DurationToSeconds(video.contentDetails?.duration),
+          viewCount: video.statistics?.viewCount != null ? parseInt(video.statistics.viewCount, 10) : null,
+          likeCount: video.statistics?.likeCount != null ? parseInt(video.statistics.likeCount, 10) : null,
+        })
+      }
     }
 
     for (const item of items) {
@@ -134,13 +144,16 @@ export async function fetchYouTubeCatalog(channelId: string, accessToken: string
       const snippet = item.snippet
       if (!videoId) continue
 
+      const details = detailsByVideoId.get(videoId)
       results.push({
         videoId,
         title: snippet?.title ?? 'Untitled',
         description: snippet?.description ?? null,
         thumbnailUrl: snippet?.thumbnails?.high?.url ?? snippet?.thumbnails?.default?.url ?? null,
         publishedAt: snippet?.publishedAt ?? null,
-        durationSeconds: durationsByVideoId.get(videoId) ?? null,
+        durationSeconds: details?.durationSeconds ?? null,
+        viewCount: details?.viewCount ?? null,
+        likeCount: details?.likeCount ?? null,
       })
     }
 
