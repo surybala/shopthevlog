@@ -8,6 +8,8 @@ import prisma from '@/lib/prisma/client'
 import {
   buildInsightStatusDisplay,
   buildBenchmarkNote,
+  buildNicheComparison,
+  buildStalenessNote,
   rankBriefsByScore,
   scoreTone,
   scoreLabel,
@@ -15,8 +17,11 @@ import {
   parseAudienceDemands,
   type AnalysisStatus,
   type ParsedContentBrief,
+  type BriefStatus,
 } from '@/lib/channelInsights'
 import TriggerAnalysisButton from './TriggerAnalysisButton'
+import { BriefStatusButton } from './BriefStatusButton'
+import { IdeaWorkshop } from './IdeaWorkshop'
 
 export default async function InsightsPage() {
   const supabase = createSupabaseServer()
@@ -40,6 +45,8 @@ export default async function InsightsPage() {
     insight?.usedBenchmarks ?? false,
     insight?.benchmarkVideoCount ?? 0,
   )
+  const nicheComparison = buildNicheComparison((insight as any)?.nicheStats ?? null)
+  const stalenessNote = buildStalenessNote(insight?.analyzedAt ?? null)
 
   const toneClasses: Record<string, string> = {
     emerald: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
@@ -72,6 +79,17 @@ export default async function InsightsPage() {
             </span>
           )}
         </div>
+
+        {stalenessNote.show && (
+          <div className="mt-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+            <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 shrink-0 text-amber-600" strokeWidth="1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Z" />
+              <path d="M8 5.5v3" />
+              <path d="M8 10.5v.5" />
+            </svg>
+            <p className="text-xs text-amber-700">{stalenessNote.message}</p>
+          </div>
+        )}
 
         <div className="mt-4">
           <TriggerAnalysisButton
@@ -131,6 +149,40 @@ export default async function InsightsPage() {
                   <p className="text-xs text-[#17332d]/60">{benchmarkNote.text}</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Niche benchmark comparison */}
+          {nicheComparison.show && (
+            <div className="dashboard-mirror-card mb-6 p-6">
+              <h2 className="mb-1 font-semibold text-[#17332d]">Your channel vs. top niche creators</h2>
+              <p className="dashboard-mirror-subtle mb-4 text-xs">
+                How you stack up against the top performers in your niche
+              </p>
+              <div className="overflow-hidden rounded-lg border border-[#17332d]/10">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[#17332d]/10 bg-[#17332d]/4">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-[#17332d]/50">Metric</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-[#17332d]/50">You</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-[#17332d]/50">Niche avg</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-[#17332d]/50">Δ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#17332d]/8">
+                    {nicheComparison.rows.map((row, i) => (
+                      <tr key={i}>
+                        <td className="px-4 py-2.5 text-xs text-[#17332d]/70">{row.label}</td>
+                        <td className="px-4 py-2.5 text-right text-sm font-semibold text-[#17332d]">{row.creatorValue}</td>
+                        <td className="px-4 py-2.5 text-right text-sm text-[#17332d]/60">{row.nicheValue}</td>
+                        <td className={`px-4 py-2.5 text-right text-xs font-medium ${row.ahead ? 'text-emerald-600' : 'text-rose-500'}`}>
+                          {row.delta}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
@@ -229,7 +281,19 @@ export default async function InsightsPage() {
               </div>
             </div>
           )}
+
+          {/* Idea Workshop — always visible once analysis has run */}
+          <div className="mt-6">
+            <IdeaWorkshop hasInsights={status === 'COMPLETE'} />
+          </div>
         </>
+      )}
+
+      {/* Idea Workshop — also available before analysis, with a nudge */}
+      {(!insight || status === 'PENDING' || status === 'FAILED') && (
+        <div className="mt-6">
+          <IdeaWorkshop hasInsights={false} />
+        </div>
       )}
     </div>
   )
@@ -257,6 +321,12 @@ function BriefCard({
             {brief.reasoning && (
               <p className="dashboard-mirror-subtle mt-1 text-xs">{brief.reasoning}</p>
             )}
+            <div className="mt-2">
+              <BriefStatusButton
+                briefId={brief.id}
+                initialStatus={(brief.briefStatus ?? 'IDEA') as BriefStatus}
+              />
+            </div>
           </div>
         </div>
         <div className="shrink-0 text-right">
