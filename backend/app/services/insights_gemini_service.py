@@ -232,7 +232,7 @@ def generate_content_briefs(
     )
 
     try:
-        raw = _call_gemini(CONTENT_BRIEF_PROMPT, prompt, max_tokens=4096)
+        raw = _call_gemini(CONTENT_BRIEF_PROMPT, prompt, max_tokens=8192)
         parsed = _parse_response(raw, creator_handle, "content-briefs")
         if not parsed:
             return []

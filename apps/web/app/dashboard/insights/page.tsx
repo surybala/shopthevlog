@@ -98,7 +98,7 @@ export default async function InsightsPage() {
         <div className="dashboard-mirror-card p-10 text-center">
           <p className="text-sm font-medium text-[#17332d]">Analysis is running…</p>
           <p className="dashboard-mirror-subtle mt-2 text-xs">
-            This usually takes 1–2 minutes. Refresh the page when it completes.
+            This usually takes 1–2 minutes. The page will update automatically.
           </p>
         </div>
       ) : (
