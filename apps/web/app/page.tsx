@@ -9,7 +9,7 @@ const creatorSteps = [
   {
     eyebrow: 'Scan',
     title: 'Connect your channel. Get instant insights.',
-    body: 'Link your YouTube channel and VlogShopper surfaces what's working, what's stale, and where your biggest growth opportunities are hiding — across every video you've ever made.',
+    body: "Link your YouTube channel and VlogShopper surfaces what's working, what's stale, and where your biggest growth opportunities are hiding — across every video you've ever made.",
   },
   {
     eyebrow: 'Grow',
@@ -19,7 +19,7 @@ const creatorSteps = [
   {
     eyebrow: 'Monetize',
     title: 'Turn your best content into a creator portal.',
-    body: 'When you're ready, approve Trip Kits, hotel picks, and gear recommendations from one queue. Your creator portal publishes them for subscribers to unlock.',
+    body: "When you're ready, approve Trip Kits, hotel picks, and gear recommendations from one queue. Your creator portal publishes them for subscribers to unlock.",
   },
 ]
 
