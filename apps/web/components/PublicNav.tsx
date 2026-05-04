@@ -28,8 +28,8 @@ export default function PublicNav({ user, isCreator = false, leftSlot, rightSlot
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-6">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex shrink-0 items-center gap-2">
-            <Image src="/logo.png" alt="VlogShopper" width={24} height={24} className="rounded-md" />
-            <span className="text-base font-bold text-[#17332d]">VlogShopper</span>
+            <Image src="/logo.png" alt="TripKits" width={24} height={24} className="rounded-md" />
+            <span className="text-base font-bold text-[#17332d]">TripKits</span>
           </Link>
           {leftSlot}
         </div>

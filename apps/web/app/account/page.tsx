@@ -10,7 +10,7 @@ import UnsaveButton from './UnsaveButton'
 import { resolveStorageAssetUrl } from '@/lib/storageAssets'
 import { getTripKitCardImageUrl } from '@/lib/tripKitImages'
 
-export const metadata = { title: 'My Account - VlogShopper' }
+export const metadata = { title: 'My Account - TripKits' }
 
 type Tab = 'following' | 'subscriptions' | 'saved'
 
@@ -125,7 +125,7 @@ export default async function AccountPage({
     <div className="editorial-shell min-h-screen text-[#17332d]">
       <nav className="sticky top-0 z-50 border-b border-[#17332d]/10 bg-[rgba(255,248,240,0.82)] backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
-          <Link href="/" className="text-lg font-bold text-[#17332d]">VlogShopper</Link>
+          <Link href="/" className="text-lg font-bold text-[#17332d]">TripKits</Link>
           <div className="flex items-center gap-4">
             <Link href="/discover" className="dashboard-mirror-subtle text-sm hover:text-[#17332d]">Discover</Link>
             {creator ? (

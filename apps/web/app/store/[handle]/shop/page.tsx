@@ -6,7 +6,7 @@ import { resolveStorageAssetUrl } from '@/lib/storageAssets'
 
 export async function generateMetadata({ params }: { params: { handle: string } }) {
   const creator = await prisma.creator.findUnique({ where: { handle: params.handle }, select: { displayName: true } })
-  return { title: `Shop - ${creator?.displayName ?? params.handle} - VlogShopper` }
+  return { title: `Shop - ${creator?.displayName ?? params.handle} - TripKits` }
 }
 
 export default async function StorefrontShopPage({ params }: { params: { handle: string } }) {

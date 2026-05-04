@@ -14,7 +14,7 @@ import { getTripKitCardImageUrl } from '@/lib/tripKitImages'
 
 export async function generateMetadata({ params }: { params: { handle: string } }) {
   const creator = await prisma.creator.findUnique({ where: { handle: params.handle }, select: { displayName: true } })
-  return { title: `Trip Kits - ${creator?.displayName ?? params.handle} - VlogShopper` }
+  return { title: `Trip Kits - ${creator?.displayName ?? params.handle} - TripKits` }
 }
 
 export default async function StorefrontKitsPage({ params }: { params: { handle: string } }) {

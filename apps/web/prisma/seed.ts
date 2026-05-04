@@ -1,5 +1,5 @@
 /**
- * VlogShopper dev seed
+ * TripKits dev seed
  *
  * Creates one fully-fleshed creator (handle: "alexwanders") with:
  *   - 40 vlogs across 8 destinations (COMPLETE processing status)
@@ -393,7 +393,7 @@ function shortCode(prefix: string, n: number): string {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('🌱  Seeding VlogShopper dev database…\n')
+  console.log('🌱  Seeding TripKits dev database…\n')
 
   // ── 1. Creator ─────────────────────────────────────────────────────────────
   const creator = await prisma.creator.upsert({

@@ -13,7 +13,7 @@ export async function generateMetadata({ params }: { params: { handle: string; s
   })
   if (!kit) return {}
   return {
-    title: `${kit.title} - VlogShopper`,
+    title: `${kit.title} - TripKits`,
     description: kit.description ?? kit.title,
     openGraph: {
       title: kit.title,
