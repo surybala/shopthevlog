@@ -17,7 +17,7 @@ export default async function DashboardOverviewPage() {
     return (
       <div className="flex min-h-screen items-center justify-center p-8">
         <div className="max-w-md text-center">
-          <h1 className="mb-3 text-2xl font-bold text-[#17332d]">Welcome to VlogShopper</h1>
+          <h1 className="mb-3 text-2xl font-bold text-[#17332d]">Welcome to TripKits</h1>
           <p className="dashboard-mirror-subtle mb-6 text-sm">
             Set up your creator profile to start growing your channel with AI-powered insights.
           </p>

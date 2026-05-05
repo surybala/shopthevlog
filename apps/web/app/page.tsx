@@ -7,19 +7,19 @@ import PublicCopyright from '@/components/PublicCopyright'
 
 const creatorSteps = [
   {
-    eyebrow: 'Ingest',
-    title: 'Plug in your vlog archive',
-    body: 'Connect your channel and pull in the videos you already made. VlogShopper turns your back-catalog into a working commerce layer.',
+    eyebrow: 'Scan',
+    title: 'Connect your channel. Get instant insights.',
+    body: "Link your YouTube channel and TripKits surfaces what's working, what's stale, and where your biggest growth opportunities are hiding — across every video you've ever made.",
   },
   {
-    eyebrow: 'Graph',
-    title: 'AI builds an evidence-backed opportunity graph',
-    body: 'Transcript claims, frame analysis, visual signals, review recommendations, and creator memory all flow into one reviewable system.',
+    eyebrow: 'Grow',
+    title: 'AI-powered briefs tailored to your niche',
+    body: 'Your creator portal generates ready-to-use content briefs, niche benchmarks, and topic ideas based on your actual performance data — not generic advice.',
   },
   {
-    eyebrow: 'Publish',
-    title: 'Approve once. Your storefront updates itself.',
-    body: 'Publish Trip Kits, hotel picks, food spots, and gear recommendations from one review queue instead of rebuilding each itinerary by hand.',
+    eyebrow: 'Monetize',
+    title: 'Turn your best content into a creator portal.',
+    body: "When you're ready, approve Trip Kits, hotel picks, and gear recommendations from one queue. Your creator portal publishes them for subscribers to unlock.",
   },
 ]
 
@@ -29,11 +29,11 @@ const subscriberMoments = [
   'Shop where they stayed, what they packed, and what they actually did.',
 ]
 
-const storefrontSignals = [
-  'Follower unlocks',
-  'Premium subscriptions',
+const portalSignals = [
+  'Growth insights',
+  'Content briefs',
+  'Niche benchmarks',
   'Affiliate-ready trips',
-  'Saved kits and repeat visits',
 ]
 
 const creatorGallery = [
@@ -139,10 +139,10 @@ export default async function HomePage() {
       <nav className="sticky top-0 z-50 border-b border-[#17332d]/10 bg-[rgba(255,248,240,0.78)] backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-3">
-            <Image src="/logo.png" alt="VlogShopper" width={34} height={34} className="rounded-xl shadow-[0_0_30px_rgba(23,51,45,0.08)]" />
+            <Image src="/logo.png" alt="TripKits" width={34} height={34} className="rounded-xl shadow-[0_0_30px_rgba(23,51,45,0.08)]" />
             <div>
-              <p className="text-base font-semibold tracking-tight text-[#17332d]">VlogShopper</p>
-                <p className="text-[10px] uppercase tracking-[0.32em] text-[#17332d]/52">Curated by creators for their subscribers</p>
+              <p className="text-base font-semibold tracking-tight text-[#17332d]">TripKits</p>
+                <p className="text-[10px] uppercase tracking-[0.32em] text-[#17332d]/52">Creator portals for travel vloggers</p>
             </div>
           </Link>
 
@@ -178,23 +178,22 @@ export default async function HomePage() {
           </div>
 
           <h1 className="mt-8 max-w-4xl text-5xl font-semibold leading-[0.95] tracking-tight text-[#17332d] sm:text-6xl lg:text-7xl">
-            Turn travel vlogs into
+            Your niche. Your audience.
             <span className="block bg-gradient-to-r from-[#17332d] via-teal-700 to-orange-500 bg-clip-text text-transparent">
-              reviewable storefronts subscribers actually shop.
+              Your playbook.
             </span>
           </h1>
 
           <p className="mt-6 max-w-2xl text-lg leading-8 text-[#17332d]/82 sm:text-xl">
-            VlogShopper scans each video, builds an evidence-backed opportunity graph, and turns hotels,
-            restaurants, routes, experiences, and travel gear into Trip Kits creators can approve and subscribers can unlock.
+            The AI built for creators who want to own their corner of the internet — grow your reach, deepen your audience, and monetize when you're ready.
           </p>
 
           <div className="mt-10 flex flex-col gap-4 sm:flex-row">
             <Link href="/waitlist" className="btn-primary inline-flex items-center justify-center px-6 py-3 text-sm">
-              Join the creator waitlist
+              Get your creator portal
             </Link>
             <Link href="/discover" className="btn-ghost inline-flex items-center justify-center px-6 py-3 text-sm">
-              Explore live storefronts
+              Explore creator portals
             </Link>
           </div>
 
@@ -205,17 +204,17 @@ export default async function HomePage() {
           <div className="landing-pipeline-panel rounded-[2rem] border border-[#17332d]/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.92),_rgba(255,247,238,0.84)_48%,_rgba(251,241,229,0.9)_100%)] p-6 shadow-[0_30px_120px_rgba(23,51,45,0.12)] backdrop-blur-xl">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.25em] text-[#17332d]/52">AI Pipeline</p>
-                <h2 className="mt-2 text-2xl font-semibold text-[#17332d]">From raw vlog to shoppable Trip Kit</h2>
+                <p className="text-xs uppercase tracking-[0.25em] text-[#17332d]/52">Creator Portal</p>
+                <h2 className="mt-2 text-2xl font-semibold text-[#17332d]">Insights first. Monetization when you're ready.</h2>
               </div>
             </div>
 
             <div className="mt-6 grid gap-3">
               {[
-                'Transcript claims and scene frames become evidence rows',
-                'Fusion merges transcript + visual signals into one candidate',
-                'Resolution, ranking, and creator memory decide review priority',
-                'Approved opportunities project into Trip Kits and storefront modules',
+                'Scan your channel and surface growth opportunities across every video',
+                'Get AI-generated content briefs tailored to your niche and audience',
+                'See how your channel benchmarks against similar creators',
+                'Turn approved content into unlockable Trip Kits for your subscribers',
               ].map((step, index) => (
                 <div key={step} className="flex items-center gap-4 rounded-2xl border border-[#17332d]/8 bg-white/60 px-4 py-4">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-full bg-[#17332d]/10 text-sm font-semibold text-teal-800">
@@ -227,9 +226,9 @@ export default async function HomePage() {
             </div>
 
             <div className="mt-6 rounded-2xl border border-[#17332d]/8 bg-white/60 p-4">
-              <p className="text-xs uppercase tracking-[0.22em] text-[#17332d]/35">Storefront unlocks</p>
+              <p className="text-xs uppercase tracking-[0.22em] text-[#17332d]/35">Portal features</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                {storefrontSignals.map((signal) => (
+                {portalSignals.map((signal) => (
                   <span key={signal} className="rounded-full border border-[#17332d]/10 bg-white/72 px-3 py-1.5 text-xs text-[#17332d]/82">
                     {signal}
                   </span>
@@ -241,7 +240,7 @@ export default async function HomePage() {
           <div className="landing-ticker mt-6 overflow-hidden rounded-full border border-[#17332d]/10 bg-white/58 py-3 backdrop-blur-sm">
             <div className="landing-ticker-track flex min-w-max gap-10 px-6 text-xs uppercase tracking-[0.3em] text-[#17332d]/58">
               {Array.from({ length: 2 }).flatMap((_, idx) =>
-                ['Trip Kits', 'Evidence graph', 'Creator review', 'Premium unlocks', 'Affiliate revenue', 'Saved kits'].map((item) => (
+                ['Growth insights', 'Content briefs', 'Niche benchmarks', 'Creator portal', 'Trip Kits', 'Affiliate revenue'].map((item) => (
                   <span key={`${item}-${idx}`}>{item}</span>
                 ))
               )}
@@ -256,12 +255,11 @@ export default async function HomePage() {
           <div>
             <p className="text-xs uppercase tracking-[0.28em] text-teal-800/80">For creators</p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[#17332d] sm:text-4xl">
-              Monetize the trips you already filmed.
+              Grow first. Monetize the trips you already filmed.
             </h2>
           </div>
           <p className="max-w-2xl text-sm leading-7 text-[#17332d]/62 sm:text-base">
-            We are not asking creators to become travel agents. We turn existing travel content into reviewable,
-            accurate commerce surfaces that feel like their brand, not a generic affiliate dump.
+            Your creator portal starts with insights — what's performing, what's stale, what to make next. Commerce is there when you want it, not the first thing we ask you to think about.
           </p>
         </div>
 
@@ -309,8 +307,8 @@ export default async function HomePage() {
               Subscribers don't just watch the trip. They can unlock it.
             </h2>
             <p className="mt-5 max-w-xl text-sm leading-7 text-[#17332d]/62 sm:text-base">
-              Discover storefronts, save kits, follow creators, and subscribe when you want the full itinerary.
-              The experience is built around trust: real places, real products, real evidence from the videos people already love.
+              Discover creator portals, save kits, follow creators, and subscribe when you want the full itinerary.
+              Real places, real products, real evidence from the videos you already love.
             </p>
           </div>
 
@@ -331,7 +329,7 @@ export default async function HomePage() {
         <div className="mb-10">
           <p className="text-xs uppercase tracking-[0.28em] text-teal-800/80">Why the AI matters</p>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[#17332d] sm:text-4xl">
-            A pipeline built for correctness, not AI theater.
+            A creator portal built for real growth, not vanity metrics.
           </h2>
         </div>
 
@@ -339,20 +337,20 @@ export default async function HomePage() {
           <div className="grid gap-5 md:grid-cols-2">
             {[
               {
-                title: 'Evidence-backed recommendations',
-                body: 'Every opportunity starts with transcript claims, scene frames, or multimodal evidence before it ever reaches a creator.',
+                title: 'Insights from your actual content',
+                body: 'Your portal surfaces performance patterns, staleness signals, and growth gaps from every video — not generic creator advice.',
               },
               {
-                title: 'Creator review stays in control',
-                body: 'Creators approve, edit, reject, and republish from a real review queue with ranking, hints, and provenance.',
+                title: 'Content briefs that match your niche',
+                body: 'AI generates ready-to-use briefs grounded in your channel data, so you spend time creating instead of researching.',
               },
               {
-                title: 'Subscriber experience stays premium',
-                body: 'Access-aware ranking, premium unlocks, follows, saves, and storefront publishing all stay aligned with creator intent.',
+                title: 'Benchmarks against your peers',
+                body: 'See how your channel stacks up in your niche and get context on what top-performing creators in your space are doing differently.',
               },
               {
-                title: 'Revenue loop is already wired',
-                body: 'Affiliate clicks, subscriptions, and dashboard analytics all connect back to the storefront flow instead of living in a separate silo.',
+                title: "Monetization when you're ready",
+                body: 'Affiliate-ready Trip Kits, subscriber unlocks, and portal analytics are all there — you decide when to turn them on.',
               },
             ].map((item) => (
               <div key={item.title} className="rounded-[1.5rem] border border-[#17332d]/8 bg-white/62 p-5">
@@ -367,18 +365,18 @@ export default async function HomePage() {
       <section className="mx-auto max-w-7xl px-6 pb-10 pt-8">
         <p className="text-xs uppercase tracking-[0.28em] text-teal-800/80">Private beta</p>
         <h2 className="mt-4 max-w-4xl text-3xl font-semibold tracking-tight text-[#17332d] sm:text-4xl">
-          We are onboarding a small set of travel creators and the subscribers who already trust them.
+          We are onboarding a small set of travel creators who want to grow — and the subscribers who already trust them.
         </h2>
         <p className="mt-5 max-w-3xl text-sm leading-7 text-[#17332d]/62 sm:text-base">
-          If you want a storefront that turns your vlogs into unlockable trip planning, join the waitlist.
+          If you want a creator portal that helps you understand your channel, plan better content, and monetize the trips you've already filmed — join the waitlist.
           If you love following creators for where they stayed, what they packed, and how they planned a trip, start in discover.
         </p>
         <div className="mt-8 flex flex-col gap-4 sm:flex-row">
           <Link href="/waitlist" className="btn-primary inline-flex items-center justify-center px-6 py-3 text-sm">
-            Request creator access
+            Get your creator portal
           </Link>
           <Link href="/discover" className="btn-ghost inline-flex items-center justify-center px-6 py-3 text-sm">
-            Browse creator storefronts
+            Browse creator portals
           </Link>
         </div>
       </section>

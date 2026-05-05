@@ -110,13 +110,13 @@ export default async function StorefrontLayout({
           <Link href="/" className="group flex items-center gap-1.5">
             <Image
               src="/logo.png"
-              alt="VlogShopper"
+              alt="TripKits"
               width={24}
               height={24}
               className="rounded-md opacity-60 transition-opacity group-hover:opacity-100"
             />
             <span className="storefront-muted text-sm font-semibold transition-colors group-hover:text-[var(--storefront-text)]">
-              VlogShopper
+              TripKits
             </span>
           </Link>
 

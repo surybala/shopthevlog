@@ -9,6 +9,7 @@ type ContentEnhancement = {
 }
 
 type AugmentationResult = {
+  id: string | null
   refinedTitles: string[]
   hookConcepts: string[]
   contentEnhancements: ContentEnhancement[]
@@ -48,12 +49,46 @@ export function IdeaWorkshop({ hasInsights }: { hasInsights: boolean }) {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<AugmentationResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [filming, setFilming] = useState(false)
+  const [filmingDone, setFilmingDone] = useState(false)
+  const [filmingError, setFilmingError] = useState<string | null>(null)
+
+  async function startFilming() {
+    if (!result || filming) return
+    setFilming(true)
+    setFilmingError(null)
+    try {
+      const res = await fetch('/api/insights/briefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: result.refinedTitles[0] ?? idea.trim(),
+          hookIdeas: result.hookConcepts,
+          contentOutline: result.contentEnhancements.map((e) => e.suggestion),
+          reasoning: result.overallAssessment,
+          estimatedScore: result.confidenceScore,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setFilmingError(data.error ?? 'Could not save brief. Try again.')
+      } else {
+        setFilmingDone(true)
+      }
+    } catch {
+      setFilmingError('Connection error. Please try again.')
+    } finally {
+      setFilming(false)
+    }
+  }
 
   async function submit() {
     if (idea.trim().length < 10 || loading) return
     setLoading(true)
     setResult(null)
     setError(null)
+    setFilmingDone(false)
+    setFilmingError(null)
     try {
       const res = await fetch('/api/insights/augment', {
         method: 'POST',
@@ -225,6 +260,48 @@ export function IdeaWorkshop({ hasInsights }: { hasInsights: boolean }) {
               )}
             </div>
           )}
+
+          {/* Start Filming CTA */}
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-[#17332d]/10 bg-[#17332d]/3 px-4 py-3">
+            {filmingDone ? (
+              <div className="flex items-center gap-2">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
+                  <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3 text-emerald-600" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 6l3 3 5-5" />
+                  </svg>
+                </span>
+                <p className="text-sm font-medium text-[#17332d]">
+                  Added to your briefs as <span className="text-emerald-700">Filming</span> — good luck!
+                </p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="text-sm font-medium text-[#17332d]">Ready to film this?</p>
+                  <p className="mt-0.5 text-xs text-[#17332d]/55">
+                    Save it to your briefs and mark it as filming to track it through to publish.
+                  </p>
+                  {filmingError && (
+                    <p className="mt-1 text-xs text-rose-500">{filmingError}</p>
+                  )}
+                </div>
+                <button
+                  onClick={startFilming}
+                  disabled={filming}
+                  className="btn-primary shrink-0 text-sm disabled:opacity-50"
+                >
+                  {filming ? (
+                    <span className="flex items-center gap-2">
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                      Saving…
+                    </span>
+                  ) : (
+                    '🎬 Start filming'
+                  )}
+                </button>
+              </>
+            )}
+          </div>
 
           {/* Try another idea */}
           <button

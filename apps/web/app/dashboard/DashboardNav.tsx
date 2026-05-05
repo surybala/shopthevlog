@@ -150,7 +150,7 @@ export default function DashboardNav({ handle, isAdmin = false }: { handle: stri
             className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[#17332d]/76 transition-colors hover:bg-[#17332d]/6 hover:text-[#17332d]"
           >
             <NavIcon><path d="M4.5 10h9" /><path d="m10.5 6 4 4-4 4" /></NavIcon>
-            View Storefront
+            Your Portal
           </Link>
         )}
         <form action="/auth/signout" method="POST">

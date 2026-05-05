@@ -48,22 +48,36 @@ describe('HomePage', () => {
     mockCreatorFindUnique.mockResolvedValue(null)
   })
 
-  it('renders updated creator and subscriber positioning for signed-out users', async () => {
+  it('renders creator portal narrative for signed-out users', async () => {
     const page = await HomePage()
     const html = renderToStaticMarkup(page)
 
-    expect(html).toContain('Curated by creators for their subscribers')
-    expect(html).toContain('reviewable storefronts subscribers actually shop')
-    expect(html).toContain('evidence-backed opportunity graph')
-    expect(html).toContain('href="#subscribers"')
-    expect(html).toContain("Subscribers don&#x27;t just watch the trip. They can unlock it.")
-    expect(html).toContain('Join the creator waitlist')
-    expect(html).toContain('Browse creator storefronts')
-    expect(html).toContain('landing-ticker')
+    // Hero
+    expect(html).toContain('Creator portals for travel vloggers')
+    expect(html).toContain('Your niche. Your audience.')
+    expect(html).toContain('Your playbook.')
+    expect(html).toContain('own their corner of the internet')
+    expect(html).toContain('Get your creator portal')
+    expect(html).toContain('Explore creator portals')
+
+    // Creator portal panel
+    expect(html).toContain('Insights first. Monetization when you&#x27;re ready.')
     expect(html).toContain('landing-pipeline-panel')
+    expect(html).toContain('landing-ticker')
+
+    // For creators section
+    expect(html).toContain('Grow first. Monetize the trips you already filmed.')
+    expect(html).toContain('href="#subscribers"')
     expect(html).toContain('Trip Kit preview')
-    expect(html).toContain('Monetize the trips you already filmed')
-    expect(html).toContain('turns your vlogs into unlockable trip planning')
+
+    // For subscribers section
+    expect(html).toContain("Subscribers don&#x27;t just watch the trip. They can unlock it.")
+
+    // Pipeline section
+    expect(html).toContain('A creator portal built for real growth, not vanity metrics.')
+
+    // CTA + footer
+    expect(html).toContain('Browse creator portals')
     expect(html).toContain('Copyright 2026 VlogShopper. All rights reserved.')
     expect(html).not.toContain('Review ready')
   })

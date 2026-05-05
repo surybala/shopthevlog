@@ -75,7 +75,7 @@ export default function SignupPage() {
     return (
       <div className="editorial-shell min-h-screen flex items-center justify-center px-4">
         <div className="w-full max-w-sm space-y-6 text-center">
-          <Link href="/" className="inline-block text-2xl font-bold text-[#17332d]">VlogShopper</Link>
+          <Link href="/" className="inline-block text-2xl font-bold text-[#17332d]">TripKits</Link>
           <div className="editorial-card space-y-4 p-8">
             <div className="text-4xl">Mailbox</div>
             <h2 className="text-lg font-semibold text-[#17332d]">Check your email</h2>
@@ -97,7 +97,7 @@ export default function SignupPage() {
     <div className="editorial-shell min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <Link href="/" className="text-2xl font-bold text-[#17332d]">VlogShopper</Link>
+          <Link href="/" className="text-2xl font-bold text-[#17332d]">TripKits</Link>
           <p className="editorial-subtle mt-2 text-sm">Create your free account</p>
         </div>
 
