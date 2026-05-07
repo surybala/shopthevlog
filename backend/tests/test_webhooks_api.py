@@ -7,6 +7,11 @@ from fastapi.testclient import TestClient
 
 from tests.conftest import FakePgClient
 from app.core.security import UserClaims
+from app.services.quota_service import QuotaResult
+
+
+def _allowed_quota() -> QuotaResult:
+    return QuotaResult(allowed=True, plan="FREE", used=1, limit=3, reset_at=None)
 
 
 def _make_client(pg_factory=None, user_id="user-001") -> TestClient:
@@ -42,17 +47,22 @@ class TestTriggerScan:
         assert "message" in resp.json()
 
     def test_queues_pending_vlogs(self):
-        first_pg = FakePgClient(rows=[{"id": "vlog-1"}, {"id": "vlog-2"}])
-        second_pg = FakePgClient(rows=[])
+        # PgClient calls: vlogs SELECT, creator SELECT, UPDATE×2
+        vlogs_pg = FakePgClient(rows=[{"id": "vlog-1"}, {"id": "vlog-2"}])
+        creator_pg = FakePgClient(rows=[{"id": "creator-1"}])
+        update_pg = FakePgClient(rows=[])
 
-        call_count = {"n": 0}
-
-        def _pg_factory():
-            call_count["n"] += 1
-            return first_pg if call_count["n"] == 1 else second_pg
+        clients = [vlogs_pg, creator_pg, update_pg, update_pg]
+        idx = {"i": 0}
+        def factory():
+            c = clients[min(idx["i"], len(clients) - 1)]
+            idx["i"] += 1
+            return c
 
         with (
-            patch("app.api.v1.webhooks.PgClient", side_effect=_pg_factory),
+            patch("app.api.v1.webhooks.PgClient", side_effect=factory),
+            patch("app.api.v1.webhooks.remaining_tripkit_slots", return_value=10),
+            patch("app.api.v1.webhooks.check_and_consume_tripkit", return_value=_allowed_quota()),
             patch("app.api.v1.webhooks.process_vlog_task"),
         ):
             client = _make_client()
@@ -62,16 +72,21 @@ class TestTriggerScan:
         assert resp.json()["queued"] == 2
 
     def test_returns_vlog_ids_in_response(self):
-        first_pg = FakePgClient(rows=[{"id": "vlog-A"}, {"id": "vlog-B"}])
-        second_pg = FakePgClient(rows=[])
-        call_count = {"n": 0}
+        vlogs_pg = FakePgClient(rows=[{"id": "vlog-A"}, {"id": "vlog-B"}])
+        creator_pg = FakePgClient(rows=[{"id": "creator-1"}])
+        update_pg = FakePgClient(rows=[])
 
-        def _pg_factory():
-            call_count["n"] += 1
-            return first_pg if call_count["n"] == 1 else second_pg
+        clients = [vlogs_pg, creator_pg, update_pg, update_pg]
+        idx = {"i": 0}
+        def factory():
+            c = clients[min(idx["i"], len(clients) - 1)]
+            idx["i"] += 1
+            return c
 
         with (
-            patch("app.api.v1.webhooks.PgClient", side_effect=_pg_factory),
+            patch("app.api.v1.webhooks.PgClient", side_effect=factory),
+            patch("app.api.v1.webhooks.remaining_tripkit_slots", return_value=10),
+            patch("app.api.v1.webhooks.check_and_consume_tripkit", return_value=_allowed_quota()),
             patch("app.api.v1.webhooks.process_vlog_task"),
         ):
             client = _make_client()
@@ -82,23 +97,28 @@ class TestTriggerScan:
         assert set(data["vlog_ids"]) == {"vlog-A", "vlog-B"}
 
     def test_marks_vlogs_as_queued(self):
-        first_pg = FakePgClient(rows=[{"id": "vlog-X"}])
-        second_pg = FakePgClient(rows=[])
-        call_count = {"n": 0}
+        vlogs_pg = FakePgClient(rows=[{"id": "vlog-X"}])
+        creator_pg = FakePgClient(rows=[{"id": "creator-1"}])
+        update_pg = FakePgClient(rows=[])
 
-        def _pg_factory():
-            call_count["n"] += 1
-            return first_pg if call_count["n"] == 1 else second_pg
+        clients = [vlogs_pg, creator_pg, update_pg]
+        idx = {"i": 0}
+        def factory():
+            c = clients[min(idx["i"], len(clients) - 1)]
+            idx["i"] += 1
+            return c
 
         with (
-            patch("app.api.v1.webhooks.PgClient", side_effect=_pg_factory),
+            patch("app.api.v1.webhooks.PgClient", side_effect=factory),
+            patch("app.api.v1.webhooks.remaining_tripkit_slots", return_value=10),
+            patch("app.api.v1.webhooks.check_and_consume_tripkit", return_value=_allowed_quota()),
             patch("app.api.v1.webhooks.process_vlog_task"),
         ):
             client = _make_client()
             client.post("/api/v1/webhooks/scan/trigger")
 
-        # Second PgClient should have had UPDATE executed
-        queries = [q[0] for q in second_pg.cursor.queries]
+        # update_pg should have had an UPDATE with QUEUED
+        queries = [q[0] for q in update_pg.cursor.queries]
         assert any("QUEUED" in q for q in queries)
 
     def test_requires_authentication(self):
@@ -110,17 +130,21 @@ class TestTriggerScan:
         assert resp.status_code == 401
 
     def test_adds_background_task_per_vlog(self):
-        first_pg = FakePgClient(rows=[{"id": "vlog-1"}, {"id": "vlog-2"}, {"id": "vlog-3"}])
-        second_pg = FakePgClient(rows=[])
-        call_count = {"n": 0}
+        vlogs_pg = FakePgClient(rows=[{"id": "vlog-1"}, {"id": "vlog-2"}, {"id": "vlog-3"}])
+        creator_pg = FakePgClient(rows=[{"id": "creator-1"}])
+        update_pg = FakePgClient(rows=[])
 
-        def _pg_factory():
-            call_count["n"] += 1
-            return first_pg if call_count["n"] == 1 else second_pg
+        clients = [vlogs_pg, creator_pg, update_pg, update_pg, update_pg]
+        idx = {"i": 0}
+        def factory():
+            c = clients[min(idx["i"], len(clients) - 1)]
+            idx["i"] += 1
+            return c
 
-        added_tasks = []
         with (
-            patch("app.api.v1.webhooks.PgClient", side_effect=_pg_factory),
+            patch("app.api.v1.webhooks.PgClient", side_effect=factory),
+            patch("app.api.v1.webhooks.remaining_tripkit_slots", return_value=10),
+            patch("app.api.v1.webhooks.check_and_consume_tripkit", return_value=_allowed_quota()),
             patch("app.api.v1.webhooks.process_vlog_task") as mock_task,
         ):
             client = _make_client()
@@ -129,16 +153,21 @@ class TestTriggerScan:
         assert resp.json()["queued"] == 3
 
     def test_single_vlog_queued(self):
-        first_pg = FakePgClient(rows=[{"id": "only-vlog"}])
-        second_pg = FakePgClient(rows=[])
-        call_count = {"n": 0}
+        vlogs_pg = FakePgClient(rows=[{"id": "only-vlog"}])
+        creator_pg = FakePgClient(rows=[{"id": "creator-1"}])
+        update_pg = FakePgClient(rows=[])
 
-        def _pg_factory():
-            call_count["n"] += 1
-            return first_pg if call_count["n"] == 1 else second_pg
+        clients = [vlogs_pg, creator_pg, update_pg]
+        idx = {"i": 0}
+        def factory():
+            c = clients[min(idx["i"], len(clients) - 1)]
+            idx["i"] += 1
+            return c
 
         with (
-            patch("app.api.v1.webhooks.PgClient", side_effect=_pg_factory),
+            patch("app.api.v1.webhooks.PgClient", side_effect=factory),
+            patch("app.api.v1.webhooks.remaining_tripkit_slots", return_value=10),
+            patch("app.api.v1.webhooks.check_and_consume_tripkit", return_value=_allowed_quota()),
             patch("app.api.v1.webhooks.process_vlog_task"),
         ):
             client = _make_client()
