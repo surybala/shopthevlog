@@ -366,6 +366,8 @@ model Creator {
   lastCatalogScan   DateTime?
   processingCreditsUsed Int     @default(0)
   processingCreditsResetAt DateTime?
+  insightsRunsUsed      Int     @default(0)
+  insightsRunsResetAt   DateTime?
   isPublished       Boolean     @default(false)
   isVerified        Boolean     @default(false)
 

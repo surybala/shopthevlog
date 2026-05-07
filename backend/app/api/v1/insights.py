@@ -17,6 +17,7 @@ from app.core.security import get_current_user, UserClaims
 from app.db.pg_client import PgClient
 from app.tasks.analyze_channel import analyze_channel_task
 from app.services.insights_gemini_service import augment_creator_idea
+from app.services.quota_service import check_and_consume_insights
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/insights", tags=["insights"])
@@ -64,6 +65,13 @@ async def trigger_analysis(
                     "message": f"Insights are fresh ({age_hours:.1f}h old). Next refresh available in {remaining:.1f}h.",
                     "cached_at": analyzed_at.isoformat(),
                 }
+
+    quota = check_and_consume_insights(creator["id"])
+    if not quota.allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=quota.to_error_detail("insights"),
+        )
 
     background_tasks.add_task(analyze_channel_task, creator["id"], creator["handle"])
     return {"status": "QUEUED", "creator_id": creator["id"]}

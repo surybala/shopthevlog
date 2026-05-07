@@ -10,6 +10,11 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 from tests.conftest import FakePgClient
+from app.services.quota_service import QuotaResult
+
+
+def _allowed_insights_quota() -> QuotaResult:
+    return QuotaResult(allowed=True, plan="FREE", used=1, limit=25, reset_at=None)
 
 
 # ─── Fixtures / helpers ───────────────────────────────────────────────────────
@@ -441,8 +446,9 @@ class TestInsightsAPI:
 
         with patch("app.api.v1.insights.PgClient", side_effect=_pg_factory):
             with patch("app.api.v1.insights.analyze_channel_task") as mock_task:
-                client = TestClient(app)
-                resp = client.post("/api/v1/insights/analyze")
+                with patch("app.api.v1.insights.check_and_consume_insights", return_value=_allowed_insights_quota()):
+                    client = TestClient(app)
+                    resp = client.post("/api/v1/insights/analyze")
 
         app.dependency_overrides.clear()
         assert resp.status_code == 200
@@ -880,8 +886,9 @@ class TestInsightsTTLCache:
 
         with patch("app.api.v1.insights.PgClient", side_effect=_pg_factory):
             with patch("app.api.v1.insights.analyze_channel_task"):
-                client = TestClient(app)
-                resp = client.post("/api/v1/insights/analyze")
+                with patch("app.api.v1.insights.check_and_consume_insights", return_value=_allowed_insights_quota()):
+                    client = TestClient(app)
+                    resp = client.post("/api/v1/insights/analyze")
 
         app.dependency_overrides.clear()
         assert resp.status_code == 200
@@ -906,8 +913,9 @@ class TestInsightsTTLCache:
 
         with patch("app.api.v1.insights.PgClient", side_effect=_pg_factory):
             with patch("app.api.v1.insights.analyze_channel_task"):
-                client = TestClient(app)
-                resp = client.post("/api/v1/insights/analyze")
+                with patch("app.api.v1.insights.check_and_consume_insights", return_value=_allowed_insights_quota()):
+                    client = TestClient(app)
+                    resp = client.post("/api/v1/insights/analyze")
 
         app.dependency_overrides.clear()
         assert resp.status_code == 200
