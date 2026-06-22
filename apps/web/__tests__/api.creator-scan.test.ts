@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
+import { CREATOR_PLAN_CONFIG } from '../lib/creatorPlans'
 
 const mockGetUser = vi.fn()
 vi.mock('@/lib/supabase/server', () => ({
@@ -476,17 +477,18 @@ describe('creator scan trigger route', () => {
       youtubeChannelId: 'channel-1',
       plan: 'FREE',
     })
-    mockVlogFindMany.mockResolvedValue([
-      { externalId: 'video-a' },
-      { externalId: 'video-b' },
-      { externalId: 'video-c' },
-      { externalId: 'video-d' },
-      { externalId: 'video-e' },
-    ])
+    // Creator is already AT the FREE import cap (none of which is the catalog's
+    // new video-1), so the scan must import nothing and report the limit reached.
+    mockVlogFindMany.mockResolvedValue(
+      Array.from({ length: CREATOR_PLAN_CONFIG.FREE.maxImportedVlogs }, (_, i) => ({
+        externalId: `existing-${i}`,
+      })),
+    )
 
     const res = await triggerScan(new NextRequest('http://localhost/api/creator/scan', { method: 'POST' }))
 
     expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({ status: 'COMPLETE', importedCount: 0, limitReached: true })
     await vi.waitFor(() => {
       expect(mockVlogUpsert).not.toHaveBeenCalled()
       expect(mockCreatorUpdate).toHaveBeenCalledWith(
