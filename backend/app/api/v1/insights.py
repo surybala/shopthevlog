@@ -8,12 +8,12 @@ POST /insights/augment  — augment a creator's rough video idea with personaliz
 """
 import json
 import logging
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.core.security import get_current_user, UserClaims
 from app.db.pg_client import PgClient
-from app.tasks.analyze_channel import analyze_channel_task
+from app.services.job_queue import enqueue
 from app.services.insights_gemini_service import augment_creator_idea
 from app.services.brief_outcomes import fetch_calibration_context
 from app.services.niche_service import fetch_niche_trends
@@ -25,10 +25,9 @@ router = APIRouter(prefix="/insights", tags=["insights"])
 
 @router.post("/analyze")
 async def trigger_analysis(
-    background_tasks: BackgroundTasks,
     user: UserClaims = Depends(get_current_user),
 ):
-    """Queue a channel analysis run for the authenticated creator."""
+    """Enqueue a durable channel-analysis job for the authenticated creator."""
     with PgClient() as db:
         db.execute(
             'SELECT id, handle FROM "Creator" WHERE "userId" = %s',
@@ -50,7 +49,7 @@ async def trigger_analysis(
     if existing and existing["status"] == "ANALYZING":
         return {"status": "ANALYZING", "message": "Analysis already running"}
 
-    background_tasks.add_task(analyze_channel_task, creator["id"], creator["handle"])
+    enqueue("analyze_channel", {"creator_id": creator["id"], "creator_handle": creator["handle"]})
     return {"status": "QUEUED", "creator_id": creator["id"]}
 
 

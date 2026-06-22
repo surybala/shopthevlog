@@ -1304,3 +1304,32 @@ model NicheBenchmarkCache {
   fetchedAt  DateTime @default(now())
   expiresAt  DateTime
 }
+
+// ─── Durable background job queue ───────────────────────────────────────────
+// Postgres-backed so long-running pipeline work (channel analysis, vlog
+// processing) survives worker restarts, retries on failure, and never gets
+// stuck — claimed atomically via SELECT ... FOR UPDATE SKIP LOCKED.
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model Job {
+  id          String    @id @default(cuid())
+  type        String
+  payload     Json
+  status      JobStatus @default(PENDING)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  runAfter    DateTime  @default(now())
+  lockedAt    DateTime?
+  lockedBy    String?
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, runAfter])
+}

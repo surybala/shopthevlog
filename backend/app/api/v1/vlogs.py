@@ -3,11 +3,11 @@ Vlog endpoints — list, status check, and per-vlog processing trigger.
 All reads/writes use the new Prisma PostgreSQL schema.
 """
 import logging
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.security import get_current_user, UserClaims
 from app.db.pg_client import PgClient
-from app.tasks.process_vlog import process_vlog_task
+from app.services.job_queue import enqueue
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/vlogs", tags=["vlogs"])
@@ -39,7 +39,6 @@ async def list_vlogs(user: UserClaims = Depends(get_current_user)):
 @router.post("/{vlog_id}/process")
 async def trigger_process(
     vlog_id: str,
-    background_tasks: BackgroundTasks,
     user: UserClaims = Depends(get_current_user),
 ):
     """Trigger AI processing (transcription + TripKit generation) for a vlog."""
@@ -76,7 +75,7 @@ async def trigger_process(
             (vlog_id,)
         )
 
-    background_tasks.add_task(process_vlog_task, vlog_id)
+    enqueue("process_vlog", {"vlog_id": vlog_id})
     return {"status": "QUEUED", "vlog_id": vlog_id}
 
 

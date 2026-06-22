@@ -190,7 +190,7 @@ class TestTriggerProcess:
 
         with (
             patch("app.api.v1.vlogs.PgClient", side_effect=clients),
-            patch("app.api.v1.vlogs.process_vlog_task") as mock_task,
+            patch("app.api.v1.vlogs.enqueue") as mock_enqueue,
         ):
             client = _make_client(select_pg)
             resp = client.post("/api/v1/vlogs/vlog-001/process")
@@ -199,6 +199,7 @@ class TestTriggerProcess:
         data = resp.json()
         assert data["status"] == "QUEUED"
         assert data["vlog_id"] == "vlog-001"
+        mock_enqueue.assert_called_once_with("process_vlog", {"vlog_id": "vlog-001"})
 
     def test_failed_vlog_can_be_requeued(self):
         select_pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "FAILED", "hasOpportunities": False}])
@@ -206,7 +207,7 @@ class TestTriggerProcess:
 
         with (
             patch("app.api.v1.vlogs.PgClient", side_effect=[select_pg, update_pg]),
-            patch("app.api.v1.vlogs.process_vlog_task"),
+            patch("app.api.v1.vlogs.enqueue"),
         ):
             client = _make_client(select_pg)
             resp = client.post("/api/v1/vlogs/vlog-001/process")
@@ -221,7 +222,7 @@ class TestTriggerProcess:
 
         with (
             patch("app.api.v1.vlogs.PgClient", side_effect=[select_pg, update_pg]),
-            patch("app.api.v1.vlogs.process_vlog_task"),
+            patch("app.api.v1.vlogs.enqueue"),
         ):
             client = _make_client(select_pg)
             resp = client.post("/api/v1/vlogs/vlog-001/process")
@@ -245,7 +246,7 @@ class TestTriggerProcess:
 
         with (
             patch("app.api.v1.vlogs.PgClient", side_effect=[select_pg, update_pg]),
-            patch("app.api.v1.vlogs.process_vlog_task"),
+            patch("app.api.v1.vlogs.enqueue"),
         ):
             client = _make_client(select_pg)
             client.post("/api/v1/vlogs/vlog-001/process")

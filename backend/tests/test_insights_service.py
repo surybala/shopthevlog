@@ -450,13 +450,16 @@ class TestInsightsAPI:
             return creator_client if call_count[0] == 1 else insight_client
 
         with patch("app.api.v1.insights.PgClient", side_effect=_pg_factory):
-            with patch("app.api.v1.insights.analyze_channel_task") as mock_task:
+            with patch("app.api.v1.insights.enqueue") as mock_enqueue:
                 client = TestClient(app)
                 resp = client.post("/api/v1/insights/analyze")
 
         app.dependency_overrides.clear()
         assert resp.status_code == 200
         assert resp.json()["status"] == "QUEUED"
+        mock_enqueue.assert_called_once_with(
+            "analyze_channel", {"creator_id": "creator-1", "creator_handle": "testcreator"}
+        )
 
     def test_trigger_returns_analyzing_when_already_running(self):
         from fastapi.testclient import TestClient

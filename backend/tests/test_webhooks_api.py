@@ -53,7 +53,7 @@ class TestTriggerScan:
 
         with (
             patch("app.api.v1.webhooks.PgClient", side_effect=_pg_factory),
-            patch("app.api.v1.webhooks.process_vlog_task"),
+            patch("app.api.v1.webhooks.enqueue"),
         ):
             client = _make_client()
             resp = client.post("/api/v1/webhooks/scan/trigger")
@@ -72,7 +72,7 @@ class TestTriggerScan:
 
         with (
             patch("app.api.v1.webhooks.PgClient", side_effect=_pg_factory),
-            patch("app.api.v1.webhooks.process_vlog_task"),
+            patch("app.api.v1.webhooks.enqueue"),
         ):
             client = _make_client()
             resp = client.post("/api/v1/webhooks/scan/trigger")
@@ -92,7 +92,7 @@ class TestTriggerScan:
 
         with (
             patch("app.api.v1.webhooks.PgClient", side_effect=_pg_factory),
-            patch("app.api.v1.webhooks.process_vlog_task"),
+            patch("app.api.v1.webhooks.enqueue"),
         ):
             client = _make_client()
             client.post("/api/v1/webhooks/scan/trigger")
@@ -118,15 +118,17 @@ class TestTriggerScan:
             call_count["n"] += 1
             return first_pg if call_count["n"] == 1 else second_pg
 
-        added_tasks = []
         with (
             patch("app.api.v1.webhooks.PgClient", side_effect=_pg_factory),
-            patch("app.api.v1.webhooks.process_vlog_task") as mock_task,
+            patch("app.api.v1.webhooks.enqueue") as mock_enqueue,
         ):
             client = _make_client()
             resp = client.post("/api/v1/webhooks/scan/trigger")
 
         assert resp.json()["queued"] == 3
+        # One durable job enqueued per vlog with the correct payload
+        assert mock_enqueue.call_count == 3
+        mock_enqueue.assert_any_call("process_vlog", {"vlog_id": "vlog-2"})
 
     def test_single_vlog_queued(self):
         first_pg = FakePgClient(rows=[{"id": "only-vlog"}])
@@ -139,7 +141,7 @@ class TestTriggerScan:
 
         with (
             patch("app.api.v1.webhooks.PgClient", side_effect=_pg_factory),
-            patch("app.api.v1.webhooks.process_vlog_task"),
+            patch("app.api.v1.webhooks.enqueue"),
         ):
             client = _make_client()
             resp = client.post("/api/v1/webhooks/scan/trigger")
