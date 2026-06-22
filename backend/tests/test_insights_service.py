@@ -308,6 +308,10 @@ class TestAnalyzeChannelTask:
             patch("app.tasks.analyze_channel.PgClient", side_effect=_pg_factory),
             patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=SAMPLE_VLOGS),
             patch("app.tasks.analyze_channel.fetch_video_comments", return_value=["Great video!"]),
+            patch("app.tasks.analyze_channel.extract_niche_search_phrases", return_value={"query": "", "niche_label": ""}),
+            patch("app.tasks.analyze_channel.extract_niche_keywords", return_value="japan budget"),
+            patch("app.tasks.analyze_channel.search_niche_benchmarks", return_value=[]),
+            patch("app.tasks.analyze_channel.find_peer_channels", return_value=[]),
             patch("app.tasks.analyze_channel.analyze_content_patterns", return_value=SAMPLE_PATTERNS),
             patch("app.tasks.analyze_channel.analyze_audience_demands", return_value=SAMPLE_AUDIENCE),
             patch("app.tasks.analyze_channel.generate_content_briefs", return_value=SAMPLE_BRIEFS),
@@ -318,17 +322,21 @@ class TestAnalyzeChannelTask:
     @pytest.mark.asyncio
     async def test_marks_failed_when_pattern_analysis_returns_none(self):
         upsert_client = FakePgClient(rows=[{"id": "insight-1"}])
-        status_clients = [FakePgClient(rows=[]) for _ in range(3)]
+        status_clients = [FakePgClient(rows=[]) for _ in range(5)]
         call_count = [0]
 
         def _pg_factory(*args, **kwargs):
             call_count[0] += 1
-            return upsert_client if call_count[0] == 1 else status_clients[min(call_count[0] - 2, 2)]
+            return upsert_client if call_count[0] == 1 else status_clients[min(call_count[0] - 2, 4)]
 
         with (
             patch("app.tasks.analyze_channel.PgClient", side_effect=_pg_factory),
             patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=SAMPLE_VLOGS),
             patch("app.tasks.analyze_channel.fetch_video_comments", return_value=[]),
+            patch("app.tasks.analyze_channel.extract_niche_search_phrases", return_value={"query": "", "niche_label": ""}),
+            patch("app.tasks.analyze_channel.extract_niche_keywords", return_value=""),
+            patch("app.tasks.analyze_channel.search_niche_benchmarks", return_value=[]),
+            patch("app.tasks.analyze_channel.find_peer_channels", return_value=[]),
             patch("app.tasks.analyze_channel.analyze_content_patterns", return_value=None),
         ):
             from app.tasks.analyze_channel import analyze_channel_task
@@ -622,6 +630,12 @@ SAMPLE_BENCHMARKS = [
 ]
 
 
+SAMPLE_PEERS = [
+    {"channelId": "ch_1", "channelTitle": "BudgetTraveler", "subscriberCount": 120_000, "videoCount": 210, "viewCount": 30_000_000},
+    {"channelId": "ch_2", "channelTitle": "TravelWithMike", "subscriberCount": 85_000, "videoCount": 140, "viewCount": 18_000_000},
+]
+
+
 class TestSearchNicheBenchmarks:
     def test_returns_empty_without_api_key(self, monkeypatch):
         monkeypatch.setattr("app.services.analytics_service.settings.YOUTUBE_API_KEY", "")
@@ -733,29 +747,32 @@ class TestAnalyzeContentPatternsWithBenchmarks:
 
 class TestAnalyzeChannelTaskBenchmarking:
     @pytest.mark.asyncio
-    async def test_fetches_benchmarks_for_small_channel(self):
-        """A channel with < 10 vlogs and low views should trigger benchmark fetch."""
-        small_vlogs = [
+    async def test_fetches_benchmarks_using_gemini_niche_query(self):
+        """The Gemini-derived niche query is preferred and drives the benchmark search."""
+        vlogs = [
             {**SAMPLE_VLOGS[0], "viewCount": 5_000},
             {**SAMPLE_VLOGS[1], "viewCount": 3_000},
         ]
         upsert_client = FakePgClient(rows=[{"id": "insight-1"}])
-        pg_clients = [FakePgClient(rows=[]) for _ in range(10)]
+        pg_clients = [FakePgClient(rows=[]) for _ in range(12)]
         call_count = [0]
 
         def _pg_factory(*args, **kwargs):
             call_count[0] += 1
-            return upsert_client if call_count[0] == 1 else pg_clients[min(call_count[0] - 2, 9)]
+            return upsert_client if call_count[0] == 1 else pg_clients[min(call_count[0] - 2, 11)]
 
         mock_benchmarks = MagicMock(return_value=SAMPLE_BENCHMARKS)
         mock_patterns = MagicMock(return_value=SAMPLE_PATTERNS)
+        mock_keywords = MagicMock(return_value="fallback keywords")
 
         with (
             patch("app.tasks.analyze_channel.PgClient", side_effect=_pg_factory),
-            patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=small_vlogs),
+            patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=vlogs),
             patch("app.tasks.analyze_channel.fetch_video_comments", return_value=[]),
-            patch("app.tasks.analyze_channel.extract_niche_keywords", return_value="japan budget"),
+            patch("app.tasks.analyze_channel.extract_niche_search_phrases", return_value={"query": "japan budget itinerary", "niche_label": "budget japan"}),
+            patch("app.tasks.analyze_channel.extract_niche_keywords", mock_keywords),
             patch("app.tasks.analyze_channel.search_niche_benchmarks", mock_benchmarks),
+            patch("app.tasks.analyze_channel.find_peer_channels", return_value=SAMPLE_PEERS),
             patch("app.tasks.analyze_channel.analyze_content_patterns", mock_patterns),
             patch("app.tasks.analyze_channel.analyze_audience_demands", return_value=None),
             patch("app.tasks.analyze_channel.generate_content_briefs", return_value=[]),
@@ -763,30 +780,36 @@ class TestAnalyzeChannelTaskBenchmarking:
             from app.tasks.analyze_channel import analyze_channel_task
             await analyze_channel_task("creator-1", "testcreator")
 
-        mock_benchmarks.assert_called_once_with("japan budget", max_results=15)
-        # Pattern analysis should have received the benchmarks
+        # Gemini query wins; deterministic keyword fallback is not consulted
+        mock_keywords.assert_not_called()
+        mock_benchmarks.assert_called_once_with("japan budget itinerary", max_results=15, recency_days=90)
+        # Pattern analysis receives both benchmarks and peer channels
         _, kwargs = mock_patterns.call_args
         assert kwargs.get("benchmarks") == SAMPLE_BENCHMARKS
+        assert kwargs.get("peers") == SAMPLE_PEERS
 
     @pytest.mark.asyncio
-    async def test_skips_benchmarks_for_large_channel(self):
-        """A channel with >= 10 vlogs and high views should not trigger benchmarking."""
-        large_vlogs = [{**v, "viewCount": 200_000} for v in (SAMPLE_VLOGS * 3)[:10]]
+    async def test_falls_back_to_keyword_extraction_when_gemini_empty(self):
+        """When Gemini returns no query, the deterministic keyword extractor is used."""
+        vlogs = [{**SAMPLE_VLOGS[0], "viewCount": 5_000}]
         upsert_client = FakePgClient(rows=[{"id": "insight-1"}])
-        pg_clients = [FakePgClient(rows=[]) for _ in range(10)]
+        pg_clients = [FakePgClient(rows=[]) for _ in range(12)]
         call_count = [0]
 
         def _pg_factory(*args, **kwargs):
             call_count[0] += 1
-            return upsert_client if call_count[0] == 1 else pg_clients[min(call_count[0] - 2, 9)]
+            return upsert_client if call_count[0] == 1 else pg_clients[min(call_count[0] - 2, 11)]
 
         mock_benchmarks = MagicMock(return_value=[])
 
         with (
             patch("app.tasks.analyze_channel.PgClient", side_effect=_pg_factory),
-            patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=large_vlogs),
+            patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=vlogs),
             patch("app.tasks.analyze_channel.fetch_video_comments", return_value=[]),
+            patch("app.tasks.analyze_channel.extract_niche_search_phrases", return_value={"query": "", "niche_label": ""}),
+            patch("app.tasks.analyze_channel.extract_niche_keywords", return_value="japan budget"),
             patch("app.tasks.analyze_channel.search_niche_benchmarks", mock_benchmarks),
+            patch("app.tasks.analyze_channel.find_peer_channels", return_value=[]),
             patch("app.tasks.analyze_channel.analyze_content_patterns", return_value=SAMPLE_PATTERNS),
             patch("app.tasks.analyze_channel.analyze_audience_demands", return_value=None),
             patch("app.tasks.analyze_channel.generate_content_briefs", return_value=[]),
@@ -794,27 +817,62 @@ class TestAnalyzeChannelTaskBenchmarking:
             from app.tasks.analyze_channel import analyze_channel_task
             await analyze_channel_task("creator-1", "testcreator")
 
-        mock_benchmarks.assert_not_called()
+        mock_benchmarks.assert_called_once_with("japan budget", max_results=15, recency_days=90)
 
     @pytest.mark.asyncio
-    async def test_persists_used_benchmarks_flag(self):
-        """When benchmarks are used, _save_insight_results should record used_benchmarks=True."""
-        small_vlogs = [{**SAMPLE_VLOGS[0], "viewCount": 2_000}]
+    async def test_benchmarks_run_for_large_channel_too(self):
+        """Established channels (many vlogs, high views) still get benchmark enrichment."""
+        large_vlogs = [{**v, "viewCount": 200_000} for v in (SAMPLE_VLOGS * 3)[:10]]
         upsert_client = FakePgClient(rows=[{"id": "insight-1"}])
-        save_client = FakePgClient(rows=[])
-        pg_clients = [FakePgClient(rows=[]), save_client, FakePgClient(rows=[])]
+        pg_clients = [FakePgClient(rows=[]) for _ in range(12)]
         call_count = [0]
 
         def _pg_factory(*args, **kwargs):
             call_count[0] += 1
-            return upsert_client if call_count[0] == 1 else pg_clients[min(call_count[0] - 2, 2)]
+            return upsert_client if call_count[0] == 1 else pg_clients[min(call_count[0] - 2, 11)]
+
+        mock_benchmarks = MagicMock(return_value=SAMPLE_BENCHMARKS)
 
         with (
             patch("app.tasks.analyze_channel.PgClient", side_effect=_pg_factory),
-            patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=small_vlogs),
+            patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=large_vlogs),
             patch("app.tasks.analyze_channel.fetch_video_comments", return_value=[]),
+            patch("app.tasks.analyze_channel.extract_niche_search_phrases", return_value={"query": "luxury europe travel", "niche_label": "luxury europe"}),
+            patch("app.tasks.analyze_channel.extract_niche_keywords", return_value="europe"),
+            patch("app.tasks.analyze_channel.search_niche_benchmarks", mock_benchmarks),
+            patch("app.tasks.analyze_channel.find_peer_channels", return_value=[]),
+            patch("app.tasks.analyze_channel.analyze_content_patterns", return_value=SAMPLE_PATTERNS),
+            patch("app.tasks.analyze_channel.analyze_audience_demands", return_value=None),
+            patch("app.tasks.analyze_channel.generate_content_briefs", return_value=[]),
+        ):
+            from app.tasks.analyze_channel import analyze_channel_task
+            await analyze_channel_task("creator-1", "testcreator")
+
+        mock_benchmarks.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_persists_used_benchmarks_flag(self):
+        """When benchmarks are used, _save_insight_results should record used_benchmarks=True."""
+        vlogs = [{**SAMPLE_VLOGS[0], "viewCount": 2_000}]
+        upsert_client = FakePgClient(rows=[{"id": "insight-1"}])
+        save_client = FakePgClient(rows=[])
+        # Order of PgClient() calls after upsert: status→ANALYZING, subscriber-count read,
+        # save_insight_results, (no briefs). save is the 3rd post-upsert client.
+        pg_clients = [FakePgClient(rows=[]), FakePgClient(rows=[{"subscriberCount": 1000}]), save_client, FakePgClient(rows=[])]
+        call_count = [0]
+
+        def _pg_factory(*args, **kwargs):
+            call_count[0] += 1
+            return upsert_client if call_count[0] == 1 else pg_clients[min(call_count[0] - 2, 3)]
+
+        with (
+            patch("app.tasks.analyze_channel.PgClient", side_effect=_pg_factory),
+            patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=vlogs),
+            patch("app.tasks.analyze_channel.fetch_video_comments", return_value=[]),
+            patch("app.tasks.analyze_channel.extract_niche_search_phrases", return_value={"query": "japan budget", "niche_label": "budget japan"}),
             patch("app.tasks.analyze_channel.extract_niche_keywords", return_value="japan budget"),
             patch("app.tasks.analyze_channel.search_niche_benchmarks", return_value=SAMPLE_BENCHMARKS),
+            patch("app.tasks.analyze_channel.find_peer_channels", return_value=[]),
             patch("app.tasks.analyze_channel.analyze_content_patterns", return_value=SAMPLE_PATTERNS),
             patch("app.tasks.analyze_channel.analyze_audience_demands", return_value=None),
             patch("app.tasks.analyze_channel.generate_content_briefs", return_value=[]),
@@ -825,3 +883,325 @@ class TestAnalyzeChannelTaskBenchmarking:
         # The save query should include usedBenchmarks=True and benchmarkVideoCount=2
         all_params = [q[1] for q in save_client.cursor.queries]
         assert any(True in (p if isinstance(p, tuple) else ()) for p in all_params)
+
+
+# ─── Phase 1: velocity, recency & peer intelligence ───────────────────────────
+
+class TestViewVelocity:
+    def test_returns_none_without_publish_date(self):
+        from app.services.analytics_service import view_velocity
+        assert view_velocity(1000, None) is None
+        assert view_velocity(1000, "") is None
+
+    def test_returns_none_for_unparseable_date(self):
+        from app.services.analytics_service import view_velocity
+        assert view_velocity(1000, "not-a-date") is None
+
+    def test_computes_views_per_day(self):
+        from datetime import datetime, timedelta, timezone
+        from app.services.analytics_service import view_velocity
+        ten_days_ago = (datetime.now(timezone.utc) - timedelta(days=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        velocity = view_velocity(1000, ten_days_ago)
+        # ~100 views/day; allow slack for elapsed test time
+        assert 90 <= velocity <= 110
+
+    def test_clamps_age_to_one_day_minimum(self):
+        from datetime import datetime, timezone
+        from app.services.analytics_service import view_velocity
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # A brand-new video should not divide by ~0
+        velocity = view_velocity(5000, now)
+        assert velocity is not None
+        assert velocity <= 5000
+
+    def test_handles_naive_datetime_string(self):
+        from datetime import datetime, timedelta, timezone
+        from app.services.analytics_service import view_velocity
+        # A naive (no tz offset) timestamp must be treated as UTC, not rejected
+        five_days_ago = (datetime.now(timezone.utc) - timedelta(days=5)).strftime("%Y-%m-%dT%H:%M:%S")
+        velocity = view_velocity(500, five_days_ago)
+        assert velocity is not None
+        assert velocity > 0
+
+
+class TestRfc3339DaysAgo:
+    def test_returns_z_suffixed_timestamp(self):
+        from app.services.analytics_service import rfc3339_days_ago
+        ts = rfc3339_days_ago(90)
+        assert ts.endswith("Z")
+        assert "T" in ts
+
+    def test_is_in_the_past(self):
+        from datetime import datetime, timezone
+        from app.services.analytics_service import rfc3339_days_ago
+        ts = rfc3339_days_ago(30)
+        parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        assert parsed < datetime.now(timezone.utc)
+
+
+class TestSearchNicheBenchmarksVelocity:
+    def test_passes_published_after_when_recency_days_set(self, monkeypatch):
+        monkeypatch.setattr("app.services.analytics_service.settings.YOUTUBE_API_KEY", "fake-key")
+        captured = {}
+
+        class _Search:
+            def list(self, **kwargs):
+                captured.update(kwargs)
+                m = MagicMock()
+                m.execute.return_value = {"items": []}
+                return m
+
+        mock_yt = MagicMock()
+        mock_yt.search.return_value = _Search()
+        with patch("app.services.analytics_service._youtube_client", mock_yt):
+            from app.services.analytics_service import search_niche_benchmarks
+            search_niche_benchmarks("japan budget", recency_days=90)
+        assert "publishedAfter" in captured
+
+    def test_explicit_published_after_takes_precedence(self, monkeypatch):
+        monkeypatch.setattr("app.services.analytics_service.settings.YOUTUBE_API_KEY", "fake-key")
+        captured = {}
+
+        class _Search:
+            def list(self, **kwargs):
+                captured.update(kwargs)
+                m = MagicMock()
+                m.execute.return_value = {"items": []}
+                return m
+
+        mock_yt = MagicMock()
+        mock_yt.search.return_value = _Search()
+        with patch("app.services.analytics_service._youtube_client", mock_yt):
+            from app.services.analytics_service import search_niche_benchmarks
+            search_niche_benchmarks("japan", published_after="2024-01-01T00:00:00Z", recency_days=90)
+        assert captured["publishedAfter"] == "2024-01-01T00:00:00Z"
+
+    def test_no_published_after_by_default(self, monkeypatch):
+        monkeypatch.setattr("app.services.analytics_service.settings.YOUTUBE_API_KEY", "fake-key")
+        captured = {}
+
+        class _Search:
+            def list(self, **kwargs):
+                captured.update(kwargs)
+                m = MagicMock()
+                m.execute.return_value = {"items": []}
+                return m
+
+        mock_yt = MagicMock()
+        mock_yt.search.return_value = _Search()
+        with patch("app.services.analytics_service._youtube_client", mock_yt):
+            from app.services.analytics_service import search_niche_benchmarks
+            search_niche_benchmarks("japan")
+        assert "publishedAfter" not in captured
+
+    def test_ranks_by_velocity_when_dates_present(self, monkeypatch):
+        from datetime import datetime, timedelta, timezone
+        monkeypatch.setattr("app.services.analytics_service.settings.YOUTUBE_API_KEY", "fake-key")
+        recent = (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        old = (datetime.now(timezone.utc) - timedelta(days=2000)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        search_resp = {"items": [{"id": {"videoId": "fresh"}}, {"id": {"videoId": "stale"}}]}
+        stats_resp = {
+            "items": [
+                {"id": "stale", "snippet": {"title": "Old megahit", "channelId": "c1", "channelTitle": "A", "publishedAt": old}, "statistics": {"viewCount": "5000000"}},
+                {"id": "fresh", "snippet": {"title": "Rising star", "channelId": "c2", "channelTitle": "B", "publishedAt": recent}, "statistics": {"viewCount": "200000"}},
+            ]
+        }
+        mock_yt = MagicMock()
+        mock_yt.search.return_value.list.return_value.execute.return_value = search_resp
+        mock_yt.videos.return_value.list.return_value.execute.return_value = stats_resp
+        with patch("app.services.analytics_service._youtube_client", mock_yt):
+            from app.services.analytics_service import search_niche_benchmarks
+            result = search_niche_benchmarks("travel")
+        # The fresh video (100k/day) outranks the old megahit (2.5k/day) despite fewer total views
+        assert result[0]["videoId"] == "fresh"
+        assert result[0]["viewVelocity"] > result[1]["viewVelocity"]
+
+    def test_falls_back_to_viewcount_when_no_dates(self, monkeypatch):
+        monkeypatch.setattr("app.services.analytics_service.settings.YOUTUBE_API_KEY", "fake-key")
+        search_resp = {"items": [{"id": {"videoId": "a"}}, {"id": {"videoId": "b"}}]}
+        stats_resp = {
+            "items": [
+                {"id": "a", "snippet": {"title": "A", "channelId": "c1", "channelTitle": "A"}, "statistics": {"viewCount": "100"}},
+                {"id": "b", "snippet": {"title": "B", "channelId": "c2", "channelTitle": "B"}, "statistics": {"viewCount": "900"}},
+            ]
+        }
+        mock_yt = MagicMock()
+        mock_yt.search.return_value.list.return_value.execute.return_value = search_resp
+        mock_yt.videos.return_value.list.return_value.execute.return_value = stats_resp
+        with patch("app.services.analytics_service._youtube_client", mock_yt):
+            from app.services.analytics_service import search_niche_benchmarks
+            result = search_niche_benchmarks("travel")
+        assert result[0]["videoId"] == "b"
+        assert result[0]["viewVelocity"] is None
+
+
+class TestFindPeerChannels:
+    def test_returns_empty_without_api_key(self, monkeypatch):
+        monkeypatch.setattr("app.services.analytics_service.settings.YOUTUBE_API_KEY", "")
+        from app.services.analytics_service import find_peer_channels
+        assert find_peer_channels(["c1", "c2"]) == []
+
+    def test_returns_empty_for_no_channel_ids(self, monkeypatch):
+        monkeypatch.setattr("app.services.analytics_service.settings.YOUTUBE_API_KEY", "fake-key")
+        from app.services.analytics_service import find_peer_channels
+        assert find_peer_channels([]) == []
+        assert find_peer_channels(["", None]) == []
+
+    def test_handles_api_error(self, monkeypatch):
+        monkeypatch.setattr("app.services.analytics_service.settings.YOUTUBE_API_KEY", "fake-key")
+        mock_yt = MagicMock()
+        mock_yt.channels.return_value.list.return_value.execute.side_effect = Exception("quota")
+        with patch("app.services.analytics_service._youtube_client", mock_yt):
+            from app.services.analytics_service import find_peer_channels
+            assert find_peer_channels(["c1"]) == []
+
+    def test_parses_and_sorts_by_subscribers(self, monkeypatch):
+        monkeypatch.setattr("app.services.analytics_service.settings.YOUTUBE_API_KEY", "fake-key")
+        resp = {
+            "items": [
+                {"id": "c1", "snippet": {"title": "Small"}, "statistics": {"subscriberCount": "1000", "videoCount": "10", "viewCount": "5000"}},
+                {"id": "c2", "snippet": {"title": "Big"}, "statistics": {"subscriberCount": "9000", "videoCount": "20", "viewCount": "9000"}},
+            ]
+        }
+        mock_yt = MagicMock()
+        mock_yt.channels.return_value.list.return_value.execute.return_value = resp
+        with patch("app.services.analytics_service._youtube_client", mock_yt):
+            from app.services.analytics_service import find_peer_channels
+            result = find_peer_channels(["c1", "c2"])
+        assert [p["channelTitle"] for p in result] == ["Big", "Small"]
+
+    def test_filters_to_subscriber_band(self, monkeypatch):
+        monkeypatch.setattr("app.services.analytics_service.settings.YOUTUBE_API_KEY", "fake-key")
+        resp = {
+            "items": [
+                {"id": "c1", "snippet": {"title": "TooSmall"}, "statistics": {"subscriberCount": "100"}},
+                {"id": "c2", "snippet": {"title": "JustRight"}, "statistics": {"subscriberCount": "10000"}},
+                {"id": "c3", "snippet": {"title": "TooBig"}, "statistics": {"subscriberCount": "5000000"}},
+            ]
+        }
+        mock_yt = MagicMock()
+        mock_yt.channels.return_value.list.return_value.execute.return_value = resp
+        with patch("app.services.analytics_service._youtube_client", mock_yt):
+            from app.services.analytics_service import find_peer_channels
+            # creator has 10k subs; band 0.2x–5x → 2k..50k
+            result = find_peer_channels(["c1", "c2", "c3"], creator_subscriber_count=10000)
+        assert [p["channelTitle"] for p in result] == ["JustRight"]
+
+    def test_band_fallback_when_filter_empties(self, monkeypatch):
+        monkeypatch.setattr("app.services.analytics_service.settings.YOUTUBE_API_KEY", "fake-key")
+        resp = {
+            "items": [
+                {"id": "c1", "snippet": {"title": "Giant"}, "statistics": {"subscriberCount": "9000000"}},
+            ]
+        }
+        mock_yt = MagicMock()
+        mock_yt.channels.return_value.list.return_value.execute.return_value = resp
+        with patch("app.services.analytics_service._youtube_client", mock_yt):
+            from app.services.analytics_service import find_peer_channels
+            result = find_peer_channels(["c1"], creator_subscriber_count=1000)
+        # No peer fits the band, so we keep all resolved channels rather than nothing
+        assert len(result) == 1
+
+    def test_dedupes_channel_ids(self, monkeypatch):
+        monkeypatch.setattr("app.services.analytics_service.settings.YOUTUBE_API_KEY", "fake-key")
+        captured = {}
+
+        class _Channels:
+            def list(self, **kwargs):
+                captured.update(kwargs)
+                m = MagicMock()
+                m.execute.return_value = {"items": []}
+                return m
+
+        mock_yt = MagicMock()
+        mock_yt.channels.return_value = _Channels()
+        with patch("app.services.analytics_service._youtube_client", mock_yt):
+            from app.services.analytics_service import find_peer_channels
+            find_peer_channels(["c1", "c1", "c2"])
+        assert captured["id"] == "c1,c2"
+
+
+class TestExtractNicheSearchPhrases:
+    def test_returns_blank_for_no_titles(self):
+        from app.services.insights_gemini_service import extract_niche_search_phrases
+        assert extract_niche_search_phrases([]) == {"query": "", "niche_label": ""}
+        assert extract_niche_search_phrases([{"title": None}]) == {"query": "", "niche_label": ""}
+
+    def test_parses_query_and_label(self):
+        raw = json.dumps({"query": "japan budget itinerary", "niche_label": "budget japan travel"})
+        with patch("app.services.insights_gemini_service._call_gemini", return_value=raw):
+            from app.services.insights_gemini_service import extract_niche_search_phrases
+            result = extract_niche_search_phrases(SAMPLE_VLOGS, "creator")
+        assert result["query"] == "japan budget itinerary"
+        assert result["niche_label"] == "budget japan travel"
+
+    def test_returns_blank_on_gemini_error(self):
+        with patch("app.services.insights_gemini_service._call_gemini", side_effect=Exception("boom")):
+            from app.services.insights_gemini_service import extract_niche_search_phrases
+            result = extract_niche_search_phrases(SAMPLE_VLOGS, "creator")
+        assert result == {"query": "", "niche_label": ""}
+
+    def test_returns_blank_on_invalid_json(self):
+        with patch("app.services.insights_gemini_service._call_gemini", return_value="not json"):
+            from app.services.insights_gemini_service import extract_niche_search_phrases
+            result = extract_niche_search_phrases(SAMPLE_VLOGS, "creator")
+        assert result == {"query": "", "niche_label": ""}
+
+
+class TestAnalyzeContentPatternsWithPeers:
+    def test_includes_peer_section_when_provided(self):
+        captured = []
+
+        def _capture(system, user_content, max_tokens):
+            captured.append(user_content)
+            return json.dumps(SAMPLE_PATTERNS)
+
+        with patch("app.services.insights_gemini_service._call_gemini", side_effect=_capture):
+            from app.services.insights_gemini_service import analyze_content_patterns
+            analyze_content_patterns(SAMPLE_VLOGS, "creator", peers=SAMPLE_PEERS)
+        assert "PEER CHANNELS" in captured[0]
+        assert "BudgetTraveler" in captured[0]
+
+    def test_no_peer_section_when_absent(self):
+        captured = []
+
+        def _capture(system, user_content, max_tokens):
+            captured.append(user_content)
+            return json.dumps(SAMPLE_PATTERNS)
+
+        with patch("app.services.insights_gemini_service._call_gemini", side_effect=_capture):
+            from app.services.insights_gemini_service import analyze_content_patterns
+            analyze_content_patterns(SAMPLE_VLOGS, "creator")
+        assert "PEER CHANNELS" not in captured[0]
+
+    def test_benchmark_velocity_rendered_in_prompt(self):
+        captured = []
+        benchmarks = [{**SAMPLE_BENCHMARKS[0], "viewVelocity": 12345.0}]
+
+        def _capture(system, user_content, max_tokens):
+            captured.append(user_content)
+            return json.dumps(SAMPLE_PATTERNS)
+
+        with patch("app.services.insights_gemini_service._call_gemini", side_effect=_capture):
+            from app.services.insights_gemini_service import analyze_content_patterns
+            analyze_content_patterns(SAMPLE_VLOGS, "creator", benchmarks=benchmarks)
+        assert "views/day" in captured[0]
+
+
+class TestFetchCreatorSubscriberCount:
+    def test_returns_count_from_db(self):
+        from app.tasks.analyze_channel import _fetch_creator_subscriber_count
+        client = FakePgClient(rows=[{"subscriberCount": 4200}])
+        with patch("app.tasks.analyze_channel.PgClient", return_value=client):
+            assert _fetch_creator_subscriber_count("creator-1") == 4200
+
+    def test_returns_zero_when_missing(self):
+        from app.tasks.analyze_channel import _fetch_creator_subscriber_count
+        client = FakePgClient(rows=[])
+        with patch("app.tasks.analyze_channel.PgClient", return_value=client):
+            assert _fetch_creator_subscriber_count("creator-1") == 0
+
+    def test_returns_zero_on_db_error(self):
+        from app.tasks.analyze_channel import _fetch_creator_subscriber_count
+        with patch("app.tasks.analyze_channel.PgClient", side_effect=RuntimeError("db down")):
+            assert _fetch_creator_subscriber_count("creator-1") == 0

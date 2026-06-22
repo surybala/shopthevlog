@@ -26,18 +26,21 @@ from app.services.analytics_service import (
     fetch_video_comments,
     extract_niche_keywords,
     search_niche_benchmarks,
+    find_peer_channels,
 )
 from app.services.insights_gemini_service import (
     analyze_content_patterns,
     analyze_audience_demands,
     generate_content_briefs,
+    extract_niche_search_phrases,
 )
 
 logger = logging.getLogger(__name__)
 
-# Channels below either threshold get niche benchmark enrichment
-_BENCHMARK_MAX_VLOGS = 10
-_BENCHMARK_MAX_VIEWS = 50_000
+# Niche benchmarks are fetched for EVERY creator: established creators need
+# competitive intelligence just as much as small ones. We bias toward recent,
+# high-velocity videos so the signal reflects what is working now.
+_BENCHMARK_RECENCY_DAYS = 90
 
 
 # ─── DB helpers ───────────────────────────────────────────────────────────────
@@ -54,6 +57,20 @@ def _upsert_insight(creator_id: str) -> str:
             (creator_id,),
         )
         return db.fetchone()["id"]
+
+
+def _fetch_creator_subscriber_count(creator_id: str) -> int:
+    """Best-effort read of the creator's subscriber count for peer banding."""
+    try:
+        with PgClient() as db:
+            db.execute(
+                'SELECT "subscriberCount" FROM "Creator" WHERE id = %s',
+                (creator_id,),
+            )
+            row = db.fetchone()
+            return int((row or {}).get("subscriberCount") or 0)
+    except Exception:
+        return 0
 
 
 def _update_insight_status(creator_id: str, status: str) -> None:
@@ -166,34 +183,45 @@ async def analyze_channel_task(creator_id: str, creator_handle: str) -> None:
                 if comments:
                     comments_by_video[v["title"]] = comments
 
-        # Stage 2.5: niche benchmarking for small / growing channels
+        # Stage 2.5: niche benchmarking + peer discovery — for EVERY creator.
+        # Prefer a Gemini-derived niche query (precise peer matching); fall back
+        # to deterministic keyword extraction if that returns nothing.
         benchmark_vlogs: list[dict] = []
+        peer_channels: list[dict] = []
         used_benchmarks = False
         benchmark_video_count = 0
 
-        max_views = max((v.get("viewCount") or 0 for v in vlogs), default=0)
-        needs_benchmarks = len(vlogs) < _BENCHMARK_MAX_VLOGS or max_views < _BENCHMARK_MAX_VIEWS
+        niche = extract_niche_search_phrases(vlogs, creator_handle)
+        query = niche.get("query") or extract_niche_keywords(vlogs)
 
-        if needs_benchmarks:
-            keywords = extract_niche_keywords(vlogs)
-            if keywords:
-                logger.info(
-                    "Fetching niche benchmarks for creator %s (query: '%s')", creator_id, keywords
+        if query:
+            logger.info(
+                "Fetching niche benchmarks for creator %s (query: '%s')", creator_id, query
+            )
+            benchmark_vlogs = search_niche_benchmarks(
+                query, max_results=15, recency_days=_BENCHMARK_RECENCY_DAYS
+            )
+            if benchmark_vlogs:
+                used_benchmarks = True
+                benchmark_video_count = len(benchmark_vlogs)
+                observability_store.record(
+                    kind="pipeline", name="analyze_channel",
+                    status="benchmark_fetched",
+                    detail=f"{benchmark_video_count}_videos",
                 )
-                benchmark_vlogs = search_niche_benchmarks(keywords, max_results=15)
-                if benchmark_vlogs:
-                    used_benchmarks = True
-                    benchmark_video_count = len(benchmark_vlogs)
-                    observability_store.record(
-                        kind="pipeline", name="analyze_channel",
-                        status="benchmark_fetched",
-                        detail=f"{benchmark_video_count}_videos",
-                    )
+
+                # Resolve benchmark channels into similar-size peers
+                subscriber_count = _fetch_creator_subscriber_count(creator_id)
+                peer_channels = find_peer_channels(
+                    [b.get("channelId") for b in benchmark_vlogs],
+                    creator_subscriber_count=subscriber_count,
+                )
 
         # Stage 3: content pattern analysis
         patterns = analyze_content_patterns(
             vlogs, creator_handle,
             benchmarks=benchmark_vlogs if benchmark_vlogs else None,
+            peers=peer_channels if peer_channels else None,
         )
         if not patterns:
             logger.warning("Pattern analysis returned no result for creator %s", creator_id)

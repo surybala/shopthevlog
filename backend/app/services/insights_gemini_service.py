@@ -123,12 +123,59 @@ Rules:
 - Titles should be genuinely compelling, not formulaic
 """
 
+NICHE_QUERY_PROMPT = """You are a YouTube search strategist. Given a travel creator's video titles,
+produce the single best YouTube search query to surface the videos of their direct competitors
+and niche peers — the creators making the same kind of content for the same audience.
+
+Return ONE valid JSON object only. No markdown, no backticks.
+
+Schema:
+{
+  "query": "string — 2 to 5 words capturing the specific niche (destination + style + format intent)",
+  "niche_label": "string — a short human-readable niche name (e.g. 'budget backpacking Southeast Asia')"
+}
+
+Rules:
+- The query must be specific enough to return true peers, not generic 'travel vlog' results
+- Prefer destination + travel-style phrasing (e.g. 'japan budget itinerary', 'luxury maldives resort tour')
+- Do not include the creator's name, years, or filler words
+"""
+
 # ─── Public API ───────────────────────────────────────────────────────────────
+
+def extract_niche_search_phrases(
+    vlogs: list[dict],
+    creator_handle: str = "",
+) -> dict:
+    """
+    Use Gemini to derive a precise niche search query from the creator's titles.
+
+    Returns {"query": str, "niche_label": str}. Both default to "" on any failure,
+    so callers can fall back to the deterministic keyword extractor.
+    """
+    titles = [str(v.get("title") or "") for v in vlogs if v.get("title")][:30]
+    if not titles:
+        return {"query": "", "niche_label": ""}
+
+    prompt = "Creator's video titles:\n" + "\n".join(f"- {t}" for t in titles)
+    try:
+        raw = _call_gemini(NICHE_QUERY_PROMPT, prompt, max_tokens=256)
+        parsed = _parse_response(raw, creator_handle or "niche-query", "niche-query")
+        if parsed and isinstance(parsed, dict):
+            return {
+                "query": str(parsed.get("query") or "").strip(),
+                "niche_label": str(parsed.get("niche_label") or "").strip(),
+            }
+    except Exception as e:
+        logger.error("extract_niche_search_phrases failed for %s: %s", creator_handle, e)
+    return {"query": "", "niche_label": ""}
+
 
 def analyze_content_patterns(
     vlogs: list[dict],
     creator_handle: str,
     benchmarks: Optional[list[dict]] = None,
+    peers: Optional[list[dict]] = None,
 ) -> Optional[dict]:
     """
     Analyze why top videos outperform the rest for this creator.
@@ -173,17 +220,32 @@ def analyze_content_patterns(
     )
 
     if benchmarks:
-        bench_lines = "\n".join(
-            f"- [{b.get('viewCount', 0):,} views] \"{b['title']}\" by {b.get('channelTitle', 'unknown creator')}:"
-            f" {(b.get('description') or '')[:150]}"
-            for b in benchmarks[:10]
-        )
+        def _bench_line(b: dict) -> str:
+            velocity = b.get("viewVelocity")
+            velocity_note = f", {velocity:,.0f} views/day" if isinstance(velocity, (int, float)) else ""
+            return (
+                f"- [{b.get('viewCount', 0):,} views{velocity_note}] \"{b['title']}\" "
+                f"by {b.get('channelTitle', 'unknown creator')}: {(b.get('description') or '')[:150]}"
+            )
+
+        bench_lines = "\n".join(_bench_line(b) for b in benchmarks[:10])
         prompt += (
-            f"\n\nNICHE BENCHMARK VIDEOS (top-performing public videos in this creator's space — "
-            f"data provided because this creator's channel is still growing):\n{bench_lines}\n\n"
+            f"\n\nNICHE BENCHMARK VIDEOS (recent high-velocity public videos in this creator's space, "
+            f"ranked by views/day so they reflect what is working NOW):\n{bench_lines}\n\n"
             f"Use benchmarks to: (1) identify proven formats the creator hasn't tried, "
             f"(2) surface gaps in the benchmark content this creator could own, "
-            f"(3) calibrate content_strengths and recommended_formats against what works at scale."
+            f"(3) calibrate content_strengths and recommended_formats against what works at scale, "
+            f"(4) flag rising topics (high views/day) the creator should move on while they are hot."
+        )
+
+    if peers:
+        peer_lines = "\n".join(
+            f"- {p.get('channelTitle', 'unknown')} ({p.get('subscriberCount', 0):,} subscribers)"
+            for p in peers[:8]
+        )
+        prompt += (
+            f"\n\nPEER CHANNELS (creators of comparable size in this niche — use as the realistic "
+            f"competitive set, not global megastars):\n{peer_lines}"
         )
 
     try:

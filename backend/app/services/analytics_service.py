@@ -9,6 +9,7 @@ the public API key. No OAuth required — all data is public.
 import logging
 import re
 from collections import Counter
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from app.core.config import settings
@@ -131,32 +132,70 @@ def extract_niche_keywords(vlogs: list[dict]) -> str:
     return " ".join(top_terms)
 
 
-def search_niche_benchmarks(query: str, max_results: int = 15) -> list[dict]:
+def rfc3339_days_ago(days: int) -> str:
+    """Return an RFC-3339 UTC timestamp `days` in the past (YouTube publishedAfter format)."""
+    moment = datetime.now(timezone.utc) - timedelta(days=max(days, 0))
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def view_velocity(view_count: int, published_at: Optional[str]) -> Optional[float]:
     """
-    Search YouTube for top-performing public videos matching the niche query.
+    Views per day since publish — a recency-weighted performance signal.
+
+    Returns None when the publish date is missing or unparseable, so callers can
+    fall back to raw view count. A video published today counts as 1 day old to
+    avoid divide-by-zero and to keep brand-new videos from dominating.
+    """
+    if not published_at:
+        return None
+    try:
+        published = datetime.fromisoformat(str(published_at).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    if published.tzinfo is None:
+        published = published.replace(tzinfo=timezone.utc)
+    age_days = (datetime.now(timezone.utc) - published).total_seconds() / 86400
+    return view_count / max(age_days, 1.0)
+
+
+def search_niche_benchmarks(
+    query: str,
+    max_results: int = 15,
+    published_after: Optional[str] = None,
+    recency_days: Optional[int] = None,
+) -> list[dict]:
+    """
+    Search YouTube for high-performing public videos matching the niche query.
 
     Makes two API calls: search.list (100 units) + videos.list (1 unit) to get
     full statistics for each video. Returns empty list if the API key is missing
     or any request fails.
+
+    Recency: pass `recency_days` (e.g. 90) or an explicit `published_after`
+    RFC-3339 timestamp to bias toward what is working NOW rather than all-time
+    mega-videos. Results are ranked by view velocity (views/day) when publish
+    dates are available, falling back to raw view count.
     """
     if not settings.YOUTUBE_API_KEY or not query:
         return []
+    if published_after is None and recency_days:
+        published_after = rfc3339_days_ago(recency_days)
     try:
         yt = _youtube()
 
-        search_resp = (
-            yt.search()
-            .list(
-                part="id",
-                q=query,
-                type="video",
-                order="viewCount",
-                maxResults=min(max_results, 50),
-                relevanceLanguage="en",
-                safeSearch="none",
-            )
-            .execute()
+        search_kwargs = dict(
+            part="id",
+            q=query,
+            type="video",
+            order="viewCount",
+            maxResults=min(max_results, 50),
+            relevanceLanguage="en",
+            safeSearch="none",
         )
+        if published_after:
+            search_kwargs["publishedAfter"] = published_after
+
+        search_resp = yt.search().list(**search_kwargs).execute()
 
         video_ids = [
             item["id"]["videoId"]
@@ -179,19 +218,79 @@ def search_niche_benchmarks(query: str, max_results: int = 15) -> list[dict]:
         for item in stats_resp.get("items", []):
             stats = item.get("statistics", {})
             snippet = item.get("snippet", {})
+            view_count = int(stats.get("viewCount") or 0)
+            published_at = snippet.get("publishedAt")
             results.append({
                 "videoId": item["id"],
                 "title": snippet.get("title", ""),
+                "channelId": snippet.get("channelId", ""),
                 "channelTitle": snippet.get("channelTitle", ""),
                 "description": (snippet.get("description") or "")[:200],
-                "viewCount": int(stats.get("viewCount") or 0),
+                "viewCount": view_count,
                 "likeCount": int(stats.get("likeCount") or 0),
+                "publishedAt": published_at,
+                "viewVelocity": view_velocity(view_count, published_at),
             })
 
-        # Sort by view count descending (search API order is approximate)
-        results.sort(key=lambda v: v["viewCount"], reverse=True)
+        # Rank by velocity when we have publish dates (what's hot now), falling
+        # back to raw view count as a stable tiebreak / when dates are absent.
+        results.sort(key=lambda v: (v.get("viewVelocity") or 0, v["viewCount"]), reverse=True)
         return results
 
     except Exception as e:
         logger.warning("search_niche_benchmarks failed for query '%s': %s", query, e)
+        return []
+
+
+def find_peer_channels(
+    channel_ids: list[str],
+    creator_subscriber_count: int = 0,
+    max_channels: int = 10,
+    band: tuple[float, float] = (0.2, 5.0),
+) -> list[dict]:
+    """
+    Resolve a set of channel IDs (e.g. from benchmark videos) into peer channels,
+    optionally filtered to a similar subscriber band.
+
+    "Creators your size" is far more credible than "top global creators": when
+    `creator_subscriber_count` is known, peers are restricted to channels with
+    `band[0]*subs <= subscribers <= band[1]*subs`. If that filter empties the
+    list, all resolved channels are returned so we never lose signal entirely.
+
+    Returns peers sorted by subscriber count descending. Empty list on any failure.
+    """
+    unique_ids = list(dict.fromkeys(cid for cid in channel_ids if cid))
+    if not settings.YOUTUBE_API_KEY or not unique_ids:
+        return []
+    try:
+        yt = _youtube()
+        resp = (
+            yt.channels()
+            .list(part="snippet,statistics", id=",".join(unique_ids[:50]))
+            .execute()
+        )
+
+        peers = []
+        for item in resp.get("items", []):
+            stats = item.get("statistics", {})
+            snippet = item.get("snippet", {})
+            peers.append({
+                "channelId": item["id"],
+                "channelTitle": snippet.get("title", ""),
+                "subscriberCount": int(stats.get("subscriberCount") or 0),
+                "videoCount": int(stats.get("videoCount") or 0),
+                "viewCount": int(stats.get("viewCount") or 0),
+            })
+
+        if creator_subscriber_count and creator_subscriber_count > 0:
+            low = creator_subscriber_count * band[0]
+            high = creator_subscriber_count * band[1]
+            sized = [p for p in peers if low <= p["subscriberCount"] <= high]
+            peers = sized or peers
+
+        peers.sort(key=lambda p: p["subscriberCount"], reverse=True)
+        return peers[:max_channels]
+
+    except Exception as e:
+        logger.warning("find_peer_channels failed: %s", e)
         return []
