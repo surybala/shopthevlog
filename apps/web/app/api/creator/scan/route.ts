@@ -109,11 +109,19 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await runScan(creator.id, creator.youtubeChannelId, creator.plan, null)
+    // First-run: once a creator's catalogue is imported, kick off channel
+    // analysis automatically so they land on real insights instead of an empty
+    // page. Best-effort and only on the very first analysis.
+    let analysisQueued = false
+    if (result.importedCount > 0) {
+      analysisQueued = await maybeTriggerFirstAnalysis(supabase, creator.id)
+    }
     record(200, 'scan_complete')
     return NextResponse.json({
       status: 'COMPLETE',
       importedCount: result.importedCount,
       limitReached: result.limitReached,
+      analysisQueued,
     })
   } catch (e) {
     console.error('Scan failed:', e)
@@ -133,6 +141,38 @@ export async function POST(req: NextRequest) {
     }
     record(500, 'scan_failed')
     return NextResponse.json({ error: 'Could not scan your channel right now.' }, { status: 500 })
+  }
+}
+
+type SupabaseLike = {
+  auth: { getSession: () => Promise<{ data: { session: { access_token?: string } | null } }> }
+}
+
+// Trigger channel analysis once, on the creator's first import. No-op if they've
+// already been analyzed, the AI pipeline isn't configured, or there's no session.
+// Best-effort: never throws, so a failure here can't fail the scan.
+async function maybeTriggerFirstAnalysis(supabase: SupabaseLike, creatorId: string): Promise<boolean> {
+  try {
+    const existing = await prisma.channelInsight.findUnique({
+      where: { creatorId },
+      select: { id: true },
+    })
+    if (existing) return false
+
+    const aiUrl = process.env.AI_PIPELINE_URL
+    if (!aiUrl) return false
+
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) return false
+
+    const res = await fetch(`${aiUrl}/api/v1/insights/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    })
+    return res.ok
+  } catch {
+    return false
   }
 }
 

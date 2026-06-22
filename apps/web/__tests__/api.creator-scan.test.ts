@@ -3,8 +3,9 @@ import { NextRequest } from 'next/server'
 import { CREATOR_PLAN_CONFIG } from '../lib/creatorPlans'
 
 const mockGetUser = vi.fn()
+const mockGetSession = vi.fn()
 vi.mock('@/lib/supabase/server', () => ({
-  createSupabaseServer: () => ({ auth: { getUser: mockGetUser } }),
+  createSupabaseServer: () => ({ auth: { getUser: mockGetUser, getSession: mockGetSession } }),
 }))
 
 const mockRateLimit = vi.fn()
@@ -20,6 +21,7 @@ const mockVlogFindMany = vi.fn()
 const mockVlogFindUnique = vi.fn()
 const mockVlogCount = vi.fn()
 const mockVlogUpsert = vi.fn()
+const mockChannelInsightFindUnique = vi.fn()
 const mockRecordApiObservation = vi.fn()
 
 vi.mock('@/lib/prisma/client', () => ({
@@ -37,6 +39,9 @@ vi.mock('@/lib/prisma/client', () => ({
       findUnique: (...args: unknown[]) => mockVlogFindUnique(...args),
       count: (...args: unknown[]) => mockVlogCount(...args),
       upsert: (...args: unknown[]) => mockVlogUpsert(...args),
+    },
+    channelInsight: {
+      findUnique: (...args: unknown[]) => mockChannelInsightFindUnique(...args),
     },
   },
 }))
@@ -71,6 +76,10 @@ describe('creator scan trigger route', () => {
     mockVlogUpsert.mockResolvedValue({})
     mockVlogFindUnique.mockResolvedValue(null)
     mockVlogCount.mockResolvedValue(0)
+    // Default: creator already analyzed, so the default-path scan does NOT
+    // auto-trigger analysis (keeps unrelated scan assertions isolated).
+    mockChannelInsightFindUnique.mockResolvedValue({ id: 'insight-1' })
+    mockGetSession.mockResolvedValue({ data: { session: { access_token: 'session-token' } } })
     process.env.AI_PIPELINE_URL = 'http://ai.example.com'
     process.env.YOUTUBE_CLIENT_ID = 'yt-client'
     process.env.YOUTUBE_CLIENT_SECRET = 'yt-secret'
@@ -162,7 +171,7 @@ describe('creator scan trigger route', () => {
     const res = await triggerScan(new NextRequest('http://localhost/api/creator/scan', { method: 'POST' }))
 
     expect(res.status).toBe(200)
-    await expect(res.json()).resolves.toEqual({ status: 'COMPLETE', importedCount: 1, limitReached: false })
+    await expect(res.json()).resolves.toEqual({ status: 'COMPLETE', importedCount: 1, limitReached: false, analysisQueued: false })
     expect(mockRecordApiObservation).toHaveBeenCalledWith('/api/creator/scan', 200, expect.any(Number), 'scan_complete')
 
     await vi.waitFor(() => {
@@ -184,6 +193,29 @@ describe('creator scan trigger route', () => {
         })
       )
     })
+  })
+
+  it('auto-triggers channel analysis on the first import', async () => {
+    mockChannelInsightFindUnique.mockResolvedValue(null)
+
+    const res = await triggerScan(new NextRequest('http://localhost/api/creator/scan', { method: 'POST' }))
+
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toMatchObject({ status: 'COMPLETE', analysisQueued: true })
+    const fetchMock = vi.mocked(fetch)
+    const analyzeCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/api/v1/insights/analyze'))
+    expect(analyzeCall).toBeTruthy()
+    expect((analyzeCall![1] as RequestInit).headers).toMatchObject({ Authorization: 'Bearer session-token' })
+  })
+
+  it('does not auto-trigger analysis when the creator already has insights', async () => {
+    // beforeEach default: channelInsight already exists
+    const res = await triggerScan(new NextRequest('http://localhost/api/creator/scan', { method: 'POST' }))
+
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toMatchObject({ analysisQueued: false })
+    const fetchMock = vi.mocked(fetch)
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).endsWith('/api/v1/insights/analyze'))).toBe(false)
   })
 
   it('default scan imports only the most recent 30 videos, newest first', async () => {
@@ -217,7 +249,7 @@ describe('creator scan trigger route', () => {
     const res = await triggerScan(new NextRequest('http://localhost/api/creator/scan', { method: 'POST' }))
 
     expect(res.status).toBe(200)
-    await expect(res.json()).resolves.toEqual({ status: 'COMPLETE', importedCount: 30, limitReached: false })
+    await expect(res.json()).resolves.toEqual({ status: 'COMPLETE', importedCount: 30, limitReached: false, analysisQueued: false })
     await vi.waitFor(() => {
       expect(mockVlogUpsert).toHaveBeenCalledTimes(30)
     })
@@ -488,7 +520,7 @@ describe('creator scan trigger route', () => {
     const res = await triggerScan(new NextRequest('http://localhost/api/creator/scan', { method: 'POST' }))
 
     expect(res.status).toBe(200)
-    await expect(res.json()).resolves.toEqual({ status: 'COMPLETE', importedCount: 0, limitReached: true })
+    await expect(res.json()).resolves.toEqual({ status: 'COMPLETE', importedCount: 0, limitReached: true, analysisQueued: false })
     await vi.waitFor(() => {
       expect(mockVlogUpsert).not.toHaveBeenCalled()
       expect(mockCreatorUpdate).toHaveBeenCalledWith(
@@ -560,7 +592,7 @@ describe('creator scan trigger route', () => {
     const res = await triggerScan(new NextRequest('http://localhost/api/creator/scan', { method: 'POST' }))
 
     expect(res.status).toBe(200)
-    await expect(res.json()).resolves.toEqual({ status: 'COMPLETE', importedCount: 0, limitReached: false })
+    await expect(res.json()).resolves.toEqual({ status: 'COMPLETE', importedCount: 0, limitReached: false, analysisQueued: false })
     await vi.waitFor(() => {
       expect(mockCreatorChannelTokenUpdate).toHaveBeenCalledWith(
         expect.objectContaining({

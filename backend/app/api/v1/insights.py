@@ -50,6 +50,17 @@ async def trigger_analysis(
         return {"status": "ANALYZING", "message": "Analysis already running"}
 
     enqueue("analyze_channel", {"creator_id": creator["id"], "creator_handle": creator["handle"]})
+
+    # Reflect QUEUED status immediately so the dashboard shows "Analyzing…" the
+    # moment the job is enqueued, before the worker picks it up.
+    with PgClient() as db:
+        db.execute(
+            '''INSERT INTO "ChannelInsight" (id, "creatorId", status, "createdAt", "updatedAt")
+               VALUES (gen_random_uuid()::text, %s, 'QUEUED', NOW(), NOW())
+               ON CONFLICT ("creatorId") DO UPDATE SET status = 'QUEUED', "updatedAt" = NOW()''',
+            (creator["id"],),
+        )
+
     return {"status": "QUEUED", "creator_id": creator["id"]}
 
 
