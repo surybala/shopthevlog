@@ -361,6 +361,9 @@ model Creator {
   channelInsight      ChannelInsight?
   ideaAugmentations   IdeaAugmentation[]
 
+  nicheId String?
+  niche   Niche?  @relation(fields: [nicheId], references: [id], onDelete: SetNull)
+
   plan              CreatorPlan @default(FREE)
   catalogScanStatus ScanStatus  @default(PENDING)
   lastCatalogScan   DateTime?
@@ -1230,4 +1233,52 @@ model IdeaAugmentation {
   overallAssessment   String
   confidenceScore     Int      @default(50)
   createdAt           DateTime @default(now())
+}
+
+// ─── Niche taxonomy (Phase 2) ───────────────────────────────────────────────
+// Canonical niche so signal compounds across creators: shared benchmark cache,
+// shared trend aggregates, and "creators like you" comparisons.
+
+enum NicheMomentum {
+  RISING
+  STEADY
+  SATURATED
+}
+
+model Niche {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  label     String
+  keywords  String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  creators       Creator[]
+  trends         NicheTrend[]
+  benchmarkCache NicheBenchmarkCache?
+}
+
+model NicheTrend {
+  id         String        @id @default(cuid())
+  nicheId    String
+  niche      Niche         @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+  topic      String
+  format     String?
+  momentum   NicheMomentum @default(STEADY)
+  score      Float         @default(0)
+  evidence   Json?
+  computedAt DateTime      @default(now())
+
+  @@index([nicheId, computedAt])
+}
+
+model NicheBenchmarkCache {
+  id         String   @id @default(cuid())
+  nicheId    String   @unique
+  niche      Niche    @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+  query      String
+  videosJson Json
+  peersJson  Json
+  fetchedAt  DateTime @default(now())
+  expiresAt  DateTime
 }

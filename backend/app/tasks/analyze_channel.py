@@ -34,6 +34,12 @@ from app.services.insights_gemini_service import (
     generate_content_briefs,
     extract_niche_search_phrases,
 )
+from app.services.niche_service import (
+    classify_and_assign_niche,
+    load_cached_benchmarks,
+    save_benchmark_cache,
+    compute_and_store_niche_trends,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +200,21 @@ async def analyze_channel_task(creator_id: str, creator_handle: str) -> None:
         niche = extract_niche_search_phrases(vlogs, creator_handle)
         query = niche.get("query") or extract_niche_keywords(vlogs)
 
-        if query:
+        # Canonicalise the creator into a shared niche so signal compounds across
+        # creators (shared benchmark cache + shared trend aggregates).
+        niche_id = classify_and_assign_niche(
+            creator_id, creator_handle, vlogs, niche.get("niche_label") or query
+        )
+
+        # Reuse a fresh per-niche benchmark cache when available to save quota
+        # and keep peers consistent for everyone in the niche.
+        cached = load_cached_benchmarks(niche_id) if niche_id else None
+        if cached and cached.get("videos"):
+            benchmark_vlogs = cached["videos"]
+            peer_channels = cached.get("peers") or []
+            used_benchmarks = True
+            benchmark_video_count = len(benchmark_vlogs)
+        elif query:
             logger.info(
                 "Fetching niche benchmarks for creator %s (query: '%s')", creator_id, query
             )
@@ -216,6 +236,15 @@ async def analyze_channel_task(creator_id: str, creator_handle: str) -> None:
                     [b.get("channelId") for b in benchmark_vlogs],
                     creator_subscriber_count=subscriber_count,
                 )
+                # Cache for the rest of the niche
+                if niche_id:
+                    save_benchmark_cache(niche_id, query, benchmark_vlogs, peer_channels)
+
+        # Derive and persist shared niche trends from the (recency-ranked) benchmarks
+        if niche_id and benchmark_vlogs:
+            compute_and_store_niche_trends(
+                niche_id, benchmark_vlogs, niche.get("niche_label") or query
+            )
 
         # Stage 3: content pattern analysis
         patterns = analyze_content_patterns(

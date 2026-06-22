@@ -309,6 +309,7 @@ class TestAnalyzeChannelTask:
             patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=SAMPLE_VLOGS),
             patch("app.tasks.analyze_channel.fetch_video_comments", return_value=["Great video!"]),
             patch("app.tasks.analyze_channel.extract_niche_search_phrases", return_value={"query": "", "niche_label": ""}),
+            patch("app.tasks.analyze_channel.classify_and_assign_niche", return_value=None),
             patch("app.tasks.analyze_channel.extract_niche_keywords", return_value="japan budget"),
             patch("app.tasks.analyze_channel.search_niche_benchmarks", return_value=[]),
             patch("app.tasks.analyze_channel.find_peer_channels", return_value=[]),
@@ -334,6 +335,7 @@ class TestAnalyzeChannelTask:
             patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=SAMPLE_VLOGS),
             patch("app.tasks.analyze_channel.fetch_video_comments", return_value=[]),
             patch("app.tasks.analyze_channel.extract_niche_search_phrases", return_value={"query": "", "niche_label": ""}),
+            patch("app.tasks.analyze_channel.classify_and_assign_niche", return_value=None),
             patch("app.tasks.analyze_channel.extract_niche_keywords", return_value=""),
             patch("app.tasks.analyze_channel.search_niche_benchmarks", return_value=[]),
             patch("app.tasks.analyze_channel.find_peer_channels", return_value=[]),
@@ -635,6 +637,10 @@ SAMPLE_PEERS = [
     {"channelId": "ch_2", "channelTitle": "TravelWithMike", "subscriberCount": 85_000, "videoCount": 140, "viewCount": 18_000_000},
 ]
 
+SAMPLE_TRENDS_TASK = [
+    {"topic": "Japan 7-day itineraries", "format": "day-by-day vlog", "momentum": "RISING", "score": 88, "evidence": "2 videos >50k views/day"},
+]
+
 
 class TestSearchNicheBenchmarks:
     def test_returns_empty_without_api_key(self, monkeypatch):
@@ -770,6 +776,7 @@ class TestAnalyzeChannelTaskBenchmarking:
             patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=vlogs),
             patch("app.tasks.analyze_channel.fetch_video_comments", return_value=[]),
             patch("app.tasks.analyze_channel.extract_niche_search_phrases", return_value={"query": "japan budget itinerary", "niche_label": "budget japan"}),
+            patch("app.tasks.analyze_channel.classify_and_assign_niche", return_value=None),
             patch("app.tasks.analyze_channel.extract_niche_keywords", mock_keywords),
             patch("app.tasks.analyze_channel.search_niche_benchmarks", mock_benchmarks),
             patch("app.tasks.analyze_channel.find_peer_channels", return_value=SAMPLE_PEERS),
@@ -807,6 +814,7 @@ class TestAnalyzeChannelTaskBenchmarking:
             patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=vlogs),
             patch("app.tasks.analyze_channel.fetch_video_comments", return_value=[]),
             patch("app.tasks.analyze_channel.extract_niche_search_phrases", return_value={"query": "", "niche_label": ""}),
+            patch("app.tasks.analyze_channel.classify_and_assign_niche", return_value=None),
             patch("app.tasks.analyze_channel.extract_niche_keywords", return_value="japan budget"),
             patch("app.tasks.analyze_channel.search_niche_benchmarks", mock_benchmarks),
             patch("app.tasks.analyze_channel.find_peer_channels", return_value=[]),
@@ -838,6 +846,7 @@ class TestAnalyzeChannelTaskBenchmarking:
             patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=large_vlogs),
             patch("app.tasks.analyze_channel.fetch_video_comments", return_value=[]),
             patch("app.tasks.analyze_channel.extract_niche_search_phrases", return_value={"query": "luxury europe travel", "niche_label": "luxury europe"}),
+            patch("app.tasks.analyze_channel.classify_and_assign_niche", return_value=None),
             patch("app.tasks.analyze_channel.extract_niche_keywords", return_value="europe"),
             patch("app.tasks.analyze_channel.search_niche_benchmarks", mock_benchmarks),
             patch("app.tasks.analyze_channel.find_peer_channels", return_value=[]),
@@ -870,6 +879,7 @@ class TestAnalyzeChannelTaskBenchmarking:
             patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=vlogs),
             patch("app.tasks.analyze_channel.fetch_video_comments", return_value=[]),
             patch("app.tasks.analyze_channel.extract_niche_search_phrases", return_value={"query": "japan budget", "niche_label": "budget japan"}),
+            patch("app.tasks.analyze_channel.classify_and_assign_niche", return_value=None),
             patch("app.tasks.analyze_channel.extract_niche_keywords", return_value="japan budget"),
             patch("app.tasks.analyze_channel.search_niche_benchmarks", return_value=SAMPLE_BENCHMARKS),
             patch("app.tasks.analyze_channel.find_peer_channels", return_value=[]),
@@ -883,6 +893,83 @@ class TestAnalyzeChannelTaskBenchmarking:
         # The save query should include usedBenchmarks=True and benchmarkVideoCount=2
         all_params = [q[1] for q in save_client.cursor.queries]
         assert any(True in (p if isinstance(p, tuple) else ()) for p in all_params)
+
+    @pytest.mark.asyncio
+    async def test_uses_niche_cache_when_fresh(self):
+        """A fresh per-niche benchmark cache is reused instead of hitting YouTube."""
+        vlogs = [{**SAMPLE_VLOGS[0], "viewCount": 5_000}]
+        upsert_client = FakePgClient(rows=[{"id": "insight-1"}])
+        pg_clients = [FakePgClient(rows=[]) for _ in range(12)]
+        call_count = [0]
+
+        def _pg_factory(*args, **kwargs):
+            call_count[0] += 1
+            return upsert_client if call_count[0] == 1 else pg_clients[min(call_count[0] - 2, 11)]
+
+        mock_search = MagicMock(return_value=[])
+        mock_trends = MagicMock(return_value=SAMPLE_TRENDS_TASK)
+        mock_patterns = MagicMock(return_value=SAMPLE_PATTERNS)
+
+        with (
+            patch("app.tasks.analyze_channel.PgClient", side_effect=_pg_factory),
+            patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=vlogs),
+            patch("app.tasks.analyze_channel.fetch_video_comments", return_value=[]),
+            patch("app.tasks.analyze_channel.extract_niche_search_phrases", return_value={"query": "japan budget", "niche_label": "budget japan"}),
+            patch("app.tasks.analyze_channel.classify_and_assign_niche", return_value="niche-1"),
+            patch("app.tasks.analyze_channel.load_cached_benchmarks", return_value={"videos": SAMPLE_BENCHMARKS, "peers": SAMPLE_PEERS}),
+            patch("app.tasks.analyze_channel.search_niche_benchmarks", mock_search),
+            patch("app.tasks.analyze_channel.find_peer_channels", return_value=[]),
+            patch("app.tasks.analyze_channel.compute_and_store_niche_trends", mock_trends),
+            patch("app.tasks.analyze_channel.analyze_content_patterns", mock_patterns),
+            patch("app.tasks.analyze_channel.analyze_audience_demands", return_value=None),
+            patch("app.tasks.analyze_channel.generate_content_briefs", return_value=[]),
+        ):
+            from app.tasks.analyze_channel import analyze_channel_task
+            await analyze_channel_task("creator-1", "testcreator")
+
+        # Cache hit → no live search, but benchmarks still flow into pattern analysis
+        mock_search.assert_not_called()
+        mock_trends.assert_called_once()
+        _, kwargs = mock_patterns.call_args
+        assert kwargs.get("benchmarks") == SAMPLE_BENCHMARKS
+        assert kwargs.get("peers") == SAMPLE_PEERS
+
+    @pytest.mark.asyncio
+    async def test_saves_cache_and_trends_on_cache_miss(self):
+        """On a cache miss we fetch live, persist the cache, and compute trends."""
+        vlogs = [{**SAMPLE_VLOGS[0], "viewCount": 5_000}]
+        upsert_client = FakePgClient(rows=[{"id": "insight-1"}])
+        pg_clients = [FakePgClient(rows=[{"subscriberCount": 1000}]) for _ in range(12)]
+        call_count = [0]
+
+        def _pg_factory(*args, **kwargs):
+            call_count[0] += 1
+            return upsert_client if call_count[0] == 1 else pg_clients[min(call_count[0] - 2, 11)]
+
+        mock_save = MagicMock()
+        mock_trends = MagicMock(return_value=SAMPLE_TRENDS_TASK)
+
+        with (
+            patch("app.tasks.analyze_channel.PgClient", side_effect=_pg_factory),
+            patch("app.tasks.analyze_channel.fetch_vlog_performance", return_value=vlogs),
+            patch("app.tasks.analyze_channel.fetch_video_comments", return_value=[]),
+            patch("app.tasks.analyze_channel.extract_niche_search_phrases", return_value={"query": "japan budget", "niche_label": "budget japan"}),
+            patch("app.tasks.analyze_channel.classify_and_assign_niche", return_value="niche-1"),
+            patch("app.tasks.analyze_channel.load_cached_benchmarks", return_value=None),
+            patch("app.tasks.analyze_channel.search_niche_benchmarks", return_value=SAMPLE_BENCHMARKS),
+            patch("app.tasks.analyze_channel.find_peer_channels", return_value=SAMPLE_PEERS),
+            patch("app.tasks.analyze_channel.save_benchmark_cache", mock_save),
+            patch("app.tasks.analyze_channel.compute_and_store_niche_trends", mock_trends),
+            patch("app.tasks.analyze_channel.analyze_content_patterns", return_value=SAMPLE_PATTERNS),
+            patch("app.tasks.analyze_channel.analyze_audience_demands", return_value=None),
+            patch("app.tasks.analyze_channel.generate_content_briefs", return_value=[]),
+        ):
+            from app.tasks.analyze_channel import analyze_channel_task
+            await analyze_channel_task("creator-1", "testcreator")
+
+        mock_save.assert_called_once()
+        assert mock_save.call_args[0][0] == "niche-1"
+        mock_trends.assert_called_once()
 
 
 # ─── Phase 1: velocity, recency & peer intelligence ───────────────────────────
