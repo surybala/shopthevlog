@@ -185,6 +185,54 @@ describe('creator scan trigger route', () => {
     })
   })
 
+  it('default scan imports only the most recent 30 videos, newest first', async () => {
+    const TOTAL = 35
+    const items = Array.from({ length: TOTAL }, (_, i) => ({
+      contentDetails: { videoId: `video-${i}` },
+      snippet: {
+        title: `Video ${i}`,
+        description: 'd',
+        // larger i => more recent
+        publishedAt: new Date(2024, 0, 1 + i).toISOString(),
+        thumbnails: { high: { url: 'https://img.example/x.jpg' } },
+      },
+    }))
+    const videoStats = items.map((it) => ({
+      id: it.contentDetails.videoId,
+      contentDetails: { duration: 'PT5M' },
+      statistics: { viewCount: '100', likeCount: '1' },
+    }))
+
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({ json: async () => ({ items: [{ contentDetails: { relatedPlaylists: { uploads: 'uploads-1' } } }] }) })
+        .mockResolvedValueOnce({ json: async () => ({ items }) })
+        .mockResolvedValueOnce({ json: async () => ({ items: videoStats }) }),
+    )
+    mockVlogFindMany.mockResolvedValue([])
+
+    const res = await triggerScan(new NextRequest('http://localhost/api/creator/scan', { method: 'POST' }))
+
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({ status: 'COMPLETE', importedCount: 30, limitReached: false })
+    await vi.waitFor(() => {
+      expect(mockVlogUpsert).toHaveBeenCalledTimes(30)
+    })
+    const importedIds = mockVlogUpsert.mock.calls.map(
+      (c) => (c[0] as { where: { platform_externalId: { externalId: string } } }).where.platform_externalId.externalId,
+    )
+    // newest 30 imported; the 5 oldest excluded
+    expect(importedIds).toContain('video-34')
+    expect(importedIds).not.toContain('video-0')
+    // imports default to PENDING (auto-transcribe is off)
+    const createForNewest = mockVlogUpsert.mock.calls.find(
+      (c) => (c[0] as { where: { platform_externalId: { externalId: string } } }).where.platform_externalId.externalId === 'video-34',
+    )?.[0] as { create: { processingStatus: string } }
+    expect(createForNewest.create.processingStatus).toBe('PENDING')
+  })
+
   it('preview returns channel videos with imported state', async () => {
     mockVlogFindMany.mockResolvedValue([{ externalId: 'video-1', id: 'vlog-1', processingStatus: 'PENDING' }])
 
@@ -192,8 +240,8 @@ describe('creator scan trigger route', () => {
 
     expect(res.status).toBe(200)
     await expect(res.json()).resolves.toEqual({
-      vlogLimit: 25,
-      remainingVlogSlots: 24,
+      vlogLimit: 200,
+      remainingVlogSlots: 199,
       videos: [
         expect.objectContaining({
           videoId: 'video-1',
@@ -282,8 +330,8 @@ describe('creator scan trigger route', () => {
 
     expect(res.status).toBe(200)
     await expect(res.json()).resolves.toEqual({
-      vlogLimit: 25,
-      remainingVlogSlots: 24,
+      vlogLimit: 200,
+      remainingVlogSlots: 199,
       videos: [
         expect.objectContaining({
           videoId: 'video-2',
@@ -319,8 +367,8 @@ describe('creator scan trigger route', () => {
 
     expect(res.status).toBe(200)
     await expect(res.json()).resolves.toEqual({
-      vlogLimit: 25,
-      remainingVlogSlots: 25,
+      vlogLimit: 200,
+      remainingVlogSlots: 200,
       video: expect.objectContaining({
         videoId: 'video-1',
         title: 'My Vlog',

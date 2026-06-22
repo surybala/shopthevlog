@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 import { rateLimit } from '@/lib/rateLimit'
-import { getCreatorPlanConfig } from '@/lib/creatorPlans'
+import {
+  getCreatorPlanConfig,
+  resolveAutoImportCount,
+  selectVlogIdsForAutoTranscription,
+} from '@/lib/creatorPlans'
 import { recordApiObservation } from '@/lib/observability'
 import {
   fetchYouTubeCatalog,
@@ -143,9 +147,27 @@ async function runScan(creatorId: string, channelId: string, plan: string, selec
   })
   const importedExternalIds = new Set(existingVlogs.map((vlog) => vlog.externalId))
   let limitReached = false
-  const videosToConsider = selectedSet
-    ? catalog.filter((item) => selectedSet.has(item.videoId))
-    : catalog
+
+  // Selected import: exactly the videos the creator picked.
+  // Default (automatic) import: the most-recent N (recency-ordered), so a brand
+  // new creator gets meaningful niche/style/performance signal without us
+  // ingesting their entire back-catalogue. Bounded by the plan's import cap.
+  let videosToConsider: typeof catalog
+  if (selectedSet) {
+    videosToConsider = catalog.filter((item) => selectedSet.has(item.videoId))
+  } else {
+    const byRecencyDesc = (a: typeof catalog[number], b: typeof catalog[number]) =>
+      (b.publishedAt ? Date.parse(b.publishedAt) : 0) - (a.publishedAt ? Date.parse(a.publishedAt) : 0)
+    videosToConsider = [...catalog].sort(byRecencyDesc).slice(0, resolveAutoImportCount(plan))
+  }
+
+  // Auto-transcribe policy: on a default import, optionally queue the top-N most
+  // viewed for transcription so the first analysis has voice/style signal.
+  // Disabled by default (AUTO_TRANSCRIBE_TOP_N = 0) since transcription is credit-gated.
+  const autoTranscribeIds = selectedSet
+    ? new Set<string>()
+    : new Set(selectVlogIdsForAutoTranscription(videosToConsider))
+
   let importedCount = 0
 
   for (const item of videosToConsider) {
@@ -169,7 +191,7 @@ async function runScan(creatorId: string, channelId: string, plan: string, selec
         durationSeconds: item.durationSeconds,
         viewCount: item.viewCount ?? 0,
         likeCount: item.likeCount ?? 0,
-        processingStatus: 'PENDING',
+        processingStatus: autoTranscribeIds.has(item.videoId) ? 'QUEUED' : 'PENDING',
       },
       update: {
         title: item.title,
