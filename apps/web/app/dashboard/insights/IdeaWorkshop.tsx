@@ -8,6 +8,10 @@ type ContentEnhancement = {
   how: string
 }
 
+type NicheTrendSignal = { topic: string; momentum: string | null; score: number | null }
+type GapSignal = { topic: string; momentum: string | null; coverageCount: number | null }
+type LiveSignals = { nicheTrends: NicheTrendSignal[]; gaps: GapSignal[] }
+
 type AugmentationResult = {
   id: string | null
   refinedTitles: string[]
@@ -17,6 +21,7 @@ type AugmentationResult = {
   nicheLearnings: string[]
   overallAssessment: string
   confidenceScore: number
+  liveSignals?: LiveSignals
 }
 
 function ScoreBadge({ score }: { score: number }) {
@@ -183,6 +188,36 @@ export function IdeaWorkshop({ hasInsights }: { hasInsights: boolean }) {
               <ScoreBadge score={result.confidenceScore} />
             </div>
           </div>
+
+          {/* Live signals — show creators *why* this is grounded in their niche right now */}
+          {result.liveSignals &&
+            (result.liveSignals.nicheTrends.length > 0 || result.liveSignals.gaps.length > 0) && (
+              <div className="rounded-xl border border-emerald-200/60 bg-emerald-50/40 p-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                  Grounded in your niche right now
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {result.liveSignals.nicheTrends.map((t, i) => (
+                    <span
+                      key={`t-${i}`}
+                      className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs text-[#17332d]/75 ring-1 ring-emerald-200"
+                    >
+                      {t.momentum === 'RISING' && <span className="text-emerald-600">↑</span>}
+                      {t.topic}
+                    </span>
+                  ))}
+                  {result.liveSignals.gaps.map((g, i) => (
+                    <span
+                      key={`g-${i}`}
+                      className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs text-amber-700 ring-1 ring-amber-200"
+                      title={`You cover ${g.coverageCount ?? 0} video(s) on this`}
+                    >
+                      whitespace · {g.topic}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
           {/* Refined titles */}
           {result.refinedTitles.length > 0 && (

@@ -16,6 +16,8 @@ from app.db.pg_client import PgClient
 from app.tasks.analyze_channel import analyze_channel_task
 from app.services.insights_gemini_service import augment_creator_idea
 from app.services.brief_outcomes import fetch_calibration_context
+from app.services.niche_service import fetch_niche_trends
+from app.services.gap_analysis import compute_gap_map
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/insights", tags=["insights"])
@@ -112,7 +114,7 @@ async def augment_idea(
     """
     with PgClient() as db:
         db.execute(
-            'SELECT id, handle FROM "Creator" WHERE "userId" = %s',
+            'SELECT id, handle, "nicheId" FROM "Creator" WHERE "userId" = %s',
             (user.user_id,),
         )
         creator = db.fetchone()
@@ -122,6 +124,7 @@ async def augment_idea(
 
     creator_id = creator["id"]
     creator_handle = creator["handle"]
+    niche_id = creator.get("nicheId")
 
     # Fetch channel insights for context
     with PgClient() as db:
@@ -143,16 +146,22 @@ async def augment_idea(
         except Exception:
             audience = None
 
-    # Fetch top performing vlogs for additional context
+    # Fetch the creator's videos for context + gap-map coverage
     with PgClient() as db:
         db.execute(
             '''SELECT title, "viewCount" FROM "Vlog"
                WHERE "creatorId" = %s AND "viewCount" IS NOT NULL
-               ORDER BY "viewCount" DESC LIMIT 8''',
+               ORDER BY "viewCount" DESC LIMIT 40''',
             (creator_id,),
         )
-        top_vlogs = [dict(row) for row in (db.fetchall() or [])]
+        creator_vlogs = [dict(row) for row in (db.fetchall() or [])]
 
+    top_vlogs = creator_vlogs[:8]
+    vlog_titles = [v.get("title") for v in creator_vlogs if v.get("title")]
+
+    # Live niche signals: current trends + demand/coverage whitespace
+    niche_trends = fetch_niche_trends(niche_id) if niche_id else []
+    gap_map = compute_gap_map(audience, niche_trends, vlog_titles)
     calibration = fetch_calibration_context(creator_id)
 
     result = augment_creator_idea(
@@ -162,6 +171,8 @@ async def augment_idea(
         creator_handle=creator_handle,
         top_vlogs=top_vlogs,
         calibration=calibration,
+        niche_trends=niche_trends,
+        gap_map=gap_map,
     )
 
     if not result:
@@ -200,4 +211,16 @@ async def augment_idea(
         "nicheLearnings": result.get("niche_learnings", []),
         "overallAssessment": result.get("overall_assessment", ""),
         "confidenceScore": result.get("confidence_score", 50),
+        # Surface the live signals the recommendation was grounded in so the UI
+        # can show creators *why* — making the personalization visible.
+        "liveSignals": {
+            "nicheTrends": [
+                {"topic": t.get("topic"), "momentum": t.get("momentum"), "score": t.get("score")}
+                for t in (niche_trends or [])[:5]
+            ],
+            "gaps": [
+                {"topic": g.get("topic"), "momentum": g.get("momentum"), "coverageCount": g.get("coverage_count")}
+                for g in (gap_map or [])[:5]
+            ],
+        },
     }

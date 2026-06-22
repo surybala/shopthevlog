@@ -1337,3 +1337,121 @@ class TestAugmentCreatorIdea:
         with patch("app.services.insights_gemini_service._call_gemini", return_value="[]"):
             from app.services.insights_gemini_service import augment_creator_idea
             assert augment_creator_idea("idea text here", SAMPLE_PATTERNS, None, "creator") == {}
+
+
+# ─── augment endpoint (Phase 4 live signals) ──────────────────────────────────
+
+class TestAugmentEndpoint:
+    def _override_user(self):
+        from app.main import app
+        from app.core.security import get_current_user, UserClaims
+        app.dependency_overrides[get_current_user] = lambda: UserClaims(user_id="user-1", email="t@t.com")
+
+    def test_returns_404_when_creator_missing(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        self._override_user()
+        with patch("app.api.v1.insights.PgClient", return_value=FakePgClient(rows=[])):
+            client = TestClient(app)
+            resp = client.post("/api/v1/insights/augment", json={"idea": "a budget japan trip video"})
+        app.dependency_overrides.clear()
+        assert resp.status_code == 404
+
+    def test_success_returns_live_signals(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        self._override_user()
+
+        creator_client = FakePgClient(rows=[{"id": "creator-1", "handle": "tc", "nicheId": "niche-1"}])
+        insight_client = FakePgClient(rows=[{"topPatterns": json.dumps(SAMPLE_PATTERNS), "audienceDemands": json.dumps(SAMPLE_AUDIENCE)}])
+        vlogs_client = FakePgClient(rows=[{"title": "Tokyo food tour", "viewCount": 1000}])
+        persist_client = FakePgClient(rows=[{"id": "aug-1"}])
+        clients = [creator_client, insight_client, vlogs_client, persist_client]
+        calls = [0]
+
+        def _factory(*a, **k):
+            calls[0] += 1
+            return clients[min(calls[0] - 1, len(clients) - 1)]
+
+        augmentation = {
+            "refined_titles": ["Better Title"],
+            "hook_concepts": ["Hook"],
+            "content_enhancements": [],
+            "audience_connections": [],
+            "niche_learnings": [],
+            "overall_assessment": "Solid",
+            "confidence_score": 71,
+        }
+
+        with (
+            patch("app.api.v1.insights.PgClient", side_effect=_factory),
+            patch("app.api.v1.insights.fetch_calibration_context", return_value={"baseline_median_views": 0, "samples": [], "mean_abs_error": None}),
+            patch("app.api.v1.insights.fetch_niche_trends", return_value=SAMPLE_TRENDS_TASK),
+            patch("app.api.v1.insights.augment_creator_idea", return_value=augmentation) as mock_aug,
+        ):
+            client = TestClient(app)
+            resp = client.post("/api/v1/insights/augment", json={"idea": "a budget japan trip video"})
+
+        app.dependency_overrides.clear()
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["confidenceScore"] == 71
+        assert "liveSignals" in data
+        assert data["liveSignals"]["nicheTrends"][0]["topic"] == "Japan 7-day itineraries"
+        # augment_creator_idea received the live niche trends + gap map
+        _, kwargs = mock_aug.call_args
+        assert kwargs.get("niche_trends") == SAMPLE_TRENDS_TASK
+        assert isinstance(kwargs.get("gap_map"), list)
+
+    def test_returns_503_when_augment_empty(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        self._override_user()
+
+        creator_client = FakePgClient(rows=[{"id": "creator-1", "handle": "tc", "nicheId": None}])
+        insight_client = FakePgClient(rows=[])
+        vlogs_client = FakePgClient(rows=[])
+        clients = [creator_client, insight_client, vlogs_client]
+        calls = [0]
+
+        def _factory(*a, **k):
+            calls[0] += 1
+            return clients[min(calls[0] - 1, len(clients) - 1)]
+
+        with (
+            patch("app.api.v1.insights.PgClient", side_effect=_factory),
+            patch("app.api.v1.insights.fetch_calibration_context", return_value={"baseline_median_views": 0, "samples": [], "mean_abs_error": None}),
+            patch("app.api.v1.insights.augment_creator_idea", return_value={}),
+        ):
+            client = TestClient(app)
+            resp = client.post("/api/v1/insights/augment", json={"idea": "a budget japan trip video"})
+
+        app.dependency_overrides.clear()
+        assert resp.status_code == 503
+
+    def test_handles_malformed_insight_json(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        self._override_user()
+
+        creator_client = FakePgClient(rows=[{"id": "creator-1", "handle": "tc", "nicheId": None}])
+        insight_client = FakePgClient(rows=[{"topPatterns": "not json", "audienceDemands": "not json"}])
+        vlogs_client = FakePgClient(rows=[])
+        persist_client = FakePgClient(rows=[{"id": "aug-1"}])
+        clients = [creator_client, insight_client, vlogs_client, persist_client]
+        calls = [0]
+
+        def _factory(*a, **k):
+            calls[0] += 1
+            return clients[min(calls[0] - 1, len(clients) - 1)]
+
+        with (
+            patch("app.api.v1.insights.PgClient", side_effect=_factory),
+            patch("app.api.v1.insights.fetch_calibration_context", return_value={"baseline_median_views": 0, "samples": [], "mean_abs_error": None}),
+            patch("app.api.v1.insights.augment_creator_idea", return_value={"confidence_score": 50}),
+        ):
+            client = TestClient(app)
+            resp = client.post("/api/v1/insights/augment", json={"idea": "a budget japan trip video"})
+
+        app.dependency_overrides.clear()
+        assert resp.status_code == 200

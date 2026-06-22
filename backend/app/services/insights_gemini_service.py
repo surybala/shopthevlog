@@ -15,6 +15,7 @@ from typing import Optional
 
 from app.services.gemini_service import _call_gemini, _parse_response
 from app.services.brief_outcomes import format_calibration_section
+from app.services.gap_analysis import format_gap_section
 
 logger = logging.getLogger(__name__)
 
@@ -374,6 +375,19 @@ Rules:
 """
 
 
+def _format_niche_trends_section(niche_trends: Optional[list[dict]]) -> str:
+    if not niche_trends:
+        return ""
+    lines = []
+    for t in niche_trends[:8]:
+        momentum = f" [{t.get('momentum')}]" if t.get("momentum") else ""
+        lines.append(f"- {t.get('topic')}{momentum} (score {t.get('score')})")
+    return (
+        "\n\nLIVE NICHE TRENDS (what is working in this niche RIGHT NOW — "
+        "lean into RISING topics):\n" + "\n".join(lines)
+    )
+
+
 def augment_creator_idea(
     raw_idea: str,
     patterns: dict,
@@ -381,12 +395,14 @@ def augment_creator_idea(
     creator_handle: str,
     top_vlogs: Optional[list[dict]] = None,
     calibration: Optional[dict] = None,
+    niche_trends: Optional[list[dict]] = None,
+    gap_map: Optional[list[dict]] = None,
 ) -> dict:
     """
-    Augment a creator's rough video idea using their channel insights and niche benchmarks.
-    When `calibration` is provided, confidence_score is anchored to the creator's
-    real predicted-vs-actual history. Returns a structured augmentation dict, or
-    an empty dict on failure.
+    Augment a creator's rough video idea using their channel insights, live niche
+    trends, and the demand-coverage gap map. When `calibration` is provided,
+    confidence_score is anchored to the creator's real predicted-vs-actual
+    history. Returns a structured augmentation dict, or an empty dict on failure.
     """
     audience_section = (
         json.dumps(audience, indent=2)
@@ -408,6 +424,8 @@ def augment_creator_idea(
         f"CHANNEL PROFILE & PERFORMANCE PATTERNS:\n{json.dumps(patterns, indent=2)}\n\n"
         f"AUDIENCE DEMAND SIGNALS:\n{audience_section}"
         f"{top_vlogs_section}"
+        f"{_format_niche_trends_section(niche_trends)}"
+        f"{format_gap_section(gap_map)}"
         f"{format_calibration_section(calibration)}"
     )
 
