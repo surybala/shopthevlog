@@ -15,6 +15,7 @@ from app.core.security import get_current_user, UserClaims
 from app.db.pg_client import PgClient
 from app.tasks.analyze_channel import analyze_channel_task
 from app.services.insights_gemini_service import augment_creator_idea
+from app.services.brief_outcomes import fetch_calibration_context
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/insights", tags=["insights"])
@@ -152,12 +153,15 @@ async def augment_idea(
         )
         top_vlogs = [dict(row) for row in (db.fetchall() or [])]
 
+    calibration = fetch_calibration_context(creator_id)
+
     result = augment_creator_idea(
         raw_idea=body.idea,
         patterns=patterns,
         audience=audience,
         creator_handle=creator_handle,
         top_vlogs=top_vlogs,
+        calibration=calibration,
     )
 
     if not result:

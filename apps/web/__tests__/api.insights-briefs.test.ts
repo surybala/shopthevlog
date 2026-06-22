@@ -11,12 +11,18 @@ vi.mock('@/lib/supabase/server', () => ({
 const mockCreatorFindUnique = vi.fn()
 const mockContentBriefFindUnique = vi.fn()
 const mockContentBriefUpdate = vi.fn()
+const mockVlogFindUnique = vi.fn()
+const mockVlogFindMany = vi.fn()
 vi.mock('@/lib/prisma/client', () => ({
   default: {
     creator: { findUnique: (...args: unknown[]) => mockCreatorFindUnique(...args) },
     contentBrief: {
       findUnique: (...args: unknown[]) => mockContentBriefFindUnique(...args),
       update: (...args: unknown[]) => mockContentBriefUpdate(...args),
+    },
+    vlog: {
+      findUnique: (...args: unknown[]) => mockVlogFindUnique(...args),
+      findMany: (...args: unknown[]) => mockVlogFindMany(...args),
     },
   },
 }))
@@ -46,6 +52,8 @@ describe('PATCH /api/insights/briefs/[id]', () => {
       briefStatus: 'FILMING',
       publishedVlogId: null,
     })
+    mockVlogFindUnique.mockResolvedValue({ viewCount: 20000, creatorId: 'creator-1' })
+    mockVlogFindMany.mockResolvedValue([{ viewCount: 10000 }, { viewCount: 10000 }])
   })
 
   it('returns 401 when unauthenticated', async () => {
@@ -105,7 +113,7 @@ describe('PATCH /api/insights/briefs/[id]', () => {
     expect(body.brief.briefStatus).toBe('FILMING')
   })
 
-  it('updates status to PUBLISHED with a vlog link', async () => {
+  it('updates status to PUBLISHED with a vlog link and measures the outcome', async () => {
     mockContentBriefUpdate.mockResolvedValue({
       id: 'brief-1',
       briefStatus: 'PUBLISHED',
@@ -116,11 +124,36 @@ describe('PATCH /api/insights/briefs/[id]', () => {
       { params: { id: 'brief-1' } },
     )
     expect(res.status).toBe(200)
-    expect(mockContentBriefUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ briefStatus: 'PUBLISHED', publishedVlogId: 'vlog-42' }),
-      }),
+    // 20000 views vs a 10000 baseline median → +1.0 delta → tanh-scaled score ~88
+    const call = mockContentBriefUpdate.mock.calls[0][0]
+    expect(call.data.briefStatus).toBe('PUBLISHED')
+    expect(call.data.publishedVlogId).toBe('vlog-42')
+    expect(call.data.outcomeDelta).toBeCloseTo(1.0, 5)
+    expect(call.data.actualScore).toBe(88)
+    expect(call.data.measuredAt).toBeInstanceOf(Date)
+  })
+
+  it('does not measure an outcome when the linked vlog belongs to another creator', async () => {
+    mockVlogFindUnique.mockResolvedValue({ viewCount: 20000, creatorId: 'someone-else' })
+    mockContentBriefUpdate.mockResolvedValue({ id: 'brief-1', briefStatus: 'PUBLISHED', publishedVlogId: 'vlog-42' })
+    await PATCH(
+      makeReq({ briefStatus: 'PUBLISHED', publishedVlogId: 'vlog-42' }),
+      { params: { id: 'brief-1' } },
     )
+    const call = mockContentBriefUpdate.mock.calls[0][0]
+    expect(call.data.actualScore).toBeUndefined()
+    expect(call.data.measuredAt).toBeUndefined()
+  })
+
+  it('does not measure an outcome for PUBLISHED without a vlog link', async () => {
+    mockContentBriefUpdate.mockResolvedValue({ id: 'brief-1', briefStatus: 'PUBLISHED', publishedVlogId: null })
+    await PATCH(
+      makeReq({ briefStatus: 'PUBLISHED' }),
+      { params: { id: 'brief-1' } },
+    )
+    expect(mockVlogFindUnique).not.toHaveBeenCalled()
+    const call = mockContentBriefUpdate.mock.calls[0][0]
+    expect(call.data.actualScore).toBeUndefined()
   })
 
   it('clears publishedVlogId when not a string', async () => {

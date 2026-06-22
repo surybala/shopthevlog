@@ -14,6 +14,7 @@ import logging
 from typing import Optional
 
 from app.services.gemini_service import _call_gemini, _parse_response
+from app.services.brief_outcomes import format_calibration_section
 
 logger = logging.getLogger(__name__)
 
@@ -290,10 +291,13 @@ def generate_content_briefs(
     patterns: dict,
     audience: Optional[dict],
     creator_handle: str,
+    calibration: Optional[dict] = None,
 ) -> list[dict]:
     """
     Generate 4 content briefs grounded in pattern analysis + audience signals.
-    Returns a list of brief dicts (may be empty on failure).
+    When `calibration` (this creator's predicted-vs-actual history) is provided,
+    the model anchors estimated_score to real outcomes. Returns a list of brief
+    dicts (may be empty on failure).
     """
     audience_section = (
         json.dumps(audience, indent=2)
@@ -305,6 +309,7 @@ def generate_content_briefs(
         f"Creator: @{creator_handle}\n\n"
         f"PERFORMANCE PATTERNS:\n{json.dumps(patterns, indent=2)}\n\n"
         f"AUDIENCE DEMAND SIGNALS:\n{audience_section}"
+        f"{format_calibration_section(calibration)}"
     )
 
     try:
@@ -375,10 +380,13 @@ def augment_creator_idea(
     audience: Optional[dict],
     creator_handle: str,
     top_vlogs: Optional[list[dict]] = None,
+    calibration: Optional[dict] = None,
 ) -> dict:
     """
     Augment a creator's rough video idea using their channel insights and niche benchmarks.
-    Returns a structured augmentation dict, or an empty dict on failure.
+    When `calibration` is provided, confidence_score is anchored to the creator's
+    real predicted-vs-actual history. Returns a structured augmentation dict, or
+    an empty dict on failure.
     """
     audience_section = (
         json.dumps(audience, indent=2)
@@ -400,6 +408,7 @@ def augment_creator_idea(
         f"CHANNEL PROFILE & PERFORMANCE PATTERNS:\n{json.dumps(patterns, indent=2)}\n\n"
         f"AUDIENCE DEMAND SIGNALS:\n{audience_section}"
         f"{top_vlogs_section}"
+        f"{format_calibration_section(calibration)}"
     )
 
     try:

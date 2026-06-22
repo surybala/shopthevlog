@@ -315,6 +315,7 @@ class TestAnalyzeChannelTask:
             patch("app.tasks.analyze_channel.find_peer_channels", return_value=[]),
             patch("app.tasks.analyze_channel.analyze_content_patterns", return_value=SAMPLE_PATTERNS),
             patch("app.tasks.analyze_channel.analyze_audience_demands", return_value=SAMPLE_AUDIENCE),
+            patch("app.tasks.analyze_channel.fetch_calibration_context", return_value={"baseline_median_views": 0, "samples": [], "mean_abs_error": None}),
             patch("app.tasks.analyze_channel.generate_content_briefs", return_value=SAMPLE_BRIEFS),
         ):
             from app.tasks.analyze_channel import analyze_channel_task
@@ -782,6 +783,7 @@ class TestAnalyzeChannelTaskBenchmarking:
             patch("app.tasks.analyze_channel.find_peer_channels", return_value=SAMPLE_PEERS),
             patch("app.tasks.analyze_channel.analyze_content_patterns", mock_patterns),
             patch("app.tasks.analyze_channel.analyze_audience_demands", return_value=None),
+            patch("app.tasks.analyze_channel.fetch_calibration_context", return_value={"baseline_median_views": 0, "samples": [], "mean_abs_error": None}),
             patch("app.tasks.analyze_channel.generate_content_briefs", return_value=[]),
         ):
             from app.tasks.analyze_channel import analyze_channel_task
@@ -820,6 +822,7 @@ class TestAnalyzeChannelTaskBenchmarking:
             patch("app.tasks.analyze_channel.find_peer_channels", return_value=[]),
             patch("app.tasks.analyze_channel.analyze_content_patterns", return_value=SAMPLE_PATTERNS),
             patch("app.tasks.analyze_channel.analyze_audience_demands", return_value=None),
+            patch("app.tasks.analyze_channel.fetch_calibration_context", return_value={"baseline_median_views": 0, "samples": [], "mean_abs_error": None}),
             patch("app.tasks.analyze_channel.generate_content_briefs", return_value=[]),
         ):
             from app.tasks.analyze_channel import analyze_channel_task
@@ -852,6 +855,7 @@ class TestAnalyzeChannelTaskBenchmarking:
             patch("app.tasks.analyze_channel.find_peer_channels", return_value=[]),
             patch("app.tasks.analyze_channel.analyze_content_patterns", return_value=SAMPLE_PATTERNS),
             patch("app.tasks.analyze_channel.analyze_audience_demands", return_value=None),
+            patch("app.tasks.analyze_channel.fetch_calibration_context", return_value={"baseline_median_views": 0, "samples": [], "mean_abs_error": None}),
             patch("app.tasks.analyze_channel.generate_content_briefs", return_value=[]),
         ):
             from app.tasks.analyze_channel import analyze_channel_task
@@ -885,6 +889,7 @@ class TestAnalyzeChannelTaskBenchmarking:
             patch("app.tasks.analyze_channel.find_peer_channels", return_value=[]),
             patch("app.tasks.analyze_channel.analyze_content_patterns", return_value=SAMPLE_PATTERNS),
             patch("app.tasks.analyze_channel.analyze_audience_demands", return_value=None),
+            patch("app.tasks.analyze_channel.fetch_calibration_context", return_value={"baseline_median_views": 0, "samples": [], "mean_abs_error": None}),
             patch("app.tasks.analyze_channel.generate_content_briefs", return_value=[]),
         ):
             from app.tasks.analyze_channel import analyze_channel_task
@@ -922,6 +927,7 @@ class TestAnalyzeChannelTaskBenchmarking:
             patch("app.tasks.analyze_channel.compute_and_store_niche_trends", mock_trends),
             patch("app.tasks.analyze_channel.analyze_content_patterns", mock_patterns),
             patch("app.tasks.analyze_channel.analyze_audience_demands", return_value=None),
+            patch("app.tasks.analyze_channel.fetch_calibration_context", return_value={"baseline_median_views": 0, "samples": [], "mean_abs_error": None}),
             patch("app.tasks.analyze_channel.generate_content_briefs", return_value=[]),
         ):
             from app.tasks.analyze_channel import analyze_channel_task
@@ -962,6 +968,7 @@ class TestAnalyzeChannelTaskBenchmarking:
             patch("app.tasks.analyze_channel.compute_and_store_niche_trends", mock_trends),
             patch("app.tasks.analyze_channel.analyze_content_patterns", return_value=SAMPLE_PATTERNS),
             patch("app.tasks.analyze_channel.analyze_audience_demands", return_value=None),
+            patch("app.tasks.analyze_channel.fetch_calibration_context", return_value={"baseline_median_views": 0, "samples": [], "mean_abs_error": None}),
             patch("app.tasks.analyze_channel.generate_content_briefs", return_value=[]),
         ):
             from app.tasks.analyze_channel import analyze_channel_task
@@ -1292,3 +1299,41 @@ class TestFetchCreatorSubscriberCount:
         from app.tasks.analyze_channel import _fetch_creator_subscriber_count
         with patch("app.tasks.analyze_channel.PgClient", side_effect=RuntimeError("db down")):
             assert _fetch_creator_subscriber_count("creator-1") == 0
+
+
+# ─── augment_creator_idea (Phase 3 surface) ───────────────────────────────────
+
+class TestAugmentCreatorIdea:
+    def test_returns_parsed_dict_on_success(self):
+        raw = json.dumps({"refined_titles": ["A"], "confidence_score": 72})
+        with patch("app.services.insights_gemini_service._call_gemini", return_value=raw):
+            from app.services.insights_gemini_service import augment_creator_idea
+            result = augment_creator_idea("My rough idea about Japan", SAMPLE_PATTERNS, SAMPLE_AUDIENCE, "creator")
+        assert result["confidence_score"] == 72
+
+    def test_includes_top_vlogs_section(self):
+        captured = []
+
+        def _cap(system, user, max_tokens):
+            captured.append(user)
+            return json.dumps({"refined_titles": []})
+
+        with patch("app.services.insights_gemini_service._call_gemini", side_effect=_cap):
+            from app.services.insights_gemini_service import augment_creator_idea
+            augment_creator_idea(
+                "My rough idea", SAMPLE_PATTERNS, None, "creator",
+                top_vlogs=[{"title": "Japan on a budget", "viewCount": 450000}],
+            )
+        assert "TOP PERFORMING VIDEOS" in captured[0]
+        assert "Japan on a budget" in captured[0]
+
+    def test_returns_empty_on_gemini_error(self):
+        with patch("app.services.insights_gemini_service._call_gemini", side_effect=Exception("boom")):
+            from app.services.insights_gemini_service import augment_creator_idea
+            assert augment_creator_idea("idea text here", SAMPLE_PATTERNS, None, "creator") == {}
+
+    def test_returns_empty_when_parse_not_dict(self):
+        # valid JSON but a list, not an object → treated as failure
+        with patch("app.services.insights_gemini_service._call_gemini", return_value="[]"):
+            from app.services.insights_gemini_service import augment_creator_idea
+            assert augment_creator_idea("idea text here", SAMPLE_PATTERNS, None, "creator") == {}

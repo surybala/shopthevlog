@@ -360,6 +360,7 @@ model Creator {
   creatorMemory CreatorMemory[]
   channelInsight      ChannelInsight?
   ideaAugmentations   IdeaAugmentation[]
+  briefFeedbacks      BriefFeedback[]
 
   nicheId String?
   niche   Niche?  @relation(fields: [nicheId], references: [id], onDelete: SetNull)
@@ -1216,8 +1217,29 @@ model ContentBrief {
   reasoning       String?
   briefStatus     BriefStatus    @default(IDEA)
   publishedVlogId String?
+  // Outcome loop (Phase 3): measured once a published vlog is linked, so the
+  // model can learn how its own predictions actually performed.
+  actualScore     Int?
+  outcomeDelta    Float?
+  measuredAt      DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+
+  feedbacks       BriefFeedback[]
+}
+
+model BriefFeedback {
+  id        String         @id @default(cuid())
+  creatorId String
+  creator   Creator        @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  briefId   String
+  brief     ContentBrief   @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  action    FeedbackAction
+  reason    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([creatorId, createdAt])
 }
 
 model IdeaAugmentation {

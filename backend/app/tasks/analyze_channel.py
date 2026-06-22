@@ -40,6 +40,7 @@ from app.services.niche_service import (
     save_benchmark_cache,
     compute_and_store_niche_trends,
 )
+from app.services.brief_outcomes import fetch_calibration_context
 
 logger = logging.getLogger(__name__)
 
@@ -264,8 +265,10 @@ async def analyze_channel_task(creator_id: str, creator_handle: str) -> None:
         # Stage 4: audience demand analysis (optional — comment fetch may be empty)
         audience = analyze_audience_demands(comments_by_video) if comments_by_video else None
 
-        # Stage 5: generate content briefs
-        briefs = generate_content_briefs(patterns, audience, creator_handle)
+        # Stage 5: generate content briefs, calibrated against this creator's
+        # real predicted-vs-actual outcome history (closed loop).
+        calibration = fetch_calibration_context(creator_id)
+        briefs = generate_content_briefs(patterns, audience, creator_handle, calibration=calibration)
 
         # Stage 6: persist
         _save_insight_results(
