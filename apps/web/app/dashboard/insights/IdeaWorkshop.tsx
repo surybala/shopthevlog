@@ -1,12 +1,18 @@
 'use client'
 
 import { useState } from 'react'
+import {
+  IDEA_WORKSHOP_MIN_CHARS,
+  IDEA_WORKSHOP_MAX_CHARS,
+} from '@/lib/ideaWorkshop'
 
 type ContentEnhancement = {
   suggestion: string
   why: string
   how: string
 }
+
+type IdeaQuota = { limit: number; used: number; remaining: number; resetAt: string }
 
 type NicheTrendSignal = { topic: string; momentum: string | null; score: number | null }
 type GapSignal = { topic: string; momentum: string | null; coverageCount: number | null }
@@ -22,6 +28,7 @@ type AugmentationResult = {
   overallAssessment: string
   confidenceScore: number
   liveSignals?: LiveSignals
+  quota?: IdeaQuota
 }
 
 function ScoreBadge({ score }: { score: number }) {
@@ -57,6 +64,12 @@ export function IdeaWorkshop({ hasInsights }: { hasInsights: boolean }) {
   const [filming, setFilming] = useState(false)
   const [filmingDone, setFilmingDone] = useState(false)
   const [filmingError, setFilmingError] = useState<string | null>(null)
+  const [quota, setQuota] = useState<IdeaQuota | null>(null)
+
+  const trimmedLength = idea.trim().length
+  const tooShort = trimmedLength < IDEA_WORKSHOP_MIN_CHARS
+  const tooLong = idea.length > IDEA_WORKSHOP_MAX_CHARS
+  const quotaExhausted = quota != null && quota.remaining <= 0
 
   async function startFilming() {
     if (!result || filming) return
@@ -88,7 +101,7 @@ export function IdeaWorkshop({ hasInsights }: { hasInsights: boolean }) {
   }
 
   async function submit() {
-    if (idea.trim().length < 10 || loading) return
+    if (tooShort || tooLong || loading) return
     setLoading(true)
     setResult(null)
     setError(null)
@@ -103,8 +116,10 @@ export function IdeaWorkshop({ hasInsights }: { hasInsights: boolean }) {
       const data = await res.json()
       if (!res.ok) {
         setError(data.error ?? 'Something went wrong. Try again.')
+        if (data.quota) setQuota(data.quota as IdeaQuota)
       } else {
         setResult(data as AugmentationResult)
+        if (data.quota) setQuota(data.quota as IdeaQuota)
       }
     } catch {
       setError('Connection error. Please try again.')
@@ -147,16 +162,17 @@ export function IdeaWorkshop({ hasInsights }: { hasInsights: boolean }) {
           onChange={(e) => setIdea(e.target.value)}
           placeholder="e.g. I want to do a video about visiting Japan on a budget — I'm thinking a 10-day itinerary with a cost breakdown at the end, but not sure how to structure the hook or title..."
           rows={4}
+          maxLength={IDEA_WORKSHOP_MAX_CHARS}
           className="w-full resize-none rounded-lg border border-[#17332d]/12 bg-[#17332d]/4 px-3.5 py-3 text-sm text-[#17332d] placeholder:text-[#17332d]/35 focus:border-[#17332d]/30 focus:outline-none"
           disabled={loading}
         />
         <div className="mt-3 flex items-center justify-between">
-          <span className={`text-xs ${idea.length > 1800 ? 'text-rose-500' : 'text-[#17332d]/40'}`}>
-            {idea.length}/2000
+          <span className={`text-xs ${idea.length > IDEA_WORKSHOP_MAX_CHARS * 0.9 ? 'text-rose-500' : 'text-[#17332d]/40'}`}>
+            {idea.length}/{IDEA_WORKSHOP_MAX_CHARS}
           </span>
           <button
             onClick={submit}
-            disabled={loading || idea.trim().length < 10}
+            disabled={loading || tooShort || tooLong || quotaExhausted}
             className="btn-primary text-sm disabled:opacity-50"
           >
             {loading ? (
@@ -169,6 +185,13 @@ export function IdeaWorkshop({ hasInsights }: { hasInsights: boolean }) {
             )}
           </button>
         </div>
+        {quota && (
+          <p className="mt-2 text-right text-xs text-[#17332d]/45">
+            {quotaExhausted
+              ? 'Daily limit reached — resets tomorrow.'
+              : `${quota.remaining} of ${quota.limit} runs left today`}
+          </p>
+        )}
       </div>
 
       {/* Error state */}

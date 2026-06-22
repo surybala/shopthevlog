@@ -7,6 +7,7 @@ export const CREATOR_PLAN_CONFIG = {
     description: 'Up to 3 Trip Kits, 50 imported videos, and 3 processing credits each month',
     maxImportedVlogs: 50,
     monthlyProcessingCredits: 3,
+    ideaWorkshopDailyLimit: 10,
   },
   PRO: {
     label: 'Pro',
@@ -14,6 +15,7 @@ export const CREATOR_PLAN_CONFIG = {
     description: 'Up to 200 imported videos, 20 processing credits each month, AI scan, and advanced analytics',
     maxImportedVlogs: 200,
     monthlyProcessingCredits: 20,
+    ideaWorkshopDailyLimit: 100,
   },
   STUDIO: {
     label: 'Studio',
@@ -21,6 +23,7 @@ export const CREATOR_PLAN_CONFIG = {
     description: 'Up to 1000 imported videos, 75 processing credits each month, team seats, and premium support',
     maxImportedVlogs: 1000,
     monthlyProcessingCredits: 75,
+    ideaWorkshopDailyLimit: 500,
   },
 } as const satisfies Record<CreatorPlanKey, {
   label: string
@@ -28,6 +31,7 @@ export const CREATOR_PLAN_CONFIG = {
   description: string
   maxImportedVlogs: number
   monthlyProcessingCredits: number
+  ideaWorkshopDailyLimit: number
 }>
 
 // How many of the creator's most-recent videos we auto-import the first time

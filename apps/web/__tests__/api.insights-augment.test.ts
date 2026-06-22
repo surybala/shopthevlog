@@ -15,9 +15,11 @@ vi.mock('@/lib/rateLimit', () => ({
 }))
 
 const mockCreatorFindUnique = vi.fn()
+const mockIdeaAugmentationCount = vi.fn()
 vi.mock('@/lib/prisma/client', () => ({
   default: {
     creator: { findUnique: (...args: unknown[]) => mockCreatorFindUnique(...args) },
+    ideaAugmentation: { count: (...args: unknown[]) => mockIdeaAugmentationCount(...args) },
   },
 }))
 
@@ -54,7 +56,8 @@ describe('POST /api/insights/augment', () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
     mockGetSession.mockResolvedValue({ data: { session: { access_token: 'token-abc' } } })
     mockRateLimit.mockReturnValue(false)
-    mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1' })
+    mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1', plan: 'PRO' })
+    mockIdeaAugmentationCount.mockResolvedValue(0)
     process.env.AI_PIPELINE_URL = 'http://ai.example.com'
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(JSON.stringify(AUGMENT_RESULT), { status: 200 }),
@@ -104,12 +107,53 @@ describe('POST /api/insights/augment', () => {
   it('returns 400 when idea is too short', async () => {
     const res = await POST(makeReq({ idea: 'short' }))
     expect(res.status).toBe(400)
-    await expect(res.json()).resolves.toMatchObject({ error: expect.stringMatching(/10 char/) })
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringMatching(/15 char/) })
+  })
+
+  it('returns 400 when idea exceeds the max length', async () => {
+    const res = await POST(makeReq({ idea: 'x'.repeat(1001) }))
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringMatching(/under 1000 char/) })
+    // Never reaches the AI pipeline
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
   })
 
   it('returns 400 when idea is missing', async () => {
     const res = await POST(makeReq({}))
     expect(res.status).toBe(400)
+  })
+
+  it('returns 429 when the daily tier quota is exhausted', async () => {
+    // PRO daily limit is 100; pretend they've already used it
+    mockIdeaAugmentationCount.mockResolvedValue(100)
+    const res = await POST(makeReq({ idea: 'Japan trip on a budget for 10 days' }))
+    expect(res.status).toBe(429)
+    const body = await res.json()
+    expect(body.error).toMatch(/Idea Workshop runs for today/)
+    expect(body.quota).toMatchObject({ limit: 100, remaining: 0 })
+    // Quota block happens before spending tokens
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+  })
+
+  it('counts only the current creator usage for today', async () => {
+    await POST(makeReq({ idea: 'Japan trip on a budget for 10 days' }))
+    expect(mockIdeaAugmentationCount).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          creatorId: 'creator-1',
+          createdAt: expect.objectContaining({ gte: expect.any(Date) }),
+        }),
+      }),
+    )
+  })
+
+  it('returns remaining quota alongside a successful augmentation', async () => {
+    mockIdeaAugmentationCount.mockResolvedValue(3)
+    const res = await POST(makeReq({ idea: 'Japan trip on a budget for 10 days' }))
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    // PRO limit 100, used 3 before this run → 4 used, 96 left
+    expect(data.quota).toMatchObject({ limit: 100, used: 4, remaining: 96 })
   })
 
   it('proxies to FastAPI with JWT and returns augmentation result', async () => {

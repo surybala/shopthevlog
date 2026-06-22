@@ -1455,3 +1455,21 @@ class TestAugmentEndpoint:
 
         app.dependency_overrides.clear()
         assert resp.status_code == 200
+
+    def test_rejects_idea_below_min_length(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        self._override_user()
+        client = TestClient(app)
+        resp = client.post("/api/v1/insights/augment", json={"idea": "short"})
+        app.dependency_overrides.clear()
+        assert resp.status_code == 422
+
+    def test_rejects_idea_above_max_length(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        self._override_user()
+        client = TestClient(app)
+        resp = client.post("/api/v1/insights/augment", json={"idea": "x" * 1001})
+        app.dependency_overrides.clear()
+        assert resp.status_code == 422

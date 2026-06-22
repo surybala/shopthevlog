@@ -7,6 +7,7 @@ import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 import { rateLimit } from '@/lib/rateLimit'
 import { recordApiObservation } from '@/lib/observability'
+import { validateIdeaLength, resolveIdeaQuota, utcDayStart } from '@/lib/ideaWorkshop'
 
 export async function POST(req: NextRequest) {
   const startedAt = Date.now()
@@ -40,11 +41,32 @@ export async function POST(req: NextRequest) {
   }
 
   const idea = (body as Record<string, unknown>)?.idea
-  if (typeof idea !== 'string' || idea.trim().length < 10) {
-    record(400, 'idea_too_short')
+  if (typeof idea !== 'string') {
+    record(400, 'idea_missing')
+    return NextResponse.json({ error: 'idea is required' }, { status: 400 })
+  }
+
+  // Character bounds keep the workshop a focused brainstorming tool (and cap
+  // per-request token spend) rather than a general-purpose LLM prompt box.
+  const lengthCheck = validateIdeaLength(idea)
+  if (!lengthCheck.ok) {
+    record(400, 'idea_length_invalid')
+    return NextResponse.json({ error: lengthCheck.error }, { status: 400 })
+  }
+
+  // Per-tier daily request quota bounds total token usage by plan.
+  const usedToday = await prisma.ideaAugmentation.count({
+    where: { creatorId: creator.id, createdAt: { gte: utcDayStart() } },
+  })
+  const quota = resolveIdeaQuota(creator.plan, usedToday)
+  if (quota.exceeded) {
+    record(429, 'idea_quota_exceeded')
     return NextResponse.json(
-      { error: 'idea must be at least 10 characters' },
-      { status: 400 },
+      {
+        error: `You've used all ${quota.limit} Idea Workshop runs for today on the ${creator.plan} plan. Resets at ${quota.resetAt.toISOString()}.`,
+        quota: { limit: quota.limit, used: quota.used, remaining: 0, resetAt: quota.resetAt.toISOString() },
+      },
+      { status: 429 },
     )
   }
 
@@ -84,5 +106,15 @@ export async function POST(req: NextRequest) {
 
   const data = await res.json()
   record(200, 'augmented')
-  return NextResponse.json(data)
+  // This run consumes one quota slot (the backend persists the row), so report
+  // the remaining balance to the UI.
+  return NextResponse.json({
+    ...data,
+    quota: {
+      limit: quota.limit,
+      used: quota.used + 1,
+      remaining: Math.max(quota.remaining - 1, 0),
+      resetAt: quota.resetAt.toISOString(),
+    },
+  })
 }

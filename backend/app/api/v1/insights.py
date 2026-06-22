@@ -100,7 +100,10 @@ async def get_insights(user: UserClaims = Depends(get_current_user)):
 # ─── Idea Augmentation ────────────────────────────────────────────────────────
 
 class AugmentIdeaRequest(BaseModel):
-    idea: str = Field(..., min_length=10, max_length=2000)
+    # Mirrors the web layer's IDEA_WORKSHOP_MIN_CHARS / MAX_CHARS. Caps per-request
+    # token spend and keeps the workshop a focused brainstorming tool. The web
+    # proxy also enforces per-tier daily request quotas before reaching here.
+    idea: str = Field(..., min_length=15, max_length=1000)
 
 
 @router.post("/augment")
