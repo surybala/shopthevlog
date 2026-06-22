@@ -83,7 +83,7 @@ test.describe('beta visual smoke coverage', () => {
     const subscriberSeed = await authenticateSubscriberAndSeed(page)
 
     await page.goto('/')
-    await expectReadableDarkText(page.getByText('TripKits').first())
+    await expectReadableDarkText(page.getByText('TripMirror').first())
     await expectReadableDarkText(page.getByRole('link', { name: 'Discover' }))
     await expectNoWrap(
       page.locator('a', {

@@ -1,4 +1,4 @@
-# VlogShopper Production Runbook on Google Cloud
+# TripMirror Production Runbook on Google Cloud
 
 This runbook stands up the first production stack for `vlogshopper.com` with:
 
@@ -64,7 +64,7 @@ Create one Docker repository:
 gcloud artifacts repositories create vlogshopper-prod \
   --repository-format=docker \
   --location=us-central1 \
-  --description="VlogShopper production images"
+  --description="TripMirror production images"
 ```
 
 ## 4. Secrets and Runtime Configuration
@@ -372,7 +372,7 @@ If using Cloud DNS:
 ```bash
 gcloud dns managed-zones create vlogshopper-zone \
   --dns-name="vlogshopper.com." \
-  --description="VlogShopper production zone"
+  --description="TripMirror production zone"
 ```
 
 Then create records in the zone:

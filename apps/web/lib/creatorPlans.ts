@@ -4,8 +4,8 @@ export const CREATOR_PLAN_CONFIG = {
   FREE: {
     label: 'Free',
     price: '$0/mo',
-    description: 'Up to 3 Trip Kits, 5 imported videos, and 3 processing credits each month',
-    maxImportedVlogs: 5,
+    description: 'Up to 3 Trip Kits, 50 imported videos, and 3 processing credits each month',
+    maxImportedVlogs: 50,
     monthlyProcessingCredits: 3,
   },
   PRO: {

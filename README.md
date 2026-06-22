@@ -1,6 +1,6 @@
-# ShopTheVlog
+# TripMirror
 
-A creator-first travel vlog commerce platform. Creators connect their YouTube/TikTok channels, and the platform automatically transcribes their vlogs, generates AI-powered day-by-day trip itineraries (TripKits), and attaches affiliate links so viewers can book the same hotels, tours, and experiences they see on screen.
+A creator-first travel vlog commerce platform. Creators connect their YouTube/TikTok channels, and the platform automatically transcribes their vlogs, generates AI-powered day-by-day trip itineraries (Trip Kits), and attaches affiliate links so viewers can book the same hotels, tours, and experiences they see on screen.
 
 ---
 

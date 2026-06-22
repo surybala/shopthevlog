@@ -5,7 +5,7 @@ export default function PublicCopyright({
 }) {
   return (
     <p className={className.trim() || 'text-xs text-[#17332d]/42'}>
-      Copyright 2026 TripKits. All rights reserved.
+      Copyright 2026 TripMirror. All rights reserved.
     </p>
   )
 }
