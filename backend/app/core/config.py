@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     # AI
     GEMINI_API_KEY: str = ""
 
+    # Cost guardrails — durable daily budgets on costly external APIs.
+    # YouTube Data API ships with a default 10,000 units/day; a search costs 100.
+    COST_GUARD_ENABLED: bool = True
+    YOUTUBE_DAILY_UNIT_BUDGET: int = 9000
+    GEMINI_DAILY_CALL_BUDGET: int = 5000
+
     # Google Places (for location resolution in AI pipeline)
     GOOGLE_PLACES_API_KEY: str = ""
 

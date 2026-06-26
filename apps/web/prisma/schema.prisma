@@ -1333,3 +1333,18 @@ model Job {
 
   @@index([status, runAfter])
 }
+
+// ─── External-API cost guardrails ───────────────────────────────────────────
+// Durable per-day usage counter so a daily budget / circuit breaker on costly
+// external calls (YouTube Data API units, Gemini calls) holds across instances
+// and restarts. One row per (resource, UTC day).
+
+model ApiUsageCounter {
+  id        String   @id @default(cuid())
+  resource  String
+  day       DateTime @db.Date
+  used      Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([resource, day])
+}

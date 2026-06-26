@@ -12,6 +12,8 @@ os.environ.setdefault("SUPABASE_SECRET_KEY",  "test-secret-key")
 # SUPABASE_JWT_SECRET removed — tests mock _jwks() directly instead
 os.environ.setdefault("DATABASE_URL",            "postgresql://test:test@localhost:5432/test")
 os.environ.setdefault("GEMINI_API_KEY",          "test-gemini-key")
+# Cost guard off by default in tests; the guard's own tests enable it explicitly.
+os.environ.setdefault("COST_GUARD_ENABLED",      "false")
 # Use in-process memory backend so slowapi rate limiting works without Redis.
 os.environ.setdefault("REDIS_URL",               "memory://")
 

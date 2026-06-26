@@ -14,6 +14,7 @@ from typing import Optional
 
 from app.core.config import settings
 from app.db.pg_client import PgClient
+from app.services import quota_guard
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,9 @@ def fetch_video_comments(video_id: str, max_comments: int = 50) -> list[str]:
     comments are disabled, or the request fails.
     """
     if not settings.YOUTUBE_API_KEY:
+        return []
+    if not quota_guard.consume(quota_guard.RESOURCE_YOUTUBE, quota_guard.YOUTUBE_LOOKUP_UNITS):
+        logger.warning("YouTube daily budget reached — skipping comments for %s", video_id)
         return []
     try:
         yt = _youtube()
@@ -178,6 +182,9 @@ def search_niche_benchmarks(
     """
     if not settings.YOUTUBE_API_KEY or not query:
         return []
+    if not quota_guard.consume(quota_guard.RESOURCE_YOUTUBE, quota_guard.YOUTUBE_SEARCH_UNITS):
+        logger.warning("YouTube daily budget reached — skipping benchmark search for '%s'", query)
+        return []
     if published_after is None and recency_days:
         published_after = rfc3339_days_ago(recency_days)
     try:
@@ -261,6 +268,9 @@ def find_peer_channels(
     """
     unique_ids = list(dict.fromkeys(cid for cid in channel_ids if cid))
     if not settings.YOUTUBE_API_KEY or not unique_ids:
+        return []
+    if not quota_guard.consume(quota_guard.RESOURCE_YOUTUBE, quota_guard.YOUTUBE_LOOKUP_UNITS):
+        logger.warning("YouTube daily budget reached — skipping peer lookup")
         return []
     try:
         yt = _youtube()

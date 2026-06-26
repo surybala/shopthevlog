@@ -330,13 +330,23 @@ def _generate_content_parts(system: str, contents: list[types.Part], max_tokens:
     )
 
 
+def _enforce_gemini_budget() -> None:
+    """Block (raise) once the daily Gemini call budget is spent. Callers already
+    treat exceptions as graceful degradation (return None / empty)."""
+    from app.services import quota_guard
+    if not quota_guard.consume(quota_guard.RESOURCE_GEMINI, 1):
+        raise RuntimeError("Gemini daily budget exceeded")
+
+
 def _call_gemini(system: str, user_content: str, max_tokens: int) -> str:
     """Call Gemini and return the raw text response."""
+    _enforce_gemini_budget()
     response = _generate_content(system, user_content, max_tokens)
     return response.text or ""
 
 
 def _call_gemini_parts(system: str, contents: list[types.Part], max_tokens: int, temperature: float = 0.2) -> str:
+    _enforce_gemini_budget()
     response = _generate_content_parts(system, contents, max_tokens, temperature=temperature)
     return response.text or ""
 
