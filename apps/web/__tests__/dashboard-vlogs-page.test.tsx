@@ -53,7 +53,7 @@ describe('VlogsPage', () => {
     vi.clearAllMocks()
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
     mockCreatorFindUnique.mockResolvedValue({ id: 'creator-1', plan: 'FREE', processingCreditsUsed: 0, processingCreditsResetAt: null })
-    mockPlanConfig.mockReturnValue({ maxImportedVlogs: 5 })
+    mockPlanConfig.mockReturnValue({ maxImportedVlogs: 50 })
     mockQuotaSnapshot.mockReturnValue({ remaining: 3, limit: 3 })
     mockVlogFindMany.mockResolvedValue([
       {
@@ -74,7 +74,7 @@ describe('VlogsPage', () => {
 
     expect(html).toContain('Video library')
     expect(html).toContain('Source videos powering your storefront.')
-    expect(html).toContain('1/5 videos imported')
+    expect(html).toContain('1/50 videos imported')
     expect(html).toContain('Recommended next videos')
     expect(html).toContain('Use credits where the kit potential looks strongest.')
     expect(html).toContain('Best for itinerary kits')

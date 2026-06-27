@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: { params: { handle: string } 
   })
   if (!creator) return {}
   return {
-    title: `${creator.displayName} - TripKits`,
+    title: `${creator.displayName} - TripMirror`,
     description: creator.bio ?? `Travel kits by ${creator.displayName}`,
     openGraph: {
       title: creator.displayName,

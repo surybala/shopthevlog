@@ -78,7 +78,7 @@ describe('HomePage', () => {
 
     // CTA + footer
     expect(html).toContain('Browse creator portals')
-    expect(html).toContain('Copyright 2026 VlogShopper. All rights reserved.')
+    expect(html).toContain('Copyright 2026 TripMirror. All rights reserved.')
     expect(html).not.toContain('Review ready')
   })
 

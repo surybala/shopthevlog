@@ -328,7 +328,7 @@ export default function VlogsClient({ initialVlogs, youtubeConnected, remainingV
           Choose which videos you want to import and generate kits from. Deleting a video frees a slot, but does not refund processing credits.
         </p>
         {youtubeConnected ? (
-          <button onClick={openImportModal} className="btn-primary text-sm" disabled={remainingVlogSlots <= 0 && availableSlots <= 0}>
+          <button onClick={openImportModal} className="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0 disabled:shadow-none" disabled={remainingVlogSlots <= 0 && availableSlots <= 0}>
             Import specific videos
           </button>
         ) : null}

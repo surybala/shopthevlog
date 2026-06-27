@@ -41,7 +41,7 @@ function WaitlistForm() {
     <div className="w-full max-w-md space-y-8">
       <div className="flex flex-col items-center text-center">
         <Link href="/" className="inline-block text-[1.9rem] font-semibold tracking-tight text-[#17332d]">
-          TripKits
+          TripMirror
         </Link>
         <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#17332d]/10 bg-white/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-[#17332d]/62">
           <span className="h-2 w-2 rounded-full bg-emerald-600 shadow-[0_0_12px_rgba(5,150,105,0.35)]" />
@@ -51,7 +51,7 @@ function WaitlistForm() {
           Early access only
         </h1>
         <p className="editorial-subtle mx-auto mt-3 max-w-sm text-[15px] leading-7">
-          TripKits is in private beta. Request access below and we will email you when your spot is ready.
+          TripMirror is in private beta. Request access below and we will email you when your spot is ready.
         </p>
       </div>
 

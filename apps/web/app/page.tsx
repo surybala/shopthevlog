@@ -9,7 +9,7 @@ const creatorSteps = [
   {
     eyebrow: 'Scan',
     title: 'Connect your channel. Get instant insights.',
-    body: "Link your YouTube channel and TripKits surfaces what's working, what's stale, and where your biggest growth opportunities are hiding — across every video you've ever made.",
+    body: "Link your YouTube channel and TripMirror surfaces what's working, what's stale, and where your biggest growth opportunities are hiding — across every video you've ever made.",
   },
   {
     eyebrow: 'Grow',
@@ -139,9 +139,9 @@ export default async function HomePage() {
       <nav className="sticky top-0 z-50 border-b border-[#17332d]/10 bg-[rgba(255,248,240,0.78)] backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-3">
-            <Image src="/logo.png" alt="TripKits" width={34} height={34} className="rounded-xl shadow-[0_0_30px_rgba(23,51,45,0.08)]" />
+            <Image src="/logo.png" alt="TripMirror" width={34} height={34} className="rounded-xl shadow-[0_0_30px_rgba(23,51,45,0.08)]" />
             <div>
-              <p className="text-base font-semibold tracking-tight text-[#17332d]">TripKits</p>
+              <p className="text-base font-semibold tracking-tight text-[#17332d]">TripMirror</p>
                 <p className="text-[10px] uppercase tracking-[0.32em] text-[#17332d]/52">Creator portals for travel vloggers</p>
             </div>
           </Link>

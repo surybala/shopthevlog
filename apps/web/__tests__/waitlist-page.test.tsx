@@ -19,11 +19,11 @@ describe('WaitlistPage', () => {
   it('renders the polished beta request hierarchy', () => {
     const html = renderToStaticMarkup(<WaitlistPage />)
 
-    expect(html).toContain('VlogShopper')
+    expect(html).toContain('TripMirror')
     expect(html).toContain('Private beta access')
     expect(html).toContain('Early access only')
     expect(html).toContain('Request early access')
-    expect(html).toContain('Copyright 2026 VlogShopper. All rights reserved.')
+    expect(html).toContain('Copyright 2026 TripMirror. All rights reserved.')
     expect(html).not.toContain('>Pass<')
   })
 })

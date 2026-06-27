@@ -22,8 +22,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <aside className="flex w-64 shrink-0 flex-col border-r border-[#17332d]/10 bg-[rgba(255,248,240,0.78)] shadow-[inset_-1px_0_0_rgba(23,51,45,0.06)] backdrop-blur-xl">
         <div className="flex h-16 items-center border-b border-[#17332d]/10 px-6">
           <Link href="/" className="flex items-center gap-2">
-              <Image src="/logo.png" alt="TripKits" width={28} height={28} className="rounded-md" />
-              <span className="text-lg font-bold text-[#17332d]">TripKits</span>
+              <Image src="/logo.png" alt="TripMirror" width={28} height={28} className="rounded-md" />
+              <span className="text-lg font-bold text-[#17332d]">TripMirror</span>
             </Link>
         </div>
 
