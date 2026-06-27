@@ -5,10 +5,16 @@ All external calls (Gemini API, YouTube API, PostgreSQL) are fully mocked.
 Pattern mirrors test_kit_service.py — FakePgClient for DB, MagicMock for Gemini.
 """
 import json
+from datetime import datetime, timedelta, timezone
 import pytest
 from unittest.mock import MagicMock, patch
 
 from tests.conftest import FakePgClient
+from app.services.quota_service import QuotaResult
+
+
+def _allowed_insights_quota() -> QuotaResult:
+    return QuotaResult(allowed=True, plan="FREE", used=1, limit=25, reset_at=None)
 
 
 # ─── Fixtures / helpers ───────────────────────────────────────────────────────
@@ -135,7 +141,7 @@ class TestAnalyzeContentPatterns:
 
     def test_returns_parsed_patterns_on_success(self):
         raw = json.dumps(SAMPLE_PATTERNS)
-        with patch("app.services.insights_gemini_service._call_gemini", return_value=raw):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", return_value=raw):
             from app.services.insights_gemini_service import analyze_content_patterns
             result = analyze_content_patterns(SAMPLE_VLOGS, "testcreator")
         assert result is not None
@@ -143,13 +149,13 @@ class TestAnalyzeContentPatterns:
         assert len(result["top_patterns"]) == 2
 
     def test_returns_none_on_gemini_failure(self):
-        with patch("app.services.insights_gemini_service._call_gemini", side_effect=Exception("API error")):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", side_effect=Exception("API error")):
             from app.services.insights_gemini_service import analyze_content_patterns
             result = analyze_content_patterns(SAMPLE_VLOGS, "testcreator")
         assert result is None
 
     def test_returns_none_on_invalid_json(self):
-        with patch("app.services.insights_gemini_service._call_gemini", return_value="not json"):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", return_value="not json"):
             from app.services.insights_gemini_service import analyze_content_patterns
             result = analyze_content_patterns(SAMPLE_VLOGS, "testcreator")
         assert result is None
@@ -157,11 +163,11 @@ class TestAnalyzeContentPatterns:
     def test_sorts_top_bottom_by_view_count(self):
         captured_prompts = []
 
-        def _capture(system, user_content, max_tokens):
+        def _capture(prompt_key, system, user_content, max_tokens):
             captured_prompts.append(user_content)
             return json.dumps(SAMPLE_PATTERNS)
 
-        with patch("app.services.insights_gemini_service._call_gemini", side_effect=_capture):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", side_effect=_capture):
             from app.services.insights_gemini_service import analyze_content_patterns
             analyze_content_patterns(SAMPLE_VLOGS, "testcreator")
 
@@ -177,11 +183,11 @@ class TestAnalyzeContentPatterns:
         ]
         captured_prompts = []
 
-        def _capture(system, user_content, max_tokens):
+        def _capture(prompt_key, system, user_content, max_tokens):
             captured_prompts.append(user_content)
             return json.dumps(SAMPLE_PATTERNS)
 
-        with patch("app.services.insights_gemini_service._call_gemini", side_effect=_capture):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", side_effect=_capture):
             from app.services.insights_gemini_service import analyze_content_patterns
             analyze_content_patterns(zero_view_vlogs, "testcreator")
 
@@ -199,14 +205,14 @@ class TestAnalyzeAudienceDemands:
 
     def test_returns_parsed_audience_on_success(self):
         raw = json.dumps(SAMPLE_AUDIENCE)
-        with patch("app.services.insights_gemini_service._call_gemini", return_value=raw):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", return_value=raw):
             from app.services.insights_gemini_service import analyze_audience_demands
             result = analyze_audience_demands({"Japan Vlog": ["How much did it cost?", "Great video!"]})
         assert result is not None
         assert len(result["top_topics"]) == 2
 
     def test_handles_gemini_error_gracefully(self):
-        with patch("app.services.insights_gemini_service._call_gemini", side_effect=RuntimeError("timeout")):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", side_effect=RuntimeError("timeout")):
             from app.services.insights_gemini_service import analyze_audience_demands
             result = analyze_audience_demands({"Japan Vlog": ["Great video!"]})
         assert result is None
@@ -214,14 +220,14 @@ class TestAnalyzeAudienceDemands:
 
 class TestGenerateContentBriefs:
     def test_returns_empty_list_on_gemini_failure(self):
-        with patch("app.services.insights_gemini_service._call_gemini", side_effect=Exception("error")):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", side_effect=Exception("error")):
             from app.services.insights_gemini_service import generate_content_briefs
             result = generate_content_briefs(SAMPLE_PATTERNS, None, "testcreator")
         assert result == []
 
     def test_returns_briefs_on_success(self):
         raw = json.dumps({"briefs": SAMPLE_BRIEFS})
-        with patch("app.services.insights_gemini_service._call_gemini", return_value=raw):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", return_value=raw):
             from app.services.insights_gemini_service import generate_content_briefs
             result = generate_content_briefs(SAMPLE_PATTERNS, SAMPLE_AUDIENCE, "testcreator")
         assert len(result) == 1
@@ -230,21 +236,21 @@ class TestGenerateContentBriefs:
 
     def test_handles_non_list_briefs_field(self):
         raw = json.dumps({"briefs": "not a list"})
-        with patch("app.services.insights_gemini_service._call_gemini", return_value=raw):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", return_value=raw):
             from app.services.insights_gemini_service import generate_content_briefs
             result = generate_content_briefs(SAMPLE_PATTERNS, None, "testcreator")
         assert result == []
 
     def test_filters_non_dict_items(self):
         raw = json.dumps({"briefs": [SAMPLE_BRIEFS[0], "invalid", None, 42]})
-        with patch("app.services.insights_gemini_service._call_gemini", return_value=raw):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", return_value=raw):
             from app.services.insights_gemini_service import generate_content_briefs
             result = generate_content_briefs(SAMPLE_PATTERNS, None, "testcreator")
         assert len(result) == 1
 
     def test_returns_empty_when_parse_response_returns_none(self):
         with (
-            patch("app.services.insights_gemini_service._call_gemini", return_value="{}"),
+            patch("app.services.insights_gemini_service._call_gemini_cached", return_value="{}"),
             patch("app.services.insights_gemini_service._parse_response", return_value=None),
         ):
             from app.services.insights_gemini_service import generate_content_briefs
@@ -253,13 +259,14 @@ class TestGenerateContentBriefs:
 
     def test_works_without_audience_data(self):
         raw = json.dumps({"briefs": SAMPLE_BRIEFS})
-        with patch("app.services.insights_gemini_service._call_gemini", return_value=raw) as mock_call:
+        with patch("app.services.insights_gemini_service._call_gemini_cached", return_value=raw) as mock_call:
             from app.services.insights_gemini_service import generate_content_briefs
             result = generate_content_briefs(SAMPLE_PATTERNS, None, "testcreator")
         assert len(result) == 1
-        # Should mention no audience data in the prompt
+        # Should mention no audience data in the prompt (user_content is arg[2] of
+        # _call_gemini_cached(prompt_key, system, user_content, max_tokens))
         call_args = mock_call.call_args
-        assert "No audience comment data" in call_args[0][1]
+        assert "No audience comment data" in call_args[0][2]
 
 
 # ─── analyze_channel_task tests ───────────────────────────────────────────────
@@ -451,8 +458,9 @@ class TestInsightsAPI:
 
         with patch("app.api.v1.insights.PgClient", side_effect=_pg_factory):
             with patch("app.api.v1.insights.enqueue") as mock_enqueue:
-                client = TestClient(app)
-                resp = client.post("/api/v1/insights/analyze")
+                with patch("app.api.v1.insights.check_and_consume_insights", return_value=_allowed_insights_quota()):
+                    client = TestClient(app)
+                    resp = client.post("/api/v1/insights/analyze")
 
         app.dependency_overrides.clear()
         assert resp.status_code == 200
@@ -713,11 +721,11 @@ class TestAnalyzeContentPatternsWithBenchmarks:
     def test_includes_benchmark_section_in_prompt_when_provided(self):
         captured = []
 
-        def _capture(system, user_content, max_tokens):
+        def _capture(prompt_key, system, user_content, max_tokens):
             captured.append(user_content)
             return json.dumps(SAMPLE_PATTERNS)
 
-        with patch("app.services.insights_gemini_service._call_gemini", side_effect=_capture):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", side_effect=_capture):
             from app.services.insights_gemini_service import analyze_content_patterns
             analyze_content_patterns(SAMPLE_VLOGS, "testcreator", benchmarks=SAMPLE_BENCHMARKS)
 
@@ -729,11 +737,11 @@ class TestAnalyzeContentPatternsWithBenchmarks:
     def test_no_benchmark_section_when_benchmarks_is_none(self):
         captured = []
 
-        def _capture(system, user_content, max_tokens):
+        def _capture(prompt_key, system, user_content, max_tokens):
             captured.append(user_content)
             return json.dumps(SAMPLE_PATTERNS)
 
-        with patch("app.services.insights_gemini_service._call_gemini", side_effect=_capture):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", side_effect=_capture):
             from app.services.insights_gemini_service import analyze_content_patterns
             analyze_content_patterns(SAMPLE_VLOGS, "testcreator", benchmarks=None)
 
@@ -742,11 +750,11 @@ class TestAnalyzeContentPatternsWithBenchmarks:
     def test_no_benchmark_section_when_benchmarks_is_empty(self):
         captured = []
 
-        def _capture(system, user_content, max_tokens):
+        def _capture(prompt_key, system, user_content, max_tokens):
             captured.append(user_content)
             return json.dumps(SAMPLE_PATTERNS)
 
-        with patch("app.services.insights_gemini_service._call_gemini", side_effect=_capture):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", side_effect=_capture):
             from app.services.insights_gemini_service import analyze_content_patterns
             analyze_content_patterns(SAMPLE_VLOGS, "testcreator", benchmarks=[])
 
@@ -1249,11 +1257,11 @@ class TestAnalyzeContentPatternsWithPeers:
     def test_includes_peer_section_when_provided(self):
         captured = []
 
-        def _capture(system, user_content, max_tokens):
+        def _capture(prompt_key, system, user_content, max_tokens):
             captured.append(user_content)
             return json.dumps(SAMPLE_PATTERNS)
 
-        with patch("app.services.insights_gemini_service._call_gemini", side_effect=_capture):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", side_effect=_capture):
             from app.services.insights_gemini_service import analyze_content_patterns
             analyze_content_patterns(SAMPLE_VLOGS, "creator", peers=SAMPLE_PEERS)
         assert "PEER CHANNELS" in captured[0]
@@ -1262,11 +1270,11 @@ class TestAnalyzeContentPatternsWithPeers:
     def test_no_peer_section_when_absent(self):
         captured = []
 
-        def _capture(system, user_content, max_tokens):
+        def _capture(prompt_key, system, user_content, max_tokens):
             captured.append(user_content)
             return json.dumps(SAMPLE_PATTERNS)
 
-        with patch("app.services.insights_gemini_service._call_gemini", side_effect=_capture):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", side_effect=_capture):
             from app.services.insights_gemini_service import analyze_content_patterns
             analyze_content_patterns(SAMPLE_VLOGS, "creator")
         assert "PEER CHANNELS" not in captured[0]
@@ -1275,11 +1283,11 @@ class TestAnalyzeContentPatternsWithPeers:
         captured = []
         benchmarks = [{**SAMPLE_BENCHMARKS[0], "viewVelocity": 12345.0}]
 
-        def _capture(system, user_content, max_tokens):
+        def _capture(prompt_key, system, user_content, max_tokens):
             captured.append(user_content)
             return json.dumps(SAMPLE_PATTERNS)
 
-        with patch("app.services.insights_gemini_service._call_gemini", side_effect=_capture):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", side_effect=_capture):
             from app.services.insights_gemini_service import analyze_content_patterns
             analyze_content_patterns(SAMPLE_VLOGS, "creator", benchmarks=benchmarks)
         assert "views/day" in captured[0]
@@ -1476,3 +1484,228 @@ class TestAugmentEndpoint:
         resp = client.post("/api/v1/insights/augment", json={"idea": "x" * 1001})
         app.dependency_overrides.clear()
         assert resp.status_code == 422
+
+
+class TestInsightsTTLCache:
+    def test_returns_cached_when_analyzed_recently(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        from app.core.security import get_current_user, UserClaims
+
+        mock_user = UserClaims(user_id="user-1", email="test@test.com")
+        app.dependency_overrides[get_current_user] = lambda: mock_user
+
+        recent_ts = datetime.now(timezone.utc) - timedelta(hours=1)
+        creator_client = FakePgClient(rows=[{"id": "creator-1", "handle": "testcreator"}])
+        insight_client = FakePgClient(rows=[{"status": "COMPLETE", "analyzedAt": recent_ts}])
+        call_count = [0]
+
+        def _pg_factory(*args, **kwargs):
+            call_count[0] += 1
+            return creator_client if call_count[0] == 1 else insight_client
+
+        with patch("app.api.v1.insights.PgClient", side_effect=_pg_factory):
+            with patch("app.api.v1.insights.enqueue") as mock_task:
+                client = TestClient(app)
+                resp = client.post("/api/v1/insights/analyze")
+
+        app.dependency_overrides.clear()
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "CACHED"
+        assert "cached_at" in data
+        assert "Next refresh" in data["message"]
+        mock_task.assert_not_called()
+
+    def test_queues_when_analyzed_beyond_ttl(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        from app.core.security import get_current_user, UserClaims
+
+        mock_user = UserClaims(user_id="user-1", email="test@test.com")
+        app.dependency_overrides[get_current_user] = lambda: mock_user
+
+        stale_ts = datetime.now(timezone.utc) - timedelta(hours=8)
+        creator_client = FakePgClient(rows=[{"id": "creator-1", "handle": "testcreator"}])
+        insight_client = FakePgClient(rows=[{"status": "COMPLETE", "analyzedAt": stale_ts}])
+        call_count = [0]
+
+        def _pg_factory(*args, **kwargs):
+            call_count[0] += 1
+            return creator_client if call_count[0] == 1 else insight_client
+
+        with patch("app.api.v1.insights.PgClient", side_effect=_pg_factory):
+            with patch("app.api.v1.insights.enqueue"):
+                with patch("app.api.v1.insights.check_and_consume_insights", return_value=_allowed_insights_quota()):
+                    client = TestClient(app)
+                    resp = client.post("/api/v1/insights/analyze")
+
+        app.dependency_overrides.clear()
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "QUEUED"
+
+    def test_queues_when_previous_run_failed(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        from app.core.security import get_current_user, UserClaims
+
+        mock_user = UserClaims(user_id="user-1", email="test@test.com")
+        app.dependency_overrides[get_current_user] = lambda: mock_user
+
+        creator_client = FakePgClient(rows=[{"id": "creator-1", "handle": "testcreator"}])
+        # FAILED status should never be treated as cached
+        insight_client = FakePgClient(rows=[{"status": "FAILED", "analyzedAt": None}])
+        call_count = [0]
+
+        def _pg_factory(*args, **kwargs):
+            call_count[0] += 1
+            return creator_client if call_count[0] == 1 else insight_client
+
+        with patch("app.api.v1.insights.PgClient", side_effect=_pg_factory):
+            with patch("app.api.v1.insights.enqueue"):
+                with patch("app.api.v1.insights.check_and_consume_insights", return_value=_allowed_insights_quota()):
+                    client = TestClient(app)
+                    resp = client.post("/api/v1/insights/analyze")
+
+        app.dependency_overrides.clear()
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "QUEUED"
+
+    def test_cached_when_analyzed_at_is_iso_string(self):
+        """analyzedAt may arrive as an ISO string from some DB adapters."""
+        from fastapi.testclient import TestClient
+        from app.main import app
+        from app.core.security import get_current_user, UserClaims
+
+        mock_user = UserClaims(user_id="user-1", email="test@test.com")
+        app.dependency_overrides[get_current_user] = lambda: mock_user
+
+        recent_iso = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        creator_client = FakePgClient(rows=[{"id": "creator-1", "handle": "testcreator"}])
+        insight_client = FakePgClient(rows=[{"status": "COMPLETE", "analyzedAt": recent_iso}])
+        call_count = [0]
+
+        def _pg_factory(*args, **kwargs):
+            call_count[0] += 1
+            return creator_client if call_count[0] == 1 else insight_client
+
+        with patch("app.api.v1.insights.PgClient", side_effect=_pg_factory):
+            with patch("app.api.v1.insights.enqueue") as mock_task:
+                client = TestClient(app)
+                resp = client.post("/api/v1/insights/analyze")
+
+        app.dependency_overrides.clear()
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "CACHED"
+        mock_task.assert_not_called()
+
+
+# ─── Gemini context cache tests ───────────────────────────────────────────────
+
+class TestGeminiContextCache:
+    def setup_method(self):
+        import app.services.gemini_service as svc
+        svc._prompt_caches.clear()
+
+    def test_creates_cache_on_first_call(self):
+        import app.services.gemini_service as svc
+
+        mock_cache = MagicMock()
+        mock_cache.name = "cachedContents/abc123"
+        mock_response = MagicMock()
+        mock_response.text = '{"result": "ok"}'
+
+        mock_client = MagicMock()
+        mock_client.caches.create.return_value = mock_cache
+        mock_client.models.generate_content.return_value = mock_response
+
+        with patch("app.services.gemini_service._gemini_client", mock_client):
+            result = svc._call_gemini_cached("test-key", "System prompt", "User content", 1024)
+
+        assert result == '{"result": "ok"}'
+        mock_client.caches.create.assert_called_once()
+        assert svc._prompt_caches["test-key"] == "cachedContents/abc123"
+
+    def test_reuses_existing_cache_on_second_call(self):
+        import app.services.gemini_service as svc
+
+        svc._prompt_caches["test-key"] = "cachedContents/existing"
+        mock_response = MagicMock()
+        mock_response.text = '{"result": "reused"}'
+
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+
+        with patch("app.services.gemini_service._gemini_client", mock_client):
+            result = svc._call_gemini_cached("test-key", "System prompt", "User content", 1024)
+
+        assert result == '{"result": "reused"}'
+        mock_client.caches.create.assert_not_called()
+
+    def test_falls_back_to_uncached_when_cache_creation_fails(self):
+        import app.services.gemini_service as svc
+
+        mock_response = MagicMock()
+        mock_response.text = '{"result": "fallback"}'
+
+        mock_client = MagicMock()
+        mock_client.caches.create.side_effect = Exception("below minimum token threshold")
+        mock_client.models.generate_content.return_value = mock_response
+
+        with patch("app.services.gemini_service._gemini_client", mock_client):
+            result = svc._call_gemini_cached("test-key", "System prompt", "User content", 1024)
+
+        assert result == '{"result": "fallback"}'
+        assert "test-key" not in svc._prompt_caches
+        # Falls back to _call_gemini which also uses generate_content
+        mock_client.models.generate_content.assert_called_once()
+
+    def test_clears_cache_and_retries_on_stale_cache_error(self):
+        import app.services.gemini_service as svc
+
+        svc._prompt_caches["test-key"] = "cachedContents/stale"
+
+        fresh_response = MagicMock()
+        fresh_response.text = '{"result": "fresh"}'
+
+        mock_client = MagicMock()
+        # First call (cached) raises, second (fallback) succeeds
+        mock_client.models.generate_content.side_effect = [
+            Exception("cache not found"),
+            fresh_response,
+        ]
+
+        with patch("app.services.gemini_service._gemini_client", mock_client):
+            result = svc._call_gemini_cached("test-key", "System prompt", "User content", 1024)
+
+        assert result == '{"result": "fresh"}'
+        assert "test-key" not in svc._prompt_caches
+
+    def test_insights_service_uses_cached_calls(self):
+        """All three analysis functions should route through _call_gemini_cached."""
+        with patch("app.services.insights_gemini_service._call_gemini_cached") as mock_cached:
+            mock_cached.return_value = json.dumps(SAMPLE_PATTERNS)
+            from app.services.insights_gemini_service import analyze_content_patterns
+            analyze_content_patterns(SAMPLE_VLOGS, "testcreator")
+
+        mock_cached.assert_called_once()
+        call_args = mock_cached.call_args
+        assert call_args[0][0] == "content-patterns"
+
+    def test_audience_demands_uses_cached_calls(self):
+        with patch("app.services.insights_gemini_service._call_gemini_cached") as mock_cached:
+            mock_cached.return_value = json.dumps(SAMPLE_AUDIENCE)
+            from app.services.insights_gemini_service import analyze_audience_demands
+            analyze_audience_demands({"Japan Vlog": ["Great video!"]})
+
+        mock_cached.assert_called_once()
+        assert mock_cached.call_args[0][0] == "audience-demands"
+
+    def test_content_briefs_uses_cached_calls(self):
+        with patch("app.services.insights_gemini_service._call_gemini_cached") as mock_cached:
+            mock_cached.return_value = json.dumps({"briefs": SAMPLE_BRIEFS})
+            from app.services.insights_gemini_service import generate_content_briefs
+            generate_content_briefs(SAMPLE_PATTERNS, SAMPLE_AUDIENCE, "testcreator")
+
+        mock_cached.assert_called_once()
+        assert mock_cached.call_args[0][0] == "content-briefs"

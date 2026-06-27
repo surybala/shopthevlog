@@ -1,0 +1,3 @@
+ALTER TABLE "Creator"
+ADD COLUMN "insightsRunsUsed" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "insightsRunsResetAt" TIMESTAMP(3);

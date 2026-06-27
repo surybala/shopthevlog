@@ -8,6 +8,7 @@ from app.core.security import get_current_user, UserClaims
 from fastapi import Depends
 from app.db.pg_client import PgClient
 from app.services.job_queue import enqueue
+from app.services.quota_service import check_and_consume_tripkit, remaining_tripkit_slots
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
@@ -35,18 +36,55 @@ async def trigger_scan(
     if not vlogs:
         return {"queued": 0, "message": "No vlogs pending processing"}
 
-    vlog_ids = [v["id"] for v in vlogs]
-
-    # Mark all as QUEUED before handing off to background tasks
+    # Resolve creator for quota checks
     with PgClient() as db:
-        for vlog_id in vlog_ids:
+        db.execute('SELECT id FROM "Creator" WHERE "userId" = %s', (user.user_id,))
+        creator = db.fetchone()
+
+    if not creator:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    creator_id = creator["id"]
+    slots = remaining_tripkit_slots(creator_id)
+
+    all_vlog_ids = [v["id"] for v in vlogs]
+    # Cap the batch to available quota slots
+    eligible_ids = all_vlog_ids[:slots] if slots < len(all_vlog_ids) else all_vlog_ids
+    skipped = len(all_vlog_ids) - len(eligible_ids)
+
+    if not eligible_ids:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "quota_exceeded",
+                "resource": "tripkits",
+                "message": "Monthly TripKit quota exhausted. Upgrade your plan for more.",
+            },
+        )
+
+    queued_ids: list[str] = []
+    for vlog_id in eligible_ids:
+        quota = check_and_consume_tripkit(creator_id)
+        if not quota.allowed:
+            # Quota ran out mid-batch (concurrent requests)
+            break
+        queued_ids.append(vlog_id)
+
+    # Mark consumed vlogs as QUEUED
+    with PgClient() as db:
+        for vlog_id in queued_ids:
             db.execute(
                 'UPDATE "Vlog" SET "processingStatus" = \'QUEUED\' WHERE id = %s',
                 (vlog_id,)
             )
 
-    for vlog_id in vlog_ids:
+    # Durable queue dispatch (replaces fire-and-forget BackgroundTasks)
+    for vlog_id in queued_ids:
         enqueue("process_vlog", {"vlog_id": vlog_id})
 
-    logger.info(f"Queued {len(vlog_ids)} vlogs for user {user.user_id}")
-    return {"queued": len(vlog_ids), "vlog_ids": vlog_ids}
+    logger.info("Queued %d vlogs for user %s (skipped %d, quota limited)", len(queued_ids), user.user_id, skipped + (len(eligible_ids) - len(queued_ids)))
+    return {
+        "queued": len(queued_ids),
+        "vlog_ids": queued_ids,
+        "skipped_quota": skipped + (len(eligible_ids) - len(queued_ids)),
+    }

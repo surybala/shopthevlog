@@ -13,7 +13,7 @@ import json
 import logging
 from typing import Optional
 
-from app.services.gemini_service import _call_gemini, _parse_response
+from app.services.gemini_service import _call_gemini, _call_gemini_cached, _parse_response
 from app.services.brief_outcomes import format_calibration_section
 from app.services.gap_analysis import format_gap_section
 
@@ -251,7 +251,7 @@ def analyze_content_patterns(
         )
 
     try:
-        raw = _call_gemini(CONTENT_PATTERN_PROMPT, prompt, max_tokens=2048)
+        raw = _call_gemini_cached("content-patterns", CONTENT_PATTERN_PROMPT, prompt, max_tokens=2048)
         return _parse_response(raw, creator_handle, "content-patterns")
     except Exception as e:
         logger.error("analyze_content_patterns failed for %s: %s", creator_handle, e)
@@ -281,7 +281,7 @@ def analyze_audience_demands(
     prompt = "Comments from recent videos:\n" + "\n".join(lines[:200])
 
     try:
-        raw = _call_gemini(AUDIENCE_DEMAND_PROMPT, prompt, max_tokens=2048)
+        raw = _call_gemini_cached("audience-demands", AUDIENCE_DEMAND_PROMPT, prompt, max_tokens=2048)
         return _parse_response(raw, "audience-demands", "audience-demands")
     except Exception as e:
         logger.error("analyze_audience_demands failed: %s", e)
@@ -314,7 +314,7 @@ def generate_content_briefs(
     )
 
     try:
-        raw = _call_gemini(CONTENT_BRIEF_PROMPT, prompt, max_tokens=8192)
+        raw = _call_gemini_cached("content-briefs", CONTENT_BRIEF_PROMPT, prompt, max_tokens=8192)
         parsed = _parse_response(raw, creator_handle, "content-briefs")
         if not parsed:
             return []

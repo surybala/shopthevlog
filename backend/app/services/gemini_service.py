@@ -281,6 +281,74 @@ Rules:
 """
 
 
+# ─── Gemini Context Cache ─────────────────────────────────────────────────────
+
+# Maps prompt_key -> live cache name. Module-level so it survives across requests
+# within the same process. Cleared on cache expiry and recreated lazily.
+_prompt_caches: dict[str, str] = {}
+
+# 55 minutes — recreate before Gemini's default 1-hour TTL expires.
+_CONTEXT_CACHE_TTL_SECS = 3300
+
+
+def _get_or_create_cache(prompt_key: str, system_prompt: str) -> str | None:
+    """Return a Gemini context cache name, creating it lazily on first call.
+
+    Returns None if the API rejects the cache (e.g. content below the minimum
+    token threshold), so callers can fall back to uncached generation silently.
+    """
+    if prompt_key in _prompt_caches:
+        return _prompt_caches[prompt_key]
+    try:
+        cache = _client().caches.create(
+            model=GEMINI_MODEL,
+            config=types.CreateCachedContentConfig(
+                system_instruction=system_prompt,
+                ttl=f"{_CONTEXT_CACHE_TTL_SECS}s",
+            ),
+        )
+        _prompt_caches[prompt_key] = cache.name
+        logger.info("Gemini context cache created: %s (key=%s)", cache.name, prompt_key)
+        return cache.name
+    except Exception as exc:
+        logger.debug("Gemini context cache unavailable for %s: %s", prompt_key, exc)
+        return None
+
+
+def _call_gemini_cached(prompt_key: str, system: str, user_content: str, max_tokens: int) -> str:
+    """Call Gemini using a context-cached system prompt when available.
+
+    On any cache error (expired, deleted, quota) clears the cached name and
+    falls back to a standard uncached call so the pipeline never stalls.
+    """
+    cache_name = _get_or_create_cache(prompt_key, system)
+    if cache_name:
+        # The cached path still makes a billable Gemini call — enforce the daily
+        # budget here. (The no-cache path enforces inside _call_gemini below.)
+        _enforce_gemini_budget()
+        try:
+            response = _client().models.generate_content(
+                model=GEMINI_MODEL,
+                contents=user_content,
+                config=types.GenerateContentConfig(
+                    cached_content=cache_name,
+                    max_output_tokens=max_tokens,
+                    temperature=0.4,
+                    response_mime_type="application/json",
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+                ),
+            )
+            return response.text or ""
+        except Exception as exc:
+            logger.warning(
+                "Cached Gemini call failed for %s (%s) — clearing and retrying uncached",
+                prompt_key, exc,
+            )
+            _prompt_caches.pop(prompt_key, None)
+
+    return _call_gemini(system, user_content, max_tokens)
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _slugify(title: str, creator_id: str) -> str:

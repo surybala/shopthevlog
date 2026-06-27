@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     # Google Places (for location resolution in AI pipeline)
     GOOGLE_PLACES_API_KEY: str = ""
 
+    # Insights
+    INSIGHTS_CACHE_TTL_HOURS: int = 6
+
     # Sentry
     SENTRY_DSN: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1

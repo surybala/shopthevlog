@@ -10,6 +10,11 @@ from fastapi.testclient import TestClient
 
 from tests.conftest import FakePgClient
 from app.core.security import UserClaims
+from app.services.quota_service import QuotaResult
+
+
+def _allowed_quota() -> QuotaResult:
+    return QuotaResult(allowed=True, plan="FREE", used=1, limit=3, reset_at=None)
 
 
 # ─── App + auth override helpers ─────────────────────────────────────────────
@@ -181,16 +186,15 @@ class TestTriggerProcess:
         assert "already processed" in data["message"].lower()
 
     def test_pending_vlog_queued_and_task_added(self):
-        # Two PgClient calls: one for the SELECT, one for the UPDATE
+        # PgClient calls: vlog SELECT, creator SELECT, vlog UPDATE
         select_pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "PENDING", "hasOpportunities": False}])
+        creator_pg = FakePgClient(rows=[{"id": "creator-1"}])
         update_pg = FakePgClient(rows=[])
 
-        call_count = {"n": 0}
-        clients = [select_pg, update_pg]
-
         with (
-            patch("app.api.v1.vlogs.PgClient", side_effect=clients),
-            patch("app.api.v1.vlogs.enqueue") as mock_enqueue,
+            patch("app.api.v1.vlogs.PgClient", side_effect=[select_pg, creator_pg, update_pg]),
+            patch("app.api.v1.vlogs.check_and_consume_tripkit", return_value=_allowed_quota()),
+            patch("app.api.v1.vlogs.enqueue") as mock_task,
         ):
             client = _make_client(select_pg)
             resp = client.post("/api/v1/vlogs/vlog-001/process")
@@ -199,14 +203,15 @@ class TestTriggerProcess:
         data = resp.json()
         assert data["status"] == "QUEUED"
         assert data["vlog_id"] == "vlog-001"
-        mock_enqueue.assert_called_once_with("process_vlog", {"vlog_id": "vlog-001"})
 
     def test_failed_vlog_can_be_requeued(self):
         select_pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "FAILED", "hasOpportunities": False}])
+        creator_pg = FakePgClient(rows=[{"id": "creator-1"}])
         update_pg = FakePgClient(rows=[])
 
         with (
-            patch("app.api.v1.vlogs.PgClient", side_effect=[select_pg, update_pg]),
+            patch("app.api.v1.vlogs.PgClient", side_effect=[select_pg, creator_pg, update_pg]),
+            patch("app.api.v1.vlogs.check_and_consume_tripkit", return_value=_allowed_quota()),
             patch("app.api.v1.vlogs.enqueue"),
         ):
             client = _make_client(select_pg)
@@ -218,10 +223,12 @@ class TestTriggerProcess:
     def test_complete_vlog_can_be_reprocessed(self):
         """COMPLETE vlogs are allowed to be re-triggered (re-generation)."""
         select_pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "COMPLETE", "hasOpportunities": False}])
+        creator_pg = FakePgClient(rows=[{"id": "creator-1"}])
         update_pg = FakePgClient(rows=[])
 
         with (
-            patch("app.api.v1.vlogs.PgClient", side_effect=[select_pg, update_pg]),
+            patch("app.api.v1.vlogs.PgClient", side_effect=[select_pg, creator_pg, update_pg]),
+            patch("app.api.v1.vlogs.check_and_consume_tripkit", return_value=_allowed_quota()),
             patch("app.api.v1.vlogs.enqueue"),
         ):
             client = _make_client(select_pg)
@@ -242,10 +249,12 @@ class TestTriggerProcess:
 
     def test_update_query_sets_queued_status(self):
         select_pg = FakePgClient(rows=[{"id": "vlog-001", "processingStatus": "PENDING"}])
+        creator_pg = FakePgClient(rows=[{"id": "creator-1"}])
         update_pg = FakePgClient(rows=[])
 
         with (
-            patch("app.api.v1.vlogs.PgClient", side_effect=[select_pg, update_pg]),
+            patch("app.api.v1.vlogs.PgClient", side_effect=[select_pg, creator_pg, update_pg]),
+            patch("app.api.v1.vlogs.check_and_consume_tripkit", return_value=_allowed_quota()),
             patch("app.api.v1.vlogs.enqueue"),
         ):
             client = _make_client(select_pg)

@@ -8,9 +8,11 @@ POST /insights/augment  — augment a creator's rough video idea with personaliz
 """
 import json
 import logging
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
 from app.core.security import get_current_user, UserClaims
 from app.db.pg_client import PgClient
 from app.services.job_queue import enqueue
@@ -18,6 +20,7 @@ from app.services.insights_gemini_service import augment_creator_idea
 from app.services.brief_outcomes import fetch_calibration_context
 from app.services.niche_service import fetch_niche_trends
 from app.services.gap_analysis import compute_gap_map
+from app.services.quota_service import check_and_consume_insights
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/insights", tags=["insights"])
@@ -38,16 +41,39 @@ async def trigger_analysis(
     if not creator:
         raise HTTPException(status_code=404, detail="Creator not found")
 
-    # Guard: skip if analysis is already in flight
+    # Guard: skip if analysis is already in flight or result is still fresh
     with PgClient() as db:
         db.execute(
-            'SELECT status FROM "ChannelInsight" WHERE "creatorId" = %s',
+            'SELECT status, "analyzedAt" FROM "ChannelInsight" WHERE "creatorId" = %s',
             (creator["id"],),
         )
         existing = db.fetchone()
 
-    if existing and existing["status"] == "ANALYZING":
-        return {"status": "ANALYZING", "message": "Analysis already running"}
+    if existing:
+        if existing["status"] == "ANALYZING":
+            return {"status": "ANALYZING", "message": "Analysis already running"}
+
+        analyzed_at = existing["analyzedAt"]
+        if existing["status"] == "COMPLETE" and analyzed_at is not None:
+            if isinstance(analyzed_at, str):
+                analyzed_at = datetime.fromisoformat(analyzed_at)
+            if analyzed_at.tzinfo is None:
+                analyzed_at = analyzed_at.replace(tzinfo=timezone.utc)
+            age_hours = (datetime.now(timezone.utc) - analyzed_at).total_seconds() / 3600
+            if age_hours < settings.INSIGHTS_CACHE_TTL_HOURS:
+                remaining = settings.INSIGHTS_CACHE_TTL_HOURS - age_hours
+                return {
+                    "status": "CACHED",
+                    "message": f"Insights are fresh ({age_hours:.1f}h old). Next refresh available in {remaining:.1f}h.",
+                    "cached_at": analyzed_at.isoformat(),
+                }
+
+    quota = check_and_consume_insights(creator["id"])
+    if not quota.allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=quota.to_error_detail("insights"),
+        )
 
     enqueue("analyze_channel", {"creator_id": creator["id"], "creator_handle": creator["handle"]})
 

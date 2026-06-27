@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.core.security import get_current_user, UserClaims
 from app.db.pg_client import PgClient
 from app.services.job_queue import enqueue
+from app.services.quota_service import check_and_consume_tripkit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/vlogs", tags=["vlogs"])
@@ -68,6 +69,24 @@ async def trigger_process(
             "status": "REVIEW_PENDING",
             "message": "Already processed; review opportunities already exist",
         }
+
+    # Resolve creator_id for quota check
+    with PgClient() as db:
+        db.execute(
+            'SELECT id FROM "Creator" WHERE "userId" = %s',
+            (user.user_id,),
+        )
+        creator = db.fetchone()
+
+    if not creator:
+        raise HTTPException(status_code=404, detail="Creator not found")
+
+    quota = check_and_consume_tripkit(creator["id"])
+    if not quota.allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=quota.to_error_detail("tripkits"),
+        )
 
     with PgClient() as db:
         db.execute(

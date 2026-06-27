@@ -124,12 +124,12 @@ class TestCalibrationInPrompts:
     def test_briefs_prompt_includes_calibration(self):
         captured = []
 
-        def _cap(system, user, max_tokens):
+        def _cap(prompt_key, system, user, max_tokens):
             captured.append(user)
             return json.dumps({"briefs": []})
 
         calibration = {"baseline_median_views": 5000, "samples": [], "mean_abs_error": None}
-        with patch("app.services.insights_gemini_service._call_gemini", side_effect=_cap):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", side_effect=_cap):
             from app.services.insights_gemini_service import generate_content_briefs
             generate_content_briefs({"channel_niche": "x"}, None, "creator", calibration=calibration)
         assert "CALIBRATION" in captured[0]
@@ -150,11 +150,11 @@ class TestCalibrationInPrompts:
     def test_briefs_prompt_clean_without_calibration(self):
         captured = []
 
-        def _cap(system, user, max_tokens):
+        def _cap(prompt_key, system, user, max_tokens):
             captured.append(user)
             return json.dumps({"briefs": []})
 
-        with patch("app.services.insights_gemini_service._call_gemini", side_effect=_cap):
+        with patch("app.services.insights_gemini_service._call_gemini_cached", side_effect=_cap):
             from app.services.insights_gemini_service import generate_content_briefs
             generate_content_briefs({"channel_niche": "x"}, None, "creator")
         assert "CALIBRATION" not in captured[0]
