@@ -85,20 +85,28 @@ describe('creator vlog routes', () => {
   });
 
   it('scan status returns creator scan metadata', async () => {
-    const res = await getScanStatus();
-    await expect(res.json()).resolves.toEqual({
-      plan: 'PRO',
-      status: 'COMPLETE',
-      lastCatalogScan: '2025-01-01',
-      vlogCount: 2,
-      vlogLimit: 25,
-      remainingVlogSlots: 23,
-      limitReached: false,
-      processingCreditsUsed: 2,
-      processingCreditsLimit: 20,
-      remainingProcessingCredits: 18,
-      processingCreditsResetAt: new Date('2026-06-01T00:00:00.000Z').toJSON(),
-    });
+    // Freeze the clock so the credit reset (next calendar-month start) is
+    // deterministic instead of drifting with the real date.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-15T12:00:00.000Z'));
+    try {
+      const res = await getScanStatus();
+      await expect(res.json()).resolves.toEqual({
+        plan: 'PRO',
+        status: 'COMPLETE',
+        lastCatalogScan: '2025-01-01',
+        vlogCount: 2,
+        vlogLimit: 200,
+        remainingVlogSlots: 198,
+        limitReached: false,
+        processingCreditsUsed: 2,
+        processingCreditsLimit: 20,
+        remainingProcessingCredits: 18,
+        processingCreditsResetAt: '2026-07-01T00:00:00.000Z',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('vlogs list returns 401 when unauthenticated', async () => {

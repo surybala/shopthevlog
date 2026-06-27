@@ -14,6 +14,8 @@ import logging
 from typing import Optional
 
 from app.services.gemini_service import _call_gemini, _call_gemini_cached, _parse_response
+from app.services.brief_outcomes import format_calibration_section
+from app.services.gap_analysis import format_gap_section
 
 logger = logging.getLogger(__name__)
 
@@ -123,12 +125,59 @@ Rules:
 - Titles should be genuinely compelling, not formulaic
 """
 
+NICHE_QUERY_PROMPT = """You are a YouTube search strategist. Given a travel creator's video titles,
+produce the single best YouTube search query to surface the videos of their direct competitors
+and niche peers — the creators making the same kind of content for the same audience.
+
+Return ONE valid JSON object only. No markdown, no backticks.
+
+Schema:
+{
+  "query": "string — 2 to 5 words capturing the specific niche (destination + style + format intent)",
+  "niche_label": "string — a short human-readable niche name (e.g. 'budget backpacking Southeast Asia')"
+}
+
+Rules:
+- The query must be specific enough to return true peers, not generic 'travel vlog' results
+- Prefer destination + travel-style phrasing (e.g. 'japan budget itinerary', 'luxury maldives resort tour')
+- Do not include the creator's name, years, or filler words
+"""
+
 # ─── Public API ───────────────────────────────────────────────────────────────
+
+def extract_niche_search_phrases(
+    vlogs: list[dict],
+    creator_handle: str = "",
+) -> dict:
+    """
+    Use Gemini to derive a precise niche search query from the creator's titles.
+
+    Returns {"query": str, "niche_label": str}. Both default to "" on any failure,
+    so callers can fall back to the deterministic keyword extractor.
+    """
+    titles = [str(v.get("title") or "") for v in vlogs if v.get("title")][:30]
+    if not titles:
+        return {"query": "", "niche_label": ""}
+
+    prompt = "Creator's video titles:\n" + "\n".join(f"- {t}" for t in titles)
+    try:
+        raw = _call_gemini(NICHE_QUERY_PROMPT, prompt, max_tokens=256)
+        parsed = _parse_response(raw, creator_handle or "niche-query", "niche-query")
+        if parsed and isinstance(parsed, dict):
+            return {
+                "query": str(parsed.get("query") or "").strip(),
+                "niche_label": str(parsed.get("niche_label") or "").strip(),
+            }
+    except Exception as e:
+        logger.error("extract_niche_search_phrases failed for %s: %s", creator_handle, e)
+    return {"query": "", "niche_label": ""}
+
 
 def analyze_content_patterns(
     vlogs: list[dict],
     creator_handle: str,
     benchmarks: Optional[list[dict]] = None,
+    peers: Optional[list[dict]] = None,
 ) -> Optional[dict]:
     """
     Analyze why top videos outperform the rest for this creator.
@@ -173,17 +222,32 @@ def analyze_content_patterns(
     )
 
     if benchmarks:
-        bench_lines = "\n".join(
-            f"- [{b.get('viewCount', 0):,} views] \"{b['title']}\" by {b.get('channelTitle', 'unknown creator')}:"
-            f" {(b.get('description') or '')[:150]}"
-            for b in benchmarks[:10]
-        )
+        def _bench_line(b: dict) -> str:
+            velocity = b.get("viewVelocity")
+            velocity_note = f", {velocity:,.0f} views/day" if isinstance(velocity, (int, float)) else ""
+            return (
+                f"- [{b.get('viewCount', 0):,} views{velocity_note}] \"{b['title']}\" "
+                f"by {b.get('channelTitle', 'unknown creator')}: {(b.get('description') or '')[:150]}"
+            )
+
+        bench_lines = "\n".join(_bench_line(b) for b in benchmarks[:10])
         prompt += (
-            f"\n\nNICHE BENCHMARK VIDEOS (top-performing public videos in this creator's space — "
-            f"data provided because this creator's channel is still growing):\n{bench_lines}\n\n"
+            f"\n\nNICHE BENCHMARK VIDEOS (recent high-velocity public videos in this creator's space, "
+            f"ranked by views/day so they reflect what is working NOW):\n{bench_lines}\n\n"
             f"Use benchmarks to: (1) identify proven formats the creator hasn't tried, "
             f"(2) surface gaps in the benchmark content this creator could own, "
-            f"(3) calibrate content_strengths and recommended_formats against what works at scale."
+            f"(3) calibrate content_strengths and recommended_formats against what works at scale, "
+            f"(4) flag rising topics (high views/day) the creator should move on while they are hot."
+        )
+
+    if peers:
+        peer_lines = "\n".join(
+            f"- {p.get('channelTitle', 'unknown')} ({p.get('subscriberCount', 0):,} subscribers)"
+            for p in peers[:8]
+        )
+        prompt += (
+            f"\n\nPEER CHANNELS (creators of comparable size in this niche — use as the realistic "
+            f"competitive set, not global megastars):\n{peer_lines}"
         )
 
     try:
@@ -228,10 +292,13 @@ def generate_content_briefs(
     patterns: dict,
     audience: Optional[dict],
     creator_handle: str,
+    calibration: Optional[dict] = None,
 ) -> list[dict]:
     """
     Generate 4 content briefs grounded in pattern analysis + audience signals.
-    Returns a list of brief dicts (may be empty on failure).
+    When `calibration` (this creator's predicted-vs-actual history) is provided,
+    the model anchors estimated_score to real outcomes. Returns a list of brief
+    dicts (may be empty on failure).
     """
     audience_section = (
         json.dumps(audience, indent=2)
@@ -243,6 +310,7 @@ def generate_content_briefs(
         f"Creator: @{creator_handle}\n\n"
         f"PERFORMANCE PATTERNS:\n{json.dumps(patterns, indent=2)}\n\n"
         f"AUDIENCE DEMAND SIGNALS:\n{audience_section}"
+        f"{format_calibration_section(calibration)}"
     )
 
     try:
@@ -307,16 +375,34 @@ Rules:
 """
 
 
+def _format_niche_trends_section(niche_trends: Optional[list[dict]]) -> str:
+    if not niche_trends:
+        return ""
+    lines = []
+    for t in niche_trends[:8]:
+        momentum = f" [{t.get('momentum')}]" if t.get("momentum") else ""
+        lines.append(f"- {t.get('topic')}{momentum} (score {t.get('score')})")
+    return (
+        "\n\nLIVE NICHE TRENDS (what is working in this niche RIGHT NOW — "
+        "lean into RISING topics):\n" + "\n".join(lines)
+    )
+
+
 def augment_creator_idea(
     raw_idea: str,
     patterns: dict,
     audience: Optional[dict],
     creator_handle: str,
     top_vlogs: Optional[list[dict]] = None,
+    calibration: Optional[dict] = None,
+    niche_trends: Optional[list[dict]] = None,
+    gap_map: Optional[list[dict]] = None,
 ) -> dict:
     """
-    Augment a creator's rough video idea using their channel insights and niche benchmarks.
-    Returns a structured augmentation dict, or an empty dict on failure.
+    Augment a creator's rough video idea using their channel insights, live niche
+    trends, and the demand-coverage gap map. When `calibration` is provided,
+    confidence_score is anchored to the creator's real predicted-vs-actual
+    history. Returns a structured augmentation dict, or an empty dict on failure.
     """
     audience_section = (
         json.dumps(audience, indent=2)
@@ -338,6 +424,9 @@ def augment_creator_idea(
         f"CHANNEL PROFILE & PERFORMANCE PATTERNS:\n{json.dumps(patterns, indent=2)}\n\n"
         f"AUDIENCE DEMAND SIGNALS:\n{audience_section}"
         f"{top_vlogs_section}"
+        f"{_format_niche_trends_section(niche_trends)}"
+        f"{format_gap_section(gap_map)}"
+        f"{format_calibration_section(calibration)}"
     )
 
     try:

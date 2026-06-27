@@ -63,7 +63,7 @@ class TestTriggerScan:
             patch("app.api.v1.webhooks.PgClient", side_effect=factory),
             patch("app.api.v1.webhooks.remaining_tripkit_slots", return_value=10),
             patch("app.api.v1.webhooks.check_and_consume_tripkit", return_value=_allowed_quota()),
-            patch("app.api.v1.webhooks.process_vlog_task"),
+            patch("app.api.v1.webhooks.enqueue"),
         ):
             client = _make_client()
             resp = client.post("/api/v1/webhooks/scan/trigger")
@@ -87,7 +87,7 @@ class TestTriggerScan:
             patch("app.api.v1.webhooks.PgClient", side_effect=factory),
             patch("app.api.v1.webhooks.remaining_tripkit_slots", return_value=10),
             patch("app.api.v1.webhooks.check_and_consume_tripkit", return_value=_allowed_quota()),
-            patch("app.api.v1.webhooks.process_vlog_task"),
+            patch("app.api.v1.webhooks.enqueue"),
         ):
             client = _make_client()
             resp = client.post("/api/v1/webhooks/scan/trigger")
@@ -112,7 +112,7 @@ class TestTriggerScan:
             patch("app.api.v1.webhooks.PgClient", side_effect=factory),
             patch("app.api.v1.webhooks.remaining_tripkit_slots", return_value=10),
             patch("app.api.v1.webhooks.check_and_consume_tripkit", return_value=_allowed_quota()),
-            patch("app.api.v1.webhooks.process_vlog_task"),
+            patch("app.api.v1.webhooks.enqueue"),
         ):
             client = _make_client()
             client.post("/api/v1/webhooks/scan/trigger")
@@ -145,7 +145,7 @@ class TestTriggerScan:
             patch("app.api.v1.webhooks.PgClient", side_effect=factory),
             patch("app.api.v1.webhooks.remaining_tripkit_slots", return_value=10),
             patch("app.api.v1.webhooks.check_and_consume_tripkit", return_value=_allowed_quota()),
-            patch("app.api.v1.webhooks.process_vlog_task") as mock_task,
+            patch("app.api.v1.webhooks.enqueue") as mock_task,
         ):
             client = _make_client()
             resp = client.post("/api/v1/webhooks/scan/trigger")
@@ -168,7 +168,7 @@ class TestTriggerScan:
             patch("app.api.v1.webhooks.PgClient", side_effect=factory),
             patch("app.api.v1.webhooks.remaining_tripkit_slots", return_value=10),
             patch("app.api.v1.webhooks.check_and_consume_tripkit", return_value=_allowed_quota()),
-            patch("app.api.v1.webhooks.process_vlog_task"),
+            patch("app.api.v1.webhooks.enqueue"),
         ):
             client = _make_client()
             resp = client.post("/api/v1/webhooks/scan/trigger")

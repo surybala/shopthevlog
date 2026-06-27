@@ -194,7 +194,7 @@ class TestTriggerProcess:
         with (
             patch("app.api.v1.vlogs.PgClient", side_effect=[select_pg, creator_pg, update_pg]),
             patch("app.api.v1.vlogs.check_and_consume_tripkit", return_value=_allowed_quota()),
-            patch("app.api.v1.vlogs.process_vlog_task") as mock_task,
+            patch("app.api.v1.vlogs.enqueue") as mock_task,
         ):
             client = _make_client(select_pg)
             resp = client.post("/api/v1/vlogs/vlog-001/process")
@@ -212,7 +212,7 @@ class TestTriggerProcess:
         with (
             patch("app.api.v1.vlogs.PgClient", side_effect=[select_pg, creator_pg, update_pg]),
             patch("app.api.v1.vlogs.check_and_consume_tripkit", return_value=_allowed_quota()),
-            patch("app.api.v1.vlogs.process_vlog_task"),
+            patch("app.api.v1.vlogs.enqueue"),
         ):
             client = _make_client(select_pg)
             resp = client.post("/api/v1/vlogs/vlog-001/process")
@@ -229,7 +229,7 @@ class TestTriggerProcess:
         with (
             patch("app.api.v1.vlogs.PgClient", side_effect=[select_pg, creator_pg, update_pg]),
             patch("app.api.v1.vlogs.check_and_consume_tripkit", return_value=_allowed_quota()),
-            patch("app.api.v1.vlogs.process_vlog_task"),
+            patch("app.api.v1.vlogs.enqueue"),
         ):
             client = _make_client(select_pg)
             resp = client.post("/api/v1/vlogs/vlog-001/process")
@@ -255,7 +255,7 @@ class TestTriggerProcess:
         with (
             patch("app.api.v1.vlogs.PgClient", side_effect=[select_pg, creator_pg, update_pg]),
             patch("app.api.v1.vlogs.check_and_consume_tripkit", return_value=_allowed_quota()),
-            patch("app.api.v1.vlogs.process_vlog_task"),
+            patch("app.api.v1.vlogs.enqueue"),
         ):
             client = _make_client(select_pg)
             client.post("/api/v1/vlogs/vlog-001/process")

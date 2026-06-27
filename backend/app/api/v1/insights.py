@@ -9,14 +9,17 @@ POST /insights/augment  — augment a creator's rough video idea with personaliz
 import json
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.security import get_current_user, UserClaims
 from app.db.pg_client import PgClient
-from app.tasks.analyze_channel import analyze_channel_task
+from app.services.job_queue import enqueue
 from app.services.insights_gemini_service import augment_creator_idea
+from app.services.brief_outcomes import fetch_calibration_context
+from app.services.niche_service import fetch_niche_trends
+from app.services.gap_analysis import compute_gap_map
 from app.services.quota_service import check_and_consume_insights
 
 logger = logging.getLogger(__name__)
@@ -25,10 +28,9 @@ router = APIRouter(prefix="/insights", tags=["insights"])
 
 @router.post("/analyze")
 async def trigger_analysis(
-    background_tasks: BackgroundTasks,
     user: UserClaims = Depends(get_current_user),
 ):
-    """Queue a channel analysis run for the authenticated creator."""
+    """Enqueue a durable channel-analysis job for the authenticated creator."""
     with PgClient() as db:
         db.execute(
             'SELECT id, handle FROM "Creator" WHERE "userId" = %s',
@@ -73,7 +75,18 @@ async def trigger_analysis(
             detail=quota.to_error_detail("insights"),
         )
 
-    background_tasks.add_task(analyze_channel_task, creator["id"], creator["handle"])
+    enqueue("analyze_channel", {"creator_id": creator["id"], "creator_handle": creator["handle"]})
+
+    # Reflect QUEUED status immediately so the dashboard shows "Analyzing…" the
+    # moment the job is enqueued, before the worker picks it up.
+    with PgClient() as db:
+        db.execute(
+            '''INSERT INTO "ChannelInsight" (id, "creatorId", status, "createdAt", "updatedAt")
+               VALUES (gen_random_uuid()::text, %s, 'QUEUED', NOW(), NOW())
+               ON CONFLICT ("creatorId") DO UPDATE SET status = 'QUEUED', "updatedAt" = NOW()''',
+            (creator["id"],),
+        )
+
     return {"status": "QUEUED", "creator_id": creator["id"]}
 
 
@@ -123,7 +136,10 @@ async def get_insights(user: UserClaims = Depends(get_current_user)):
 # ─── Idea Augmentation ────────────────────────────────────────────────────────
 
 class AugmentIdeaRequest(BaseModel):
-    idea: str = Field(..., min_length=10, max_length=2000)
+    # Mirrors the web layer's IDEA_WORKSHOP_MIN_CHARS / MAX_CHARS. Caps per-request
+    # token spend and keeps the workshop a focused brainstorming tool. The web
+    # proxy also enforces per-tier daily request quotas before reaching here.
+    idea: str = Field(..., min_length=15, max_length=1000)
 
 
 @router.post("/augment")
@@ -137,7 +153,7 @@ async def augment_idea(
     """
     with PgClient() as db:
         db.execute(
-            'SELECT id, handle FROM "Creator" WHERE "userId" = %s',
+            'SELECT id, handle, "nicheId" FROM "Creator" WHERE "userId" = %s',
             (user.user_id,),
         )
         creator = db.fetchone()
@@ -147,6 +163,7 @@ async def augment_idea(
 
     creator_id = creator["id"]
     creator_handle = creator["handle"]
+    niche_id = creator.get("nicheId")
 
     # Fetch channel insights for context
     with PgClient() as db:
@@ -168,15 +185,23 @@ async def augment_idea(
         except Exception:
             audience = None
 
-    # Fetch top performing vlogs for additional context
+    # Fetch the creator's videos for context + gap-map coverage
     with PgClient() as db:
         db.execute(
             '''SELECT title, "viewCount" FROM "Vlog"
                WHERE "creatorId" = %s AND "viewCount" IS NOT NULL
-               ORDER BY "viewCount" DESC LIMIT 8''',
+               ORDER BY "viewCount" DESC LIMIT 40''',
             (creator_id,),
         )
-        top_vlogs = [dict(row) for row in (db.fetchall() or [])]
+        creator_vlogs = [dict(row) for row in (db.fetchall() or [])]
+
+    top_vlogs = creator_vlogs[:8]
+    vlog_titles = [v.get("title") for v in creator_vlogs if v.get("title")]
+
+    # Live niche signals: current trends + demand/coverage whitespace
+    niche_trends = fetch_niche_trends(niche_id) if niche_id else []
+    gap_map = compute_gap_map(audience, niche_trends, vlog_titles)
+    calibration = fetch_calibration_context(creator_id)
 
     result = augment_creator_idea(
         raw_idea=body.idea,
@@ -184,6 +209,9 @@ async def augment_idea(
         audience=audience,
         creator_handle=creator_handle,
         top_vlogs=top_vlogs,
+        calibration=calibration,
+        niche_trends=niche_trends,
+        gap_map=gap_map,
     )
 
     if not result:
@@ -222,4 +250,16 @@ async def augment_idea(
         "nicheLearnings": result.get("niche_learnings", []),
         "overallAssessment": result.get("overall_assessment", ""),
         "confidenceScore": result.get("confidence_score", 50),
+        # Surface the live signals the recommendation was grounded in so the UI
+        # can show creators *why* — making the personalization visible.
+        "liveSignals": {
+            "nicheTrends": [
+                {"topic": t.get("topic"), "momentum": t.get("momentum"), "score": t.get("score")}
+                for t in (niche_trends or [])[:5]
+            ],
+            "gaps": [
+                {"topic": g.get("topic"), "momentum": g.get("momentum"), "coverageCount": g.get("coverage_count")}
+                for g in (gap_map or [])[:5]
+            ],
+        },
     }

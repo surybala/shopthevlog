@@ -2,12 +2,12 @@
 Internal trigger endpoints for the AI processing pipeline.
 """
 import logging
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, HTTPException
 
 from app.core.security import get_current_user, UserClaims
 from fastapi import Depends
 from app.db.pg_client import PgClient
-from app.tasks.process_vlog import process_vlog_task
+from app.services.job_queue import enqueue
 from app.services.quota_service import check_and_consume_tripkit, remaining_tripkit_slots
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 @router.post("/scan/trigger")
 async def trigger_scan(
-    background_tasks: BackgroundTasks,
     user: UserClaims = Depends(get_current_user),
 ):
     """
@@ -79,8 +78,9 @@ async def trigger_scan(
                 (vlog_id,)
             )
 
+    # Durable queue dispatch (replaces fire-and-forget BackgroundTasks)
     for vlog_id in queued_ids:
-        background_tasks.add_task(process_vlog_task, vlog_id)
+        enqueue("process_vlog", {"vlog_id": vlog_id})
 
     logger.info("Queued %d vlogs for user %s (skipped %d, quota limited)", len(queued_ids), user.user_id, skipped + (len(eligible_ids) - len(queued_ids)))
     return {

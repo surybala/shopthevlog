@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 import { rateLimit } from '@/lib/rateLimit'
-import { getCreatorPlanConfig } from '@/lib/creatorPlans'
+import {
+  getCreatorPlanConfig,
+  resolveAutoImportCount,
+  selectVlogIdsForAutoTranscription,
+} from '@/lib/creatorPlans'
 import { recordApiObservation } from '@/lib/observability'
 import {
   fetchYouTubeCatalog,
@@ -105,11 +109,19 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await runScan(creator.id, creator.youtubeChannelId, creator.plan, null)
+    // First-run: once a creator's catalogue is imported, kick off channel
+    // analysis automatically so they land on real insights instead of an empty
+    // page. Best-effort and only on the very first analysis.
+    let analysisQueued = false
+    if (result.importedCount > 0) {
+      analysisQueued = await maybeTriggerFirstAnalysis(supabase, creator.id)
+    }
     record(200, 'scan_complete')
     return NextResponse.json({
       status: 'COMPLETE',
       importedCount: result.importedCount,
       limitReached: result.limitReached,
+      analysisQueued,
     })
   } catch (e) {
     console.error('Scan failed:', e)
@@ -132,6 +144,38 @@ export async function POST(req: NextRequest) {
   }
 }
 
+type SupabaseLike = {
+  auth: { getSession: () => Promise<{ data: { session: { access_token?: string } | null } }> }
+}
+
+// Trigger channel analysis once, on the creator's first import. No-op if they've
+// already been analyzed, the AI pipeline isn't configured, or there's no session.
+// Best-effort: never throws, so a failure here can't fail the scan.
+async function maybeTriggerFirstAnalysis(supabase: SupabaseLike, creatorId: string): Promise<boolean> {
+  try {
+    const existing = await prisma.channelInsight.findUnique({
+      where: { creatorId },
+      select: { id: true },
+    })
+    if (existing) return false
+
+    const aiUrl = process.env.AI_PIPELINE_URL
+    if (!aiUrl) return false
+
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) return false
+
+    const res = await fetch(`${aiUrl}/api/v1/insights/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 async function runScan(creatorId: string, channelId: string, plan: string, selectedVideoIds?: string[] | null) {
   const { maxImportedVlogs } = getCreatorPlanConfig(plan)
   const accessToken = await getYouTubeAccessToken(creatorId)
@@ -143,9 +187,27 @@ async function runScan(creatorId: string, channelId: string, plan: string, selec
   })
   const importedExternalIds = new Set(existingVlogs.map((vlog) => vlog.externalId))
   let limitReached = false
-  const videosToConsider = selectedSet
-    ? catalog.filter((item) => selectedSet.has(item.videoId))
-    : catalog
+
+  // Selected import: exactly the videos the creator picked.
+  // Default (automatic) import: the most-recent N (recency-ordered), so a brand
+  // new creator gets meaningful niche/style/performance signal without us
+  // ingesting their entire back-catalogue. Bounded by the plan's import cap.
+  let videosToConsider: typeof catalog
+  if (selectedSet) {
+    videosToConsider = catalog.filter((item) => selectedSet.has(item.videoId))
+  } else {
+    const byRecencyDesc = (a: typeof catalog[number], b: typeof catalog[number]) =>
+      (b.publishedAt ? Date.parse(b.publishedAt) : 0) - (a.publishedAt ? Date.parse(a.publishedAt) : 0)
+    videosToConsider = [...catalog].sort(byRecencyDesc).slice(0, resolveAutoImportCount(plan))
+  }
+
+  // Auto-transcribe policy: on a default import, optionally queue the top-N most
+  // viewed for transcription so the first analysis has voice/style signal.
+  // Disabled by default (AUTO_TRANSCRIBE_TOP_N = 0) since transcription is credit-gated.
+  const autoTranscribeIds = selectedSet
+    ? new Set<string>()
+    : new Set(selectVlogIdsForAutoTranscription(videosToConsider))
+
   let importedCount = 0
 
   for (const item of videosToConsider) {
@@ -169,7 +231,7 @@ async function runScan(creatorId: string, channelId: string, plan: string, selec
         durationSeconds: item.durationSeconds,
         viewCount: item.viewCount ?? 0,
         likeCount: item.likeCount ?? 0,
-        processingStatus: 'PENDING',
+        processingStatus: autoTranscribeIds.has(item.videoId) ? 'QUEUED' : 'PENDING',
       },
       update: {
         title: item.title,

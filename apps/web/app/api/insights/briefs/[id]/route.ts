@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import prisma from '@/lib/prisma/client'
 import { recordApiObservation } from '@/lib/observability'
+import { computeBriefOutcome } from '@/lib/briefOutcomes'
 
 const VALID_STATUSES = ['IDEA', 'FILMING', 'PUBLISHED'] as const
 type BriefStatusValue = (typeof VALID_STATUSES)[number]
@@ -55,12 +56,44 @@ export async function PATCH(
     return NextResponse.json({ error: 'Brief not found' }, { status: 404 })
   }
 
+  const linkedVlogId = typeof publishedVlogId === 'string' ? publishedVlogId : null
+
+  const data: {
+    briefStatus: BriefStatusValue
+    publishedVlogId: string | null
+    actualScore?: number | null
+    outcomeDelta?: number | null
+    measuredAt?: Date | null
+  } = {
+    briefStatus: briefStatus as BriefStatusValue,
+    publishedVlogId: linkedVlogId,
+  }
+
+  // Close the outcome loop: when a brief is published against a real vlog,
+  // measure how it actually performed vs the creator's baseline.
+  if (briefStatus === 'PUBLISHED' && linkedVlogId) {
+    const publishedVlog = await prisma.vlog.findUnique({
+      where: { id: linkedVlogId },
+      select: { viewCount: true, creatorId: true },
+    })
+    if (publishedVlog && publishedVlog.creatorId === creator.id) {
+      const others = await prisma.vlog.findMany({
+        where: { creatorId: creator.id, id: { not: linkedVlogId }, viewCount: { gt: 0 } },
+        select: { viewCount: true },
+      })
+      const { actualScore, outcomeDelta } = computeBriefOutcome(
+        publishedVlog.viewCount ?? 0,
+        others.map((o) => o.viewCount ?? 0),
+      )
+      data.actualScore = actualScore
+      data.outcomeDelta = outcomeDelta
+      data.measuredAt = new Date()
+    }
+  }
+
   const updated = await prisma.contentBrief.update({
     where: { id: params.id },
-    data: {
-      briefStatus: briefStatus as BriefStatusValue,
-      publishedVlogId: typeof publishedVlogId === 'string' ? publishedVlogId : null,
-    },
+    data,
   })
 
   record(200, 'updated')

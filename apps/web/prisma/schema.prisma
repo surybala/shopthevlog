@@ -360,6 +360,10 @@ model Creator {
   creatorMemory CreatorMemory[]
   channelInsight      ChannelInsight?
   ideaAugmentations   IdeaAugmentation[]
+  briefFeedbacks      BriefFeedback[]
+
+  nicheId String?
+  niche   Niche?  @relation(fields: [nicheId], references: [id], onDelete: SetNull)
 
   plan              CreatorPlan @default(FREE)
   catalogScanStatus ScanStatus  @default(PENDING)
@@ -1215,8 +1219,29 @@ model ContentBrief {
   reasoning       String?
   briefStatus     BriefStatus    @default(IDEA)
   publishedVlogId String?
+  // Outcome loop (Phase 3): measured once a published vlog is linked, so the
+  // model can learn how its own predictions actually performed.
+  actualScore     Int?
+  outcomeDelta    Float?
+  measuredAt      DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+
+  feedbacks       BriefFeedback[]
+}
+
+model BriefFeedback {
+  id        String         @id @default(cuid())
+  creatorId String
+  creator   Creator        @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  briefId   String
+  brief     ContentBrief   @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  action    FeedbackAction
+  reason    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([creatorId, createdAt])
 }
 
 model IdeaAugmentation {
@@ -1232,4 +1257,96 @@ model IdeaAugmentation {
   overallAssessment   String
   confidenceScore     Int      @default(50)
   createdAt           DateTime @default(now())
+}
+
+// ─── Niche taxonomy (Phase 2) ───────────────────────────────────────────────
+// Canonical niche so signal compounds across creators: shared benchmark cache,
+// shared trend aggregates, and "creators like you" comparisons.
+
+enum NicheMomentum {
+  RISING
+  STEADY
+  SATURATED
+}
+
+model Niche {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  label     String
+  keywords  String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  creators       Creator[]
+  trends         NicheTrend[]
+  benchmarkCache NicheBenchmarkCache?
+}
+
+model NicheTrend {
+  id         String        @id @default(cuid())
+  nicheId    String
+  niche      Niche         @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+  topic      String
+  format     String?
+  momentum   NicheMomentum @default(STEADY)
+  score      Float         @default(0)
+  evidence   Json?
+  computedAt DateTime      @default(now())
+
+  @@index([nicheId, computedAt])
+}
+
+model NicheBenchmarkCache {
+  id         String   @id @default(cuid())
+  nicheId    String   @unique
+  niche      Niche    @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+  query      String
+  videosJson Json
+  peersJson  Json
+  fetchedAt  DateTime @default(now())
+  expiresAt  DateTime
+}
+
+// ─── Durable background job queue ───────────────────────────────────────────
+// Postgres-backed so long-running pipeline work (channel analysis, vlog
+// processing) survives worker restarts, retries on failure, and never gets
+// stuck — claimed atomically via SELECT ... FOR UPDATE SKIP LOCKED.
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model Job {
+  id          String    @id @default(cuid())
+  type        String
+  payload     Json
+  status      JobStatus @default(PENDING)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  runAfter    DateTime  @default(now())
+  lockedAt    DateTime?
+  lockedBy    String?
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, runAfter])
+}
+
+// ─── External-API cost guardrails ───────────────────────────────────────────
+// Durable per-day usage counter so a daily budget / circuit breaker on costly
+// external calls (YouTube Data API units, Gemini calls) holds across instances
+// and restarts. One row per (resource, UTC day).
+
+model ApiUsageCounter {
+  id        String   @id @default(cuid())
+  resource  String
+  day       DateTime @db.Date
+  used      Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([resource, day])
 }
